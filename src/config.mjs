@@ -24,5 +24,7 @@ export function LoadConfig(Env = process.env) {
 		MaxVideoBytes: MaxVideoMB * 1024 * 1024, MaxVideoSeconds,
 		FFmpeg: Env.FFMPEG ?? 'ffmpeg', FFprobe: Env.FFPROBE ?? 'ffprobe',
 		SourceUrl: Env.SOURCE_URL || '/source', IsLocal,
+		IpHeader: /^[a-z0-9-]{1,64}$/.test(String(Env.IP_HEADER ?? '').toLowerCase()) ? Env.IP_HEADER.toLowerCase() : null,
+		CountryHeader: /^[a-z0-9-]{1,64}$/.test(String(Env.COUNTRY_HEADER ?? '').toLowerCase()) ? Env.COUNTRY_HEADER.toLowerCase() : null,
 	};
 }

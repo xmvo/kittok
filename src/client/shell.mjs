@@ -1,6 +1,13 @@
 import { ReadJsonScript, ReplaceJsonScript, RewriteAssets } from './archive.mjs';
 import { AvatarUrl } from '../store.mjs';
 
+const Slot = Name => `[class*="DivMainNavContainer"] > :has([data-e2e="${Name}"])`;
+const FeatureSelectors = {
+	shop: [Slot('nav-shop')], explore: [Slot('nav-explore')], following: [Slot('nav-following')], shortDrama: [Slot('nav-short-drama')], live: [Slot('nav-live')],
+	upload: [Slot('nav-upload'), 'a[href^="/tiktokstudio/upload"]'], search: ['[data-e2e="nav-search"]', '[data-e2e="search-user-input"]'],
+	comments: ['[data-e2e="comment-input"]', '[data-e2e="comment-post"]'],
+};
+
 export function Shell(Raw, Origin, { Config, User } = {}) {
 	const State = ReadJsonScript(Raw, '__UNIVERSAL_DATA_FOR_REHYDRATION__');
 	const Scope = State.__DEFAULT_SCOPE__;
@@ -55,7 +62,8 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	Html = Html.replace(/<link\b[^>]*\brel="(?:preconnect|dns-prefetch|canonical|alternate|manifest)"[^>]*>/g, '');
 	Html = Html.replace(/\s+(?:integrity|nonce)="[^"]*"/g, '');
 	Html = RewriteAssets(Html, Origin);
-	const Instance = { name: Config?.Name ?? 'Kittok', account: User ? { username: User.username, displayName: User.display_name, role: User.role } : null, csrfToken: User?.csrf_token ?? null };
+	const Instance = { name: Config?.Name ?? 'Kittok', account: User ? { username: User.username, displayName: User.display_name, role: User.role } : null, csrfToken: User?.csrf_token ?? null, announcement: Config?.Announcement?.text ? Config.Announcement : null };
+	const Hidden = Object.entries(Config?.Features ?? {}).filter(([, On]) => !On).flatMap(([Name]) => FeatureSelectors[Name] ?? []);
 	Html = Html.replace(/<title>[\s\S]*?<\/title>/, `<title>${Instance.name.replace(/[<&]/g, '')}</title>`);
-	return Html.replace('<head>', `<head><link rel="icon" href="/public/avatar.svg"><link rel="stylesheet" href="/public/brand.css"><script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);
+	return Html.replace('<head>', `<head><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="/public/brand.css">${Hidden.length ? `<style>${Hidden.join(',')}{display:none!important}</style>` : ''}<script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);
 }

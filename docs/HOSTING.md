@@ -16,6 +16,8 @@ The database must become healthy before the app starts. The app downloads a sign
 
 Public instances require HTTPS. Cookies get `Secure`, `HttpOnly`, and `SameSite=Lax` attributes. `PUBLIC_ORIGIN` is authoritative; proxy headers cannot override it. Preserve the original `Host` header in your proxy. Match the proxy's upload limit and timeout to `MAX_VIDEO_MB` and the time needed to transcode uploads. Caddy's example starts at 100 MB. This release uses per-process rate limits keyed by the directly connected address; users behind a reverse proxy share that address's unauthenticated login limits.
 
+The admin panel records each sign-up and login with its IP address, country, language, and device, and keeps sessions' devices and last activity. Set `IP_HEADER=x-forwarded-for` behind Caddy (or `cf-connecting-ip` behind Cloudflare) so the visitor's address is recorded instead of the proxy's; Kittok uses the last address in that header. Set `COUNTRY_HEADER=cf-ipcountry` behind Cloudflare to record countries; without it, countries show as Unknown. Only set these when your proxy overwrites the header, because visitors can send it themselves otherwise. IP addresses are cleared from the activity log after 90 days. Mention this collection in your instance's privacy policy.
+
 ## Configuration
 
 | Variable | Default | Purpose |

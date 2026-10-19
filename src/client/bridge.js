@@ -1,6 +1,12 @@
 (() => {
 	const Instance = JSON.parse(document.getElementById('kittok-instance')?.textContent ?? '{}');
 	document.documentElement.style.setProperty('--kittok-name', JSON.stringify(Instance.name ?? 'Kittok'));
+	let ShopPromo;
+	function ShopPromoText() {
+		if (ShopPromo) return ShopPromo;
+		try { ShopPromo = JSON.parse(document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__').textContent).__DEFAULT_SCOPE__['webapp.i18n-translation'].Webapp.TTSweb_notif_inAppAnnounce_header; } catch {}
+		return ShopPromo || 'TikTok Shop is now available on web';
+	}
 	function Brand() {
 		if (document.title !== Instance.name) document.title = Instance.name;
 		const LoginTitle = document.getElementById('login-modal-title');
@@ -25,6 +31,9 @@
 			const Icon = Item.querySelector('svg');
 			if (Icon) Icon.outerHTML = '<svg fill="currentColor" viewBox="0 0 48 48" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M24 3 7 9.5V22c0 11 7.2 20.3 17 23 9.8-2.7 17-12 17-23V9.5L24 3Zm0 4.3 13 5v9.7c0 8.9-5.6 16.6-13 19.1-7.4-2.5-13-10.2-13-19.1v-9.7l13-5Zm7.3 9.3a1 1 0 0 1 1.4 0l1.4 1.4a1 1 0 0 1 0 1.4L22.4 31.1a1 1 0 0 1-1.4 0l-6.1-6.1a1 1 0 0 1 0-1.4l1.4-1.4a1 1 0 0 1 1.4 0l5 5 8.6-10.6Z"/></svg>';
 			Slot.after(Item);
+		}
+		for (const Item of document.querySelectorAll('[data-e2e="notice-list-item"]')) {
+			if (Item.querySelector('[data-e2e="notice-main"]')?.textContent.includes(ShopPromoText())) Item.remove();
 		}
 		if (document.body && !document.getElementById('kittok-source')) {
 			const Source = document.createElement('a'); Source.id = 'kittok-source'; Source.href = '/about'; Source.textContent = 'Kittok · Source'; document.body.append(Source);
@@ -79,6 +88,21 @@
 	document.addEventListener('keydown', Event => {
 		if ((Event.key === 'Enter' || Event.key === ' ') && Event.target instanceof Element && Event.target.closest('[data-kittok-unavailable]')) { Event.preventDefault(); Event.stopImmediatePropagation(); }
 	}, true);
+	const Notice = Instance.announcement;
+	let Dismissed = null;
+	try { Dismissed = localStorage.getItem('kittok-announcement'); } catch {}
+	if (Notice?.text && Dismissed !== String(Notice.version)) {
+		const Show = () => {
+			if (!document.body || document.getElementById('kittok-announcement')) return;
+			const Bar = document.createElement('div'); Bar.id = 'kittok-announcement'; Bar.setAttribute('role', 'status');
+			const Text = document.createElement('span'); Text.textContent = Notice.text; Bar.append(Text);
+			if (Notice.link) { const Link = document.createElement('a'); Link.href = Notice.link; Link.textContent = 'Learn more'; Link.rel = 'noopener'; Bar.append(Link); }
+			const Close = document.createElement('button'); Close.type = 'button'; Close.setAttribute('aria-label', 'Close announcement'); Close.textContent = '×';
+			Close.addEventListener('click', () => { Bar.remove(); try { localStorage.setItem('kittok-announcement', String(Notice.version)); } catch {} });
+			Bar.append(Close); document.body.append(Bar);
+		};
+		document.body ? Show() : document.addEventListener('DOMContentLoaded', Show);
+	}
 	const Viewed = new Set();
 	document.addEventListener('playing', Event => {
 		const Id = Event.target instanceof HTMLVideoElement ? Event.target.closest('[id^="xgwrapper-"]')?.id.match(/-(\d+)$/)?.[1] : null;

@@ -1,4 +1,4 @@
-import { Login, RequireCsrf, SessionCookie } from '../auth.mjs';
+import { Login, RequireCsrf, SessionCookie, ClientInfo, RecordEvent } from '../auth.mjs';
 import { HttpError, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { AvatarUrl } from '../store.mjs';
 
@@ -34,7 +34,7 @@ export async function Passport(Context) {
 			const Mixed = String(Body.mix_mode) === '1';
 			const Username = DecodePassportValue(Body.username ?? Body.account ?? Body.email, Mixed);
 			const Password = DecodePassportValue(Body.password, Mixed);
-			const Session = await Login(Pool, Username, Password);
+			const Session = await Login(Pool, Username, Password, ClientInfo(Request, Config));
 			Response.setHeader('set-cookie', SessionCookie(Config, Session.Token));
 			Json(Response, { message: 'success', data: PassportUser(Session.User, Config) });
 		} catch (Error) {
@@ -55,6 +55,7 @@ export async function Passport(Context) {
 		if (!/^[a-z0-9_]{3,24}$/.test(Name)) { Json(Response, { message: 'error', data: { error_code: 1027, description: 'Use 3 to 24 lowercase letters, numbers, or underscores.' } }); return true; }
 		try {
 			const Updated = (await Pool.query('UPDATE users SET username = $2 WHERE id = $1 RETURNING id, username, display_name, avatar_name', [User.id, Name])).rows[0];
+			if (Name !== User.username) await RecordEvent(Pool, User.id, 'username_change', ClientInfo(Request, Config), `@${User.username} → @${Name}`);
 			Json(Response, { message: 'success', data: PassportUser(Updated, Config) });
 		} catch (Error) {
 			if (Error.code !== '23505') throw Error;

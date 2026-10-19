@@ -30,18 +30,30 @@ The original username/password form posts to `/passport/web/user/login/`. This a
 
 ## Admin
 
-Admins open `/admin` (also linked from the sidebar and `/account`). The panel calls these JSON routes; non-admins get 404. Writes need the session's `X-CSRF-Token` and are recorded in `admin_actions`. Admins cannot suspend, demote, or delete themselves.
+Admins open `/admin` (also linked from the sidebar and `/account`). It is a standalone page that loads the original client's TUX stylesheets and fonts. The panel calls these JSON routes; non-admins get 404. Writes need the session's `X-CSRF-Token` and are recorded in `admin_actions`. Admins cannot suspend, demote, delete, or sign out their own account here.
 
 | Method | Route | Behavior |
 | --- | --- | --- |
-| GET | `/_kittok/admin/overview` | Instance counts, the last 20 admin actions, and the most frequent unimplemented client calls |
-| GET | `/_kittok/admin/users?q=&before=ID` | Users, newest first, 50 per page |
+| GET | `/_kittok/admin/overview` | Instance counts, newest accounts, and the most frequent unimplemented client calls |
+| GET | `/_kittok/admin/users?q=&before=ID` | Users, newest first, 50 per page. `q` matches username, display name, user ID, or an IP address seen in the activity log |
+| GET | `/_kittok/admin/users/ID` | Profile, stats, sign-up details, countries and languages seen, activity log, active sessions, accounts sharing an IP, videos, comments, and violations |
 | POST | `/_kittok/admin/users/ID/suspend` / `unsuspend` | Suspending signs the user out everywhere and blocks login |
 | POST | `/_kittok/admin/users/ID/role` | JSON `{role}`: `admin` or `member` |
+| POST | `/_kittok/admin/users/ID/sessions/revoke` | JSON `{session}`: a session ID from the user page, or `all` |
+| POST | `/_kittok/admin/users/ID/violations` | JSON `{category, reason, video_id?, comment_id?}`; the video or comment must be the user's |
+| POST | `/_kittok/admin/violations/ID/revoke` | Marks a violation revoked; it stays in the history |
 | POST | `/_kittok/admin/users/ID/delete` | JSON `{confirm}` must equal the username; deletes the account, its videos and their files, and its avatar |
 | GET | `/_kittok/admin/videos?before=ID` | Videos with views, likes, and comment counts, 30 per page |
 | POST | `/_kittok/admin/videos/ID/delete` | Deletes the video and its files |
 | GET | `/_kittok/admin/comments?before=ID` | Comments, newest first, 50 per page |
+| GET | `/_kittok/admin/comments/ID` | One comment with its author, video, parent, replies, and violations |
 | POST | `/_kittok/admin/comments/ID/delete` | Deletes the comment and its replies |
 | GET / POST | `/_kittok/admin/invites` | List open invites, or create one with JSON `{uses, days}` (1–100 uses, 1–90 days); the code is returned once |
 | POST | `/_kittok/admin/invites/HASH/delete` | Revokes an invite |
+| GET | `/_kittok/admin/settings` | Sign-up mode, instance name, features, upload limits, announcement, rules, and brand images |
+| POST | `/_kittok/admin/settings/KEY` | JSON `{value}` for `registration`, `name`, `features`, `limits`, `announcement`, or `rules`; applied immediately without a restart |
+| POST | `/_kittok/admin/brand/SLOT` | Multipart `file` (PNG, JPEG, or WebP, up to 2 MB) for `wordmarkDark`, `wordmarkLight`, `icon`, or `favicon`; re-encoded to PNG |
+| POST | `/_kittok/admin/brand/SLOT/reset` | Restores the shipped image |
+| GET | `/_kittok/admin/audit?before=ID` | Admin actions, newest first, 50 per page |
+
+Settings stored in the database override the environment values for `REGISTRATION_MODE`, `INSTANCE_NAME`, `MAX_VIDEO_MB`, and `MAX_VIDEO_SECONDS`. Public routes `/brand/SLOT` serve the current brand images and `/rules` shows the rules.

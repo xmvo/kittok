@@ -72,7 +72,23 @@ export async function SaveAvatar(Config, UserId, Bytes) {
 	} finally { await rm(Input, { force: true }); }
 }
 
-export const AvatarExists = async (Config, Name) => (await stat(join(Config.MediaDir, Name)).catch(() => null))?.isFile() ?? false;
+export async function SaveBrandImage(Config, Slot, Bytes) {
+	await mkdir(join(Config.MediaDir, '.incoming'), { recursive: true });
+	const Input = join(Config.MediaDir, '.incoming', randomUUID());
+	const Name = `brand-${Slot}-${randomUUID()}.png`;
+	const Whitelist = ['-protocol_whitelist', 'file', '-format_whitelist', 'png_pipe,jpeg_pipe,webp_pipe'];
+	const [Width, Height] = Slot.startsWith('wordmark') ? [1200, 400] : [512, 512];
+	try {
+		await writeFile(Input, Bytes, { flag: 'wx', mode: 0o600 });
+		const Track = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', ...Whitelist, '-show_streams', '-of', 'json', Input], 'InvalidImage')).streams?.[0];
+		if (!Track || Track.width > 4096 || Track.height > 4096) throw new HttpError(422, 'InvalidImage');
+		await Run(Config.FFmpeg, ['-hide_banner', '-loglevel', 'error', '-nostdin', ...Whitelist, '-i', Input, '-frames:v', '1', '-map_metadata', '-1',
+			'-vf', `scale='min(${Width},iw)':'min(${Height},ih)':force_original_aspect_ratio=decrease`, '-pix_fmt', 'rgba', '-c:v', 'png', '-threads', '1', '-n', join(Config.MediaDir, Name)], 'InvalidImage');
+		return Name;
+	} finally { await rm(Input, { force: true }); }
+}
+
+export const AvatarExists =async (Config, Name) => (await stat(join(Config.MediaDir, Name)).catch(() => null))?.isFile() ?? false;
 export const RemoveMedia = (Config, Name) => rm(join(Config.MediaDir, Name), { force: true });
 
 export async function ReceiveVideo(Request, Config) {

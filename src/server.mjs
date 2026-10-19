@@ -15,10 +15,12 @@ import { Compatibility } from './routes/compatibility.mjs';
 import { Account } from './routes/account.mjs';
 import { Passport } from './routes/passport.mjs';
 import { Admin } from './routes/admin.mjs';
+import { LoadSettings } from './settings.mjs';
 
 const Config = LoadConfig();
 const Pool = Database(Config.DatabaseUrl);
 await Migrate(Pool);
+await LoadSettings(Pool, Config);
 const Raw = await readFile(join(ClientDir, 'index.html'), 'utf8').catch(() => { throw new Error('Run npm run capture first'); });
 const Unknown = new Map();
 const Blocked = new Map();
@@ -28,6 +30,7 @@ const Csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'
 const Cleanup = setInterval(() => {
 	Pool.query('DELETE FROM sessions WHERE expires_at < now()').catch(() => console.error('SessionCleanupFailed'));
 	Pool.query("DELETE FROM video_views WHERE viewed_at < now() - interval '6 hours'").catch(() => console.error('ViewCleanupFailed'));
+	Pool.query("UPDATE user_events SET ip = NULL WHERE ip IS NOT NULL AND created_at < now() - interval '90 days'").catch(() => console.error('EventCleanupFailed'));
 }, 3600000).unref();
 
 const Server = createServer(async (Request, Response) => {
@@ -93,7 +96,7 @@ const Server = createServer(async (Request, Response) => {
 			return Json(Response, { ok: true });
 		}
 		const User = await Viewer(Pool, Request);
-		const Context = { Request, Response, Url, Pool, Config, User, Limiter, Uploading, Unknown, ClientShell: () => Shell(Raw, Config.Origin, { Config, User }) };
+		const Context = { Request, Response, Url, Pool, Config, User, Limiter, Uploading, Unknown };
 		if (Path.startsWith('/_debug/')) {
 			RequireMethod(Request, ['GET']);
 			if (User?.role !== 'admin') throw new HttpError(403, 'AdminRequired');

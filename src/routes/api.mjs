@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises';
 import { HttpError, Id, Json, ReadBody, RequireMethod } from '../http.mjs';
-import { CreateUser, Login, RequireCsrf, SessionCookie } from '../auth.mjs';
+import { CreateUser, Login, RequireCsrf, SessionCookie, ClientInfo } from '../auth.mjs';
 import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment } from '../store.mjs';
 import { ImportVideo, ReceiveVideo } from '../media.mjs';
 
@@ -23,7 +23,7 @@ export async function Api(Context) {
 		RequireMethod(Request, ['POST']);
 		Limiter.Hit(`auth:${Request.socket.remoteAddress}`, 10);
 		const Body = await ReadBody(Request);
-		const Session = await Login(Pool, Body.username, Body.password);
+		const Session = await Login(Pool, Body.username, Body.password, ClientInfo(Request, Config));
 		Response.setHeader('set-cookie', SessionCookie(Config, Session.Token));
 		Json(Response, { user: UserShape(Session.User, Config.Origin), csrfToken: Session.Csrf });
 		return true;
@@ -31,7 +31,7 @@ export async function Api(Context) {
 	if (Path === '/api/v1/users') {
 		RequireMethod(Request, ['POST']);
 		Limiter.Hit(`register:${Request.socket.remoteAddress}`, 5);
-		const Created = await CreateUser(Pool, await ReadBody(Request), Config.Registration);
+		const Created = await CreateUser(Pool, await ReadBody(Request), Config.Registration, false, ClientInfo(Request, Config));
 		Json(Response, { user: UserShape(Created, Config.Origin) }, 201); return true;
 	}
 	if (Path === '/api/v1/videos') {
@@ -39,6 +39,7 @@ export async function Api(Context) {
 			Json(Response, await Videos(Pool, Config.Origin, { before: Url.searchParams.get('cursor'), viewer: User?.id })); return true;
 		}
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		if (Config.Features?.upload === false) throw new HttpError(403, 'UploadsDisabled');
 		Limiter.Hit(`upload:${User.id}`, 5, 3600000);
 		if (!Request.headers['content-type']?.startsWith('video/')) throw new HttpError(415, 'ExpectedVideoBody');
 		if (Number(Request.headers['content-length']) > Config.MaxVideoBytes) throw new HttpError(413, 'VideoTooLarge');
@@ -61,6 +62,7 @@ export async function Api(Context) {
 				Json(Response, { comments: Result.rows }); return true;
 			}
 			RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+			if (Config.Features?.comments === false) throw new HttpError(403, 'CommentsDisabled');
 			Limiter.Hit(`comment:${User.id}`, 30);
 			const { id, body, created_at } = await AddComment(Pool, VideoId, User.id, (await ReadBody(Request)).text);
 			Json(Response, { id, body, created_at }, 201); return true;

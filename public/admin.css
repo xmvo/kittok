@@ -1,55 +1,78 @@
-html.kittok-admin-active main > :not(#kittok-admin){display:none!important}
-#kittok-admin{box-sizing:border-box;width:100%;max-width:1080px;margin:0 auto;padding:32px 32px 80px;color:var(--tux-colorTextPrimary);font-family:TikTokFont,Arial,Tahoma,PingFangSC,sans-serif}
-#kittok-admin *{box-sizing:border-box}
-#kittok-admin h1{margin:0 0 20px;font-size:28px;line-height:36px}
-#kittok-admin h2{margin:32px 0 12px;font-size:18px;font-weight:700}
-.kittok-admin-tabs{display:flex;gap:4px;border-bottom:1px solid var(--tux-colorLineSecondary);margin-bottom:24px;overflow-x:auto;scrollbar-width:none}
-.kittok-admin-tabs button{flex:none;padding:12px 24px;border:0;background:none;color:var(--tux-colorTextSecondary);font:600 17px/24px TikTokFont,Arial,sans-serif;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
-.kittok-admin-tabs button:hover{color:var(--tux-colorTextPrimary)}
-.kittok-admin-tabs button[aria-selected="true"]{color:var(--tux-colorTextPrimary);border-bottom-color:var(--tux-colorTextPrimary)}
-.kittok-admin-body[aria-busy="true"]{opacity:.5}
-.kittok-admin-sub,.kittok-admin-meta{color:var(--tux-colorTextSecondary);font-size:14px;line-height:20px}
-.kittok-admin-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:16px}
-.kittok-admin-stat{display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:8px;background:var(--tux-colorBGSecondary)}
-.kittok-admin-stat strong{font-size:24px;line-height:32px;font-weight:700}
-.kittok-admin-stat span{color:var(--tux-colorTextSecondary);font-size:14px}
-.kittok-admin-list{list-style:none;margin:0;padding:0}
-.kittok-admin-list>li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--tux-colorLineSecondary)}
-.kittok-admin-person{display:flex;align-items:flex-start;gap:12px;min-width:0;color:inherit;text-decoration:none}
-.kittok-admin-avatar{flex:none;border-radius:50%;object-fit:cover;background:var(--tux-colorBGSecondary)}
-.kittok-admin-main{display:flex;flex-direction:column;gap:2px;min-width:0}
-.kittok-admin-main>strong{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700}
-.kittok-admin-name{font-size:14px;font-weight:600;color:var(--tux-colorTextSecondary)}
-.kittok-admin-comment{margin:2px 0;font-size:16px;line-height:22px;overflow-wrap:anywhere;white-space:pre-wrap}
-.kittok-admin-tag{padding:2px 8px;border-radius:4px;background:var(--tux-colorBGSecondary);color:var(--tux-colorTextSecondary);font-size:12px;font-weight:600}
-.kittok-admin-tag.negative{background:var(--tux-colorPrimary-opacity-12,rgba(254,44,85,.12));color:var(--tux-colorPrimary)}
-.kittok-admin-actions{display:flex;flex:none;flex-wrap:wrap;gap:8px;justify-content:flex-end}
-.kittok-admin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px 12px}
-.kittok-admin-card{display:flex;flex-direction:column;gap:6px;min-width:0}
-.kittok-admin-card .TUXButton{align-self:flex-start}
-.kittok-admin-cover{position:relative;display:block;aspect-ratio:3/4;border-radius:8px;overflow:hidden;background:var(--tux-colorBGSecondary)}
-.kittok-admin-cover img{width:100%;height:100%;object-fit:cover;display:block}
-.kittok-admin-views{position:absolute;left:8px;bottom:6px;color:#fff;font-size:14px;font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.6)}
-.kittok-admin-caption{margin:0;font-size:14px;line-height:20px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.kittok-admin-input{display:block;width:100%;height:44px;padding:0 16px;border:1px solid transparent;border-radius:8px;background:var(--tux-colorBGInput,var(--tux-colorBGSecondary));color:var(--tux-colorTextPrimary);font:16px TikTokFont,Arial,sans-serif;outline:none}
-.kittok-admin-input:focus{border-color:var(--tux-colorLineInput,var(--tux-colorLineSecondary))}
-.kittok-admin-search{max-width:460px;margin-bottom:8px}
-.kittok-admin-form{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
-.kittok-admin-form label{display:flex;flex-direction:column;gap:6px;width:160px;font-size:14px;font-weight:600;color:var(--tux-colorTextSecondary)}
-.kittok-admin-code{margin-top:16px;padding:16px;border-radius:8px;background:var(--tux-colorBGSecondary)}
-.kittok-admin-code p{margin:0 0 8px;color:var(--tux-colorTextSecondary);font-size:14px}
-.kittok-admin-code code{display:block;margin-bottom:12px;font-size:15px;overflow-wrap:anywhere;user-select:all}
-#kittok-admin code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
-.kittok-admin-notice{padding:12px 16px;border-radius:8px;background:var(--tux-colorBGSecondary);color:var(--tux-colorTextSecondary);font-size:14px}
-.kittok-admin-empty{padding:48px 0;text-align:center;color:var(--tux-colorTextSecondary);font-size:16px}
-.kittok-admin-more{display:flex;justify-content:center;margin-top:20px}
-.kittok-admin-overlay{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.5)}
-.kittok-admin-dialog{width:100%;max-width:400px;padding:24px;border-radius:8px;background:var(--tux-colorBGPrimary,#fff);color:var(--tux-colorTextPrimary);font-family:TikTokFont,Arial,sans-serif;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.25)}
-.kittok-admin-dialog h2{margin:0 0 8px;font-size:20px;font-weight:700}
-.kittok-admin-dialog p{margin:0 0 16px;color:var(--tux-colorTextSecondary);font-size:15px;line-height:21px}
-.kittok-admin-dialog .kittok-admin-input{margin-bottom:16px;text-align:center}
-.kittok-admin-dialog-actions{display:flex;gap:12px}
-.kittok-admin-dialog-actions .TUXButton{flex:1}
-.kittok-admin-toast{position:fixed;left:50%;top:24px;z-index:6000;transform:translateX(-50%);max-width:calc(100vw - 32px);padding:12px 20px;border-radius:8px;background:var(--tux-colorToastDefault,rgba(84,84,84,.92));color:#fff;font:600 15px TikTokFont,Arial,sans-serif}
-.kittok-admin-toast.negative{background:var(--tux-colorToastNegative,#e5254c)}
-@media (max-width:720px){#kittok-admin{padding:20px 16px 80px}.kittok-admin-list>li{flex-direction:column;align-items:stretch}.kittok-admin-actions{justify-content:flex-start}.kittok-admin-tabs button{padding:10px 14px;font-size:15px}}
+@font-face{font-family:TikTokFont;src:url("/_client/sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Regular.woff2?_default_font=1&v=2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:TikTokFont;src:url("/_client/sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.woff2?_default_font=1&v=2") format("woff2");font-weight:500 600;font-display:swap}
+@font-face{font-family:TikTokFont;src:url("/_client/sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Bold.woff2?_default_font=1&v=2") format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:TikTokDisplayFont;src:url("/_client/sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Bold.woff2?_default_font=1&v=2") format("woff2");font-weight:700;font-display:swap}
+:root{--bg:var(--tux-colorBGPrimary,#fff);--card:var(--tux-colorBGSecondary,#f1f1f2);--card2:var(--tux-colorBGTertiary,#e3e3e4);--text:var(--tux-colorTextPrimary,#161823);--muted:var(--tux-colorTextSecondary,rgba(22,24,35,.6));--line:var(--tux-colorLineSecondary,rgba(22,24,35,.12));--primary:var(--tux-colorPrimary,#fe2c55);--input:var(--tux-colorBGInput,var(--card))}
+[data-theme="dark"]{--bg:var(--tux-colorBGPrimary,#121212);--card:var(--tux-colorBGSecondary,#1e1e1e)}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:400 15px/1.4 TikTokFont,Arial,Tahoma,sans-serif}
+a{color:inherit;text-decoration:none}a:hover{text-decoration:underline}
+#kittok-admin{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}
+.sidebar{position:sticky;top:0;display:flex;flex-direction:column;gap:20px;height:100vh;padding:20px 12px;border-right:1px solid var(--line);background:var(--bg)}
+.logo-link{display:block;padding:4px 12px}.logo{display:block;height:40px;max-width:180px;object-fit:contain;object-position:left}
+.sidebar nav{display:flex;flex-direction:column;gap:2px}
+.sidebar nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;font-weight:600;font-size:17px;color:var(--text)}
+.sidebar nav a:hover{background:var(--card);text-decoration:none}
+.sidebar nav a[aria-current]{color:var(--primary)}
+.sidebar nav a:last-child{margin-top:8px;color:var(--muted)}
+.me{display:flex;align-items:center;gap:10px;margin-top:auto;padding:0 12px}.me .muted{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.theme{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:50%;background:var(--card);color:var(--text);cursor:pointer}
+.content{min-width:0;max-width:1180px;padding:28px 32px 96px}
+.content[aria-busy]{opacity:.55;transition:opacity .2s}
+h1{margin:4px 0 20px;font:700 28px/36px TikTokDisplayFont,TikTokFont,Arial,sans-serif}
+h2{margin:0 0 12px;font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+h2.section{margin:36px 0 4px}h3{margin:0 0 10px;font-size:14px;font-weight:700}
+.muted,small{color:var(--muted);font-size:14px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;overflow-wrap:anywhere}
+.crumbs{margin:-8px 0 16px;color:var(--muted);font-size:14px}.crumbs a{color:var(--muted)}
+.card{padding:20px;border-radius:12px;background:var(--card);margin-bottom:16px;min-width:0}
+.columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start}.columns>.card,.columns>.stack{margin:0}
+.columns+.card,.columns+.columns{margin-top:16px}
+.stack{display:flex;flex-direction:column;gap:16px}.stack>.card{margin:0}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:20px}
+.stat{display:flex;flex-direction:column;gap:2px;padding:16px;border-radius:12px;background:var(--card)}.stat strong{font-size:26px;line-height:34px}.stat span{color:var(--muted);font-size:14px}
+.list{list-style:none;margin:0;padding:0}
+.list>li{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.list>li:last-child{border-bottom:0}
+.list.compact>li{padding:8px 0}.list>li.revoked{opacity:.6}
+.grow{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.grow>strong{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:700}
+.body{margin:2px 0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:22px}.body.large{font-size:17px;line-height:24px}
+.avatar{flex:none;border-radius:50%;object-fit:cover;background:var(--card2)}
+.tag{display:inline-block;padding:1px 8px;border-radius:4px;background:var(--card2);color:var(--muted);font-size:12px;font-weight:600}
+.tag.negative{background:color-mix(in srgb,var(--primary) 15%,transparent);color:var(--primary)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;flex:none;align-items:center}.actions.vertical{flex-direction:column;align-items:stretch}
+.profile{display:flex;align-items:flex-start;gap:20px}.profile h2{font-size:24px;margin:0}
+.handle{margin:2px 0 8px;font-weight:600}.counts{margin:10px 0 0;color:var(--muted);white-space:pre-wrap}.counts strong{color:var(--text)}
+.facts{display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:10px 16px;margin:0}.facts div{display:contents}.facts dt{color:var(--muted);font-size:14px}.facts dd{margin:0;overflow-wrap:anywhere}
+.table{width:100%;border-collapse:collapse;font-size:14px}.table th{text-align:left;color:var(--muted);font-weight:600;padding:8px;border-bottom:1px solid var(--line)}.table td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+.card>.table{display:block;overflow-x:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:18px 12px}
+.tile{display:flex;flex-direction:column;gap:6px;min-width:0}
+.cover{position:relative;display:block;aspect-ratio:3/4;border-radius:8px;overflow:hidden;background:var(--card2)}.cover.small{max-width:220px;margin-bottom:10px}
+.cover img{width:100%;height:100%;object-fit:cover;display:block}.cover span{position:absolute;left:8px;bottom:6px;color:#fff;font-weight:600;font-size:14px;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+.caption{margin:0;line-height:20px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.quote{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+.input{display:block;width:100%;min-height:44px;padding:10px 14px;border:1px solid transparent;border-radius:8px;background:var(--input);color:var(--text);font:inherit;outline:none}
+.card .input{background:var(--bg)}textarea.input{resize:vertical}
+.input:focus{border-color:var(--primary)}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}.field>span{color:var(--muted);font-size:14px}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:120px}.row.tight{align-items:center}.row.tight>*{flex:none}
+.search{display:flex;gap:12px;max-width:560px;margin-bottom:16px}.search .input{flex:1}
+.more{display:flex;justify-content:center;margin-top:16px}.more.left{justify-content:flex-start}
+.empty{margin:0;padding:28px 0;text-align:center;color:var(--muted)}
+.notice{padding:12px 16px;border-radius:8px;background:var(--card);color:var(--muted)}
+.code{margin-top:16px;padding:16px;border-radius:8px;background:var(--bg)}.code p{margin:0 0 8px;color:var(--muted);font-size:14px}.code code{display:block;margin-bottom:12px;font-size:15px;user-select:all}
+.settings{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:stretch}.settings>.card{margin:0;display:flex;flex-direction:column}.settings>.card>.more{margin-top:auto;padding-top:16px}
+.choices{display:flex;flex-direction:column;gap:12px}.choice{display:flex;gap:10px;align-items:flex-start;cursor:pointer}.choice span{display:flex;flex-direction:column}
+.checks{display:flex;flex-direction:column;gap:10px;margin-top:12px}.check{display:flex;gap:10px;align-items:center;cursor:pointer}
+input[type=radio],input[type=checkbox]{width:18px;height:18px;margin:2px 0 0;accent-color:var(--primary);flex:none}
+.brand-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:16px}
+.brand-card{padding:16px;border-radius:12px;background:var(--card)}
+.preview{display:grid;place-items:center;height:96px;margin-bottom:12px;border-radius:8px;border:1px solid var(--line)}.preview.dark{background:#000}.preview.light{background:#fff}.preview img{max-width:85%;max-height:72px;object-fit:contain}
+.overlay{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:rgba(0,0,0,.5)}
+.dialog{width:100%;max-width:440px;padding:24px;border-radius:12px;background:var(--bg);color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.dialog h2{justify-content:center;text-align:center;font-size:20px}.dialog>p{margin:0 0 16px;text-align:center;color:var(--muted)}.dialog .input{background:var(--card)}
+.dialog-actions{display:flex;gap:12px;margin-top:16px}.dialog-actions .TUXButton{flex:1}
+.toast{position:fixed;left:50%;top:20px;z-index:60;transform:translateX(-50%);max-width:calc(100vw - 32px);padding:12px 20px;border-radius:8px;background:var(--tux-colorToastDefault,rgba(84,84,84,.92));color:#fff;font-weight:600}.toast.negative{background:var(--tux-colorToastNegative,#e5254c)}
+@media (max-width:820px){#kittok-admin{grid-template-columns:1fr}.sidebar{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}.sidebar nav{flex-direction:row;flex-wrap:wrap}.sidebar nav a{font-size:15px;padding:8px 10px}.me{margin:0}.content{padding:20px 16px 80px}.profile{flex-direction:column}.facts{grid-template-columns:1fr}}
+.table td:nth-child(-n+4){white-space:nowrap}.table td code{white-space:nowrap}

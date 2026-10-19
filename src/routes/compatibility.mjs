@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
-import { RequireCsrf } from '../auth.mjs';
+import { RequireCsrf, RecordEvent, ClientInfo } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveMedia } from '../media.mjs';
 import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView } from '../store.mjs';
 
@@ -162,6 +162,8 @@ export async function Compatibility(Context) {
 			FROM (SELECT avatar_name FROM users WHERE id = $1) Previous WHERE u.id = $1
 			RETURNING u.id, u.username, u.display_name, u.bio, u.avatar_name, Previous.avatar_name AS previous_avatar`, [User.id, Nickname, Bio, Avatar])).rows[0];
 		if (Updated.previous_avatar && Updated.previous_avatar !== Updated.avatar_name) await RemoveMedia(Config, Updated.previous_avatar);
+		const Changed = [Nickname !== null && 'name', Bio !== null && 'bio', Avatar !== null && 'avatar'].filter(Boolean);
+		if (Changed.length) await RecordEvent(Pool, User.id, 'profile_change', ClientInfo(Request, Config), `Changed ${Changed.join(', ')}`);
 		const Url = { url_list: [AvatarUrl(Updated, Config.Origin)] };
 		Json(Response, { status_code: 0, status_msg: '', user: { uid: Updated.id, sec_uid: Updated.id, unique_id: Updated.username, nickname: Updated.display_name, signature: Updated.bio, avatar_thumb: Url, avatar_medium: Url, avatar_larger: Url } }); return true;
 	}
@@ -176,6 +178,7 @@ export async function Compatibility(Context) {
 		Json(Response, { statusCode: 0, status_code: 0, collectionList: [], cursor: '0', hasMore: false }); return true;
 	}
 	async function SearchUsers(Limit) {
+		if (Config.Features?.search === false) return [];
 		const Query = `%${(Params.get('keyword') ?? '').slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`;
 		const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, ${RelationSql('$3::bigint', 'u.id')} AS relation FROM users u
 			WHERE u.username ILIKE $1 ESCAPE '\\' OR u.display_name ILIKE $1 ESCAPE '\\' ORDER BY u.username LIMIT $2`, [Query, Limit, User?.id ?? null]);
@@ -187,7 +190,7 @@ export async function Compatibility(Context) {
 	async function SearchVideos() {
 		const Cursor = Params.get('cursor');
 		const Keyword = (Params.get('keyword') ?? '').trim();
-		if (!Keyword) return { items: [], hasMore: false, cursor: Cursor ?? '0' };
+		if (!Keyword || Config.Features?.search === false) return { items: [], hasMore: false, cursor: Cursor ?? '0' };
 		return Videos(Pool, Config.Origin, { query: Keyword, viewer: User?.id, before: Cursor && Cursor !== '0' ? Cursor : undefined, limit: Params.get('count') ?? 12 });
 	}
 	if (Path === '/api/search/user/full/') {
@@ -237,6 +240,7 @@ export async function Compatibility(Context) {
 	}
 	if (Path === '/api/comment/publish/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		if (Config.Features?.comments === false) throw new HttpError(403, 'CommentsDisabled');
 		Limiter.Hit(`comment:${User.id}`, 30);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
 		const VideoId = Id(Body.aweme_id);
