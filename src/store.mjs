@@ -34,6 +34,32 @@ export async function FollowList(Pool, Viewer, Target, Scene, Offset, Limit) {
 	return { users: Result.rows, total: Result.rows[0]?.total ?? 0 };
 }
 
+const ActivitySql = `
+	SELECT 'like' AS kind, l.created_at AS at, l.user_id AS actor, v.id AS video_id, NULL::bigint AS comment_id FROM likes l JOIN videos v ON v.id = l.video_id WHERE v.author_id = $1 AND l.user_id <> $1
+	UNION ALL SELECT 'comment_like', cl.created_at, cl.user_id, c.video_id, c.id FROM comment_likes cl JOIN comments c ON c.id = cl.comment_id WHERE c.author_id = $1 AND cl.user_id <> $1
+	UNION ALL SELECT 'comment', c.created_at, c.author_id, c.video_id, c.id FROM comments c JOIN videos v ON v.id = c.video_id LEFT JOIN comments p ON p.id = c.parent_id WHERE c.author_id <> $1 AND (v.author_id = $1 OR p.author_id = $1)
+	UNION ALL SELECT 'follow', f.created_at, f.follower_id, NULL, NULL FROM follows f WHERE f.following_id = $1`;
+
+export async function Activity(Pool, UserId, Kinds, { Before = null, After = null }, Limit) {
+	const Result = await Pool.query(`SELECT a.kind, a.at, extract(epoch FROM a.at)::float8 AS epoch, a.at <= me.notices_read_at AS read,
+		u.id, u.username, u.display_name, u.bio, u.avatar_name, ${RelationSql('$1', 'u.id')} AS relation,
+		a.video_id, v.author_id AS video_author, v.cover_name, v.description, a.comment_id, c.body, c.parent_id, p.author_id AS parent_author
+		FROM (${ActivitySql}) a JOIN users me ON me.id = $1 JOIN users u ON u.id = a.actor
+		LEFT JOIN videos v ON v.id = a.video_id LEFT JOIN comments c ON c.id = a.comment_id LEFT JOIN comments p ON p.id = c.parent_id
+		WHERE a.kind = ANY($2) AND ($3::float8 IS NULL OR a.at < to_timestamp($3)) AND ($5::float8 IS NULL OR a.at > to_timestamp($5))
+		ORDER BY a.at DESC LIMIT $4`, [UserId, Kinds, Before, Limit, After]);
+	return Result.rows;
+}
+
+export async function UnreadActivity(Pool, UserId) {
+	const Result = await Pool.query(`SELECT a.kind, count(*)::int AS count FROM (${ActivitySql}) a JOIN users me ON me.id = $1 WHERE a.at > me.notices_read_at GROUP BY a.kind`, [UserId]);
+	return Object.fromEntries(Result.rows.map(Row => [Row.kind, Row.count]));
+}
+
+export async function MarkActivityRead(Pool, UserId) {
+	await Pool.query('UPDATE users SET notices_read_at = now() WHERE id = $1', [UserId]);
+}
+
 export async function FindUser(Pool, Value, ById = false) {
 	const Result = await Pool.query(`SELECT id, username, display_name, bio, role, avatar_name FROM users WHERE ${ById ? 'id' : 'username'} = $1`, [ById ? Id(Value) : String(Value).toLowerCase()]);
 	if (!Result.rowCount) throw new HttpError(404, 'UserNotFound');

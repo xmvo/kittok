@@ -404,6 +404,54 @@ test('original client username checks and changes enforce local username rules',
 	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, { cookie: AsKitten.cookie })).json()).user.uniqueId, 'fresh_name');
 });
 
+test('original client notifications derive likes, comments, replies, and follows from the database with read state', async () => {
+	const Friendly = await Login(Pool, 'friend', Password);
+	const AsFriend = { cookie: `kittok_session=${Friendly.Token}`, 'x-csrf-token': Friendly.Csrf };
+	const Publish = (Text, Headers, Reply = '0') => Call(`/api/comment/publish/?aweme_id=${VideoId}&text=${encodeURIComponent(Text)}&reply_id=${Reply}`, 'POST', undefined, Headers).then(Response => Response.json()).then(Result => Result.comment.cid);
+	const Mine = await Publish('Owner comment for notices', Auth());
+	await Call(`/api/commit/item/digg/?aweme_id=${VideoId}&type=1`, 'POST', undefined, AsFriend);
+	const FriendComment = await Publish('Nice video from friend', AsFriend);
+	const FriendReply = await Publish('Replying to the owner', AsFriend, Mine);
+	await Call(`/api/comment/digg/?aweme_id=${VideoId}&cid=${Mine}&digg_type=1`, 'POST', undefined, AsFriend);
+	await Publish('Owner replies to self', Auth(), Mine);
+	const Counts = async (Headers = Auth()) => Object.fromEntries((await (await Call('/api/inbox/notice_count/', 'GET', undefined, Headers)).json()).notice_count.map(Entry => [Entry.group, Entry.count]));
+	const Unread = await Counts();
+	assert.equal(Unread[3], 2); assert.equal(Unread[505], 2); assert.equal(Unread[2], 2); assert.equal(Unread[7], 2); assert.equal(Unread[6], 0); assert.equal(Unread[500], 6);
+	const List = async (Group, Extra = {}, Headers = Auth()) => (await (await Call(`/api/notice/multi/?aid=1988&group_list=${encodeURIComponent(JSON.stringify([{ count: 20, is_mark_read: 0, group: Group, max_time: 0, min_time: 0, ...Extra }]))}`, 'GET', undefined, Headers)).json()).notice_lists[0];
+	const All = await List(500);
+	assert.equal(All.notice_list.length, 6); assert.equal(All.has_more, 0);
+	assert.ok(All.notice_list.every((Notice, Index, Notices) => Index === 0 || Number(Notices[Index - 1].create_time) >= Number(Notice.create_time)));
+	assert.ok(All.notice_list.every(Notice => Notice.has_read === false && Notice.nid_str === Notice.nid));
+	assert.equal(new Set(All.notice_list.map(Notice => Notice.nid)).size, 6);
+	const Like = All.notice_list.find(Notice => Notice.type === 41 && Notice.digg.digg_type === 1);
+	assert.equal(Like.digg.from_user[0].unique_id, 'friend'); assert.equal(Like.digg.aweme.aweme_id, VideoId); assert.equal(Like.digg.aweme.author.uid, Owner.id); assert.ok(Like.digg.aweme.video.cover.url_list[0].startsWith(Origin + '/media/'));
+	const CommentLike = All.notice_list.find(Notice => Notice.type === 41 && Notice.digg.digg_type === 3);
+	assert.equal(CommentLike.digg.comment.cid, Mine); assert.equal(CommentLike.digg.comment.text, 'Owner comment for notices');
+	const Comment = All.notice_list.find(Notice => Notice.type === 31 && Notice.comment.comment.cid === FriendComment);
+	assert.equal(Comment.comment.comment_type, 1); assert.equal(Comment.comment.comment.text, 'Nice video from friend'); assert.equal(Comment.comment.comment.user.unique_id, 'friend'); assert.equal(Comment.comment.aweme.aweme_id, VideoId);
+	const Reply = All.notice_list.find(Notice => Notice.type === 31 && Notice.comment.comment.cid === FriendReply);
+	assert.equal(Reply.comment.comment_type, 2); assert.equal(Reply.comment.reply_comment.user.uid, Owner.id); assert.equal(Reply.comment.comment.reply_id, Mine);
+	const Follows = All.notice_list.filter(Notice => Notice.type === 33);
+	assert.deepEqual(Follows.map(Notice => [Notice.follow.from_user.unique_id, Notice.follow.follow_button_type]).sort(), [['fresh_name', 1], ['friend', 0]]);
+	assert.deepEqual((await List(2)).notice_list.map(Notice => Notice.type), [31, 31]);
+	assert.deepEqual((await List(7)).notice_list.map(Notice => Notice.type), [33, 33]);
+	assert.deepEqual((await List(3)).notice_list.map(Notice => Notice.type), [41, 41]);
+	assert.deepEqual((await List(6)).notice_list, []);
+	const First = await List(500, { count: 4 });
+	assert.equal(First.notice_list.length, 4); assert.equal(First.has_more, 1);
+	const Second = await List(500, { count: 4, max_time: First.max_time, min_time: First.min_time });
+	assert.equal(Second.notice_list.length, 2); assert.equal(Second.has_more, 0);
+	assert.deepEqual([...First.notice_list, ...Second.notice_list].map(Notice => Notice.nid), All.notice_list.map(Notice => Notice.nid));
+	assert.deepEqual((await List(500, { max_time: 0, min_time: All.max_time })).notice_list, []);
+	assert.deepEqual((await List(500, { max_time: 0, min_time: Second.min_time })).notice_list.length, 5);
+	assert.deepEqual(Object.values(await Counts({})).filter(Boolean), []);
+	assert.deepEqual((await List(500, {}, {})).notice_list, []);
+	await List(500, { is_mark_read: 1 });
+	assert.deepEqual(Object.values(await Counts()).filter(Boolean), []);
+	assert.ok((await List(500)).notice_list.every(Notice => Notice.has_read === true));
+	assert.equal((await Call('/api/notice/multi/?group_list=not-json', 'GET', undefined, Auth())).status, 400);
+});
+
 test('search finds local accounts and paginated feeds do not repeat the final video', async () => {
 	const Users = await (await Call('/api/search/user/full/?keyword=owner')).json(); assert.equal(Users.user_list[0].user_info.unique_id, 'owner');
 	const Next = await (await Call(`/api/recommend/item_list/?cursor=${VideoId}`)).json(); assert.deepEqual(Next.itemList, []);
@@ -431,7 +479,8 @@ test('raw video uploads are transcoded, persist, and appear in the original feed
 test('users, sessions, videos, and social data survive a server restart', async () => {
 	await Stop(); await Start();
 	const Current = await (await Call('/api/v1/session', 'GET', undefined, { cookie: Cookie })).json(); assert.equal(Current.user.uniqueId, 'owner');
-	assert.equal((await Pool.query('SELECT * FROM likes WHERE video_id=$1', [VideoId])).rowCount, 1);
+	assert.equal((await Pool.query('SELECT * FROM likes WHERE video_id=$1 AND user_id=$2', [VideoId, Owner.id])).rowCount, 1);
+	assert.deepEqual((await (await Call('/api/inbox/notice_count/', 'GET', undefined, Auth())).json()).notice_count.filter(Entry => Entry.count), []);
 	const Feed = await (await Call('/api/recommend/item_list/')).json(); assert.equal(Feed.itemList.length, 2);
 	const Item = (await (await Call('/api/recommend/item_list/', 'GET', undefined, Auth())).json()).itemList.find(Item => Item.id === VideoId);
 	assert.equal(Item.collected, true); assert.equal(Item.stats.collectCount, 1);

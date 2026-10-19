@@ -1,7 +1,7 @@
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { RequireCsrf } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveAvatar } from '../media.mjs';
-import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl } from '../store.mjs';
+import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead } from '../store.mjs';
 
 const FollowStatus = Value => ({ 1: 1, 2: 2 })[Value] ?? 0;
 const Offset = Value => Math.min(Math.max(Math.floor(Number(Value)) || 0, 0), 100000);
@@ -13,6 +13,27 @@ function CommentShape(Row, Origin) {
 		digg_count: Row.likes ?? 0, reply_comment_total: Row.replies ?? 0, user_digged: Row.liked ? 1 : 0, reply_id: Row.parent_id ?? '0', reply_to_reply_id: '0',
 		user: { uid: Row.author_id, unique_id: Row.username, nickname: Row.display_name, sec_uid: Row.author_id, avatar_thumb: { url_list: [AvatarUrl(Row, Origin)] } },
 	};
+}
+
+function ApiUser(Row, Origin) {
+	const Avatar = { url_list: [AvatarUrl(Row, Origin)] };
+	return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio ?? '', avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0 };
+}
+
+const NoticeKinds = { 500: ['like', 'comment_like', 'comment', 'follow'], 3: ['like', 'comment_like'], 505: ['like', 'comment_like'], 2: ['comment'], 7: ['follow'] };
+
+function NoticeShape(Row, Viewer, Origin) {
+	const Code = { like: 1, comment_like: 2, comment: 3, follow: 4 }[Row.kind];
+	const Nid = `${Code}${Row.video_id ?? 0}${Row.comment_id ?? 0}${Row.id}`;
+	const Notice = { nid: Nid, nid_str: Nid, create_time: Math.floor(Row.epoch), has_read: Row.read, user_id: Viewer };
+	const From = ApiUser(Row, Origin);
+	const Aweme = Row.video_id && { aweme_id: Row.video_id, aweme_type: 0, desc: Row.description, author: { uid: Row.video_author }, status: { private_status: 0 }, video: { cover: { url_list: [`${Origin}/media/${Row.cover_name}`] } } };
+	if (Row.kind === 'follow') return { ...Notice, type: 33, follow: { from_user: From, follow_button_type: Row.relation === 2 ? 0 : 1 } };
+	if (Row.kind === 'comment') {
+		const Reply = Row.parent_author === Viewer;
+		return { ...Notice, type: 31, comment: { comment_type: Reply ? 2 : 1, aweme: Aweme, comment: { cid: Row.comment_id, text: Row.body, text_extra: [], reply_id: Row.parent_id ?? '0', user: From }, ...(Reply ? { reply_comment: { user: { uid: Viewer } } } : {}) } };
+	}
+	return { ...Notice, type: 41, digg: { digg_type: Row.kind === 'like' ? 1 : 3, merge_count: 1, from_user: [From], aweme: Aweme, ...(Row.kind === 'comment_like' ? { comment: { cid: Row.comment_id, text: Row.body, text_extra: [] } } : {}) } };
 }
 
 async function CommentPage(Pool, Origin, Viewer, { video, parent, cursor, count }) {
@@ -86,11 +107,27 @@ export async function Compatibility(Context) {
 		const List = User ? await FollowList(Pool, User.id, User.id, 'following', Start, PageSize(Params.get('count'), 30)) : { users: [], total: 0 };
 		Json(Response, {
 			status_code: 0, max_time: Start, min_time: Start + List.users.length, has_more: Start + List.users.length < List.total ? 1 : 0,
-			followings: List.users.map(Row => {
-				const Avatar = { url_list: [AvatarUrl(Row, Config.Origin)] };
-				return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio, avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: Row.relation === 2 ? 1 : 0 };
-			}),
+			followings: List.users.map(Row => ApiUser(Row, Config.Origin)),
 		}); return true;
+	}
+	if (Path === '/api/inbox/notice_count/') {
+		RequireMethod(Request, ['GET']);
+		const Unread = User ? await UnreadActivity(Pool, User.id) : {};
+		const Count = Kinds => Kinds.reduce((Sum, Kind) => Sum + (Unread[Kind] ?? 0), 0);
+		Json(Response, { status_code: 0, notice_count: [500, 3, 505, 2, 6, 7, 661].map(Group => ({ group: Group, count: Count(NoticeKinds[Group] ?? []) })) }); return true;
+	}
+	if (Path === '/api/notice/multi/' || Path === '/api/inbox/notice_list/') {
+		RequireMethod(Request, ['GET']);
+		let Entry;
+		try { Entry = JSON.parse(Params.get('group_list') ?? '[]')[0]; } catch { throw new HttpError(400, 'InvalidGroupList'); }
+		const Group = Number(Entry?.group);
+		const Max = Number(Entry?.max_time) || 0, Min = Number(Entry?.min_time) || 0;
+		const Window = Max > 0 ? { Before: Min || Max } : Min > 0 ? { After: Min } : {};
+		if (User && Number(Entry?.is_mark_read) === 1) await MarkActivityRead(Pool, User.id);
+		const Limit = PageSize(Entry?.count, 20);
+		const Rows = User && NoticeKinds[Group] ? await Activity(Pool, User.id, NoticeKinds[Group], Window, Limit + 1) : [];
+		const Page = Rows.slice(0, Limit);
+		Json(Response, { status_code: 0, notice_lists: [{ group: Group, has_more: Rows.length > Limit ? 1 : 0, max_time: Page[0]?.epoch ?? 0, min_time: Page.at(-1)?.epoch ?? 0, notice_list: Page.map(Row => NoticeShape(Row, User.id, Config.Origin)) }] }); return true;
 	}
 	if (Path === '/api/upload/image/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
