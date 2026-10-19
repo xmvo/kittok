@@ -12,7 +12,7 @@ export function UserShape(User, Origin) {
 	};
 }
 
-const RelationSql = (Viewer, Target) => `CASE
+export const RelationSql = (Viewer, Target) => `CASE
 	WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Viewer} AND following_id = ${Target})
 		THEN CASE WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Target} AND following_id = ${Viewer}) THEN 2 ELSE 1 END
 	WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Target} AND following_id = ${Viewer}) THEN 6 ELSE 0 END`;

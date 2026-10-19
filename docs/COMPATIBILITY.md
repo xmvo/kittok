@@ -20,7 +20,7 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Share sheet following list | Your followings from `follows` | Verified: the client's retry loop (about 2 requests per second) stopped |
 | Likes | PostgreSQL `likes`, read back as `digged`/`stats.diggCount` | Native like/unlike verified, including after reload |
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
-| User search | Local SQL lookup and response adapter | Needs browser acceptance checks |
+| User and video search | Usernames and display names; video captions, newest first | Native Top, Users, and Videos tabs verified. Photos and LIVE return empty results |
 | Video search, notifications, DMs, LIVE, shop, coins | Not implemented | Visible original controls do not imply working features |
 | Moderation and admin panel | Operator CLI and admin debug routes only | Full administration UI remains to be built |
 
@@ -52,6 +52,12 @@ These are taken from the cached client bundle. The client sends every parameter 
 | GET `/api/notice/multi/` and `/api/inbox/notice_list/` | `group_list` JSON `[{group, count, max_time, min_time, is_mark_read}]` | `notice_lists[0]`: `notice_list`, `has_more`, `max_time`, `min_time`. `max_time` 0 and `min_time` 0 returns the newest page; `max_time` above 0 loads items older than `min_time`; `max_time` 0 with `min_time` set fetches newer items. `is_mark_read: 1`, sent whenever the inbox opens, marks everything read |
 
 Notices use type 41 for likes (`digg.digg_type` 1 for a video, 3 for a comment), 31 for comments (`comment.comment_type` 1 for a comment, 2 for a reply to your comment, with `reply_comment.user`), and 33 for follows (`follow.follow_button_type` 0 when mutual). `create_time` must be whole seconds because the client sorts with `BigInt`. Mentions are not stored, so that tab is always empty. Each like is its own notice; likes on the same video are not merged.
+
+| GET `/api/search/item/full/` | `keyword`, `cursor` (0 first), `count` (12) | `item_list` of item structs, `cursor` (last video id), `has_more` |
+| GET `/api/search/general/full/` | `keyword`, `cursor`, `count` | `data[]`: `{type: 4, user_list}` once on the first page, then `{type: 1, item}` per video; `cursor`, `has_more` |
+| GET `/api/search/user/full/` | `keyword` | `user_list[{user_info}]` with snake_case stats (`follower_count`, `following_count`, `aweme_count`, `total_favorited`) and the viewer's `follow_status` |
+
+Your own account still shows a Follow button in search results; following yourself is rejected.
 
 The client's security SDK re-opens XHR requests and replays their headers, so `X-CSRF-Token` can arrive as `token, token`. Kittok accepts that only when every copy matches the session token.
 | POST `/api/commit/follow/user/` and `/api/follow/` | `user_id`, `type`/`action_type` (1 follow, 0 unfollow) | `status_code`, integer `follow_status`: 0 none, 1 following, 2 mutual (4, requested, is unused) |

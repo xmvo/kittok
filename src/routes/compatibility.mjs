@@ -1,7 +1,7 @@
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { RequireCsrf } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveAvatar } from '../media.mjs';
-import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead } from '../store.mjs';
+import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql } from '../store.mjs';
 
 const FollowStatus = Value => ({ 1: 1, 2: 2 })[Value] ?? 0;
 const Offset = Value => Math.min(Math.max(Math.floor(Number(Value)) || 0, 0), 100000);
@@ -165,11 +165,41 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']);
 		Json(Response, { statusCode: 0, status_code: 0, collectionList: [], cursor: '0', hasMore: false }); return true;
 	}
+	async function SearchUsers(Limit) {
+		const Query = `%${(Params.get('keyword') ?? '').slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`;
+		const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, ${RelationSql('$3::bigint', 'u.id')} AS relation FROM users u
+			WHERE u.username ILIKE $1 ESCAPE '\\' OR u.display_name ILIKE $1 ESCAPE '\\' ORDER BY u.username LIMIT $2`, [Query, Limit, User?.id ?? null]);
+		return Promise.all(Result.rows.map(async Row => {
+			const Stats = await UserStats(Pool, Row.id);
+			return { user_info: { ...ApiUser(Row, Config.Origin), follower_count: Stats.followerCount, following_count: Stats.followingCount, aweme_count: Stats.videoCount, total_favorited: Stats.heartCount } };
+		}));
+	}
+	async function SearchVideos() {
+		const Cursor = Params.get('cursor');
+		const Keyword = (Params.get('keyword') ?? '').trim();
+		if (!Keyword) return { items: [], hasMore: false, cursor: Cursor ?? '0' };
+		return Videos(Pool, Config.Origin, { query: Keyword, viewer: User?.id, before: Cursor && Cursor !== '0' ? Cursor : undefined, limit: Params.get('count') ?? 12 });
+	}
 	if (Path === '/api/search/user/full/') {
 		RequireMethod(Request, ['GET']);
-		const Query = `%${(Params.get('keyword') ?? '').slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`;
-		const Result = await Pool.query("SELECT id, username, display_name, bio, avatar_name FROM users WHERE username ILIKE $1 ESCAPE '\\' OR display_name ILIKE $1 ESCAPE '\\' ORDER BY username LIMIT 20", [Query]);
-		Json(Response, { status_code: 0, user_list: await Promise.all(Result.rows.map(async Row => ({ user_info: { ...UserShape(Row, Config.Origin), uid: Row.id, unique_id: Row.username, sec_uid: Row.id, nickname: Row.display_name, avatar_thumb: { url_list: [AvatarUrl(Row, Config.Origin)] }, ...await UserStats(Pool, Row.id) } }))), cursor: 0, has_more: 0 }); return true;
+		Json(Response, { status_code: 0, user_list: await SearchUsers(20), cursor: 0, has_more: 0 }); return true;
+	}
+	if (Path === '/api/search/item/full/') {
+		RequireMethod(Request, ['GET']);
+		const Found = await SearchVideos();
+		Json(Response, { status_code: 0, item_list: Found.items, cursor: Found.cursor, has_more: Found.hasMore ? 1 : 0, extra: { logid: 'kittok' } }); return true;
+	}
+	if (Path === '/api/search/general/full/') {
+		RequireMethod(Request, ['GET']);
+		const First = !Params.get('cursor') || Params.get('cursor') === '0';
+		const People = First && Params.get('keyword')?.trim() ? await SearchUsers(5) : [];
+		const Found = await SearchVideos();
+		const Data = [...(People.length ? [{ type: 4, user_list: People, view_more: People.length === 5, common: {} }] : []), ...Found.items.map(Item => ({ type: 1, item: Item, common: {} }))];
+		Json(Response, { status_code: 0, data: Data, cursor: Found.cursor, has_more: Found.hasMore ? 1 : 0, extra: { logid: 'kittok' } }); return true;
+	}
+	if (Path === '/api/search/photo/full/' || Path === '/api/search/live/full/') {
+		RequireMethod(Request, ['GET']);
+		Json(Response, { status_code: 0, item_list: [], data: [], cursor: 0, has_more: 0, extra: { logid: 'kittok' } }); return true;
 	}
 	if (Path === '/api/comment/list/') {
 		RequireMethod(Request, ['GET']);

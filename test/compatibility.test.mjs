@@ -454,6 +454,17 @@ test('original client notifications derive likes, comments, replies, and follows
 
 test('search finds local accounts and paginated feeds do not repeat the final video', async () => {
 	const Users = await (await Call('/api/search/user/full/?keyword=owner')).json(); assert.equal(Users.user_list[0].user_info.unique_id, 'owner');
+	const Friendly = (await (await Call('/api/search/user/full/?keyword=friend', 'GET', undefined, Auth())).json()).user_list[0].user_info;
+	assert.equal(Friendly.follower_count, 1); assert.equal(Friendly.follow_status, 2);
+	const Videos = await (await Call('/api/search/item/full/?keyword=KITTOK&cursor=0&count=12')).json();
+	assert.equal(Videos.status_code, 0); assert.deepEqual(Videos.item_list.map(Item => Item.id), [VideoId]); assert.equal(Videos.has_more, 0);
+	assert.deepEqual((await (await Call('/api/search/item/full/?keyword=nothing-matches-this')).json()).item_list, []);
+	assert.deepEqual((await (await Call('/api/search/item/full/?keyword=%25')).json()).item_list, []);
+	const Top = await (await Call('/api/search/general/full/?keyword=owner&cursor=0&count=12')).json();
+	assert.deepEqual(Top.data.map(Entry => Entry.type), [4]); assert.equal(Top.data[0].user_list[0].user_info.unique_id, 'owner');
+	const TopVideo = await (await Call('/api/search/general/full/?keyword=first&cursor=0')).json();
+	assert.equal(TopVideo.data[0].type, 1); assert.equal(TopVideo.data[0].item.id, VideoId);
+	assert.deepEqual((await (await Call('/api/search/photo/full/?keyword=owner')).json()).item_list, []);
 	const Next = await (await Call(`/api/recommend/item_list/?cursor=${VideoId}`)).json(); assert.deepEqual(Next.itemList, []);
 });
 
