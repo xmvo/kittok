@@ -1,0 +1,26 @@
+{
+	"name": "kittok",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"capture": "node scripts/capture.mjs",
+		"start": "node --env-file-if-exists=.env src/server.mjs",
+		"migrate": "node --env-file-if-exists=.env scripts/migrate.mjs",
+		"user:create": "node --env-file-if-exists=.env scripts/create-user.mjs",
+		"invite:create": "node --env-file-if-exists=.env scripts/create-invite.mjs",
+		"video:import": "node --env-file-if-exists=.env scripts/import-video.mjs",
+		"demo": "node --env-file-if-exists=.env scripts/seed.mjs",
+		"setup": "node scripts/setup.mjs",
+		"source": "node scripts/package-source.mjs",
+		"test": "node --env-file-if-exists=.env scripts/test.mjs"
+	},
+	"engines": {
+		"node": ">=22"
+	},
+	"version": "0.1.0",
+	"description": "Self-hosted backend for the TikTok web client",
+	"license": "AGPL-3.0-or-later",
+	"dependencies": {
+		"pg": "8.23.1"
+	}
+}

@@ -1,0 +1,12 @@
+client/
+data/
+media/
+artifacts/
+.env
+.env.*
+!.env.example
+.owner-password
+node_modules/
+dist/
+*.log
+.git/

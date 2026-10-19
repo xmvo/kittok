@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 110" role="img" aria-labelledby="title">
+  <title id="title">KitTok</title>
+  <defs>
+    <path id="cat" d="M22 48 20 17Q20 11 26 15L44 29Q55 26 66 29L84 15Q90 11 90 18L88 48Q98 83 70 94Q55 100 39 94Q12 84 22 48Z"/>
+
+  </defs>
+  <path fill="#fff" d="M0 0h110v110H0z"/>
+  <use href="#cat" fill="#25F4EE" transform="translate(-5 -3)"/>
+  <use href="#cat" fill="#FE2C55" transform="translate(5 3)"/>
+  <use href="#cat" fill="#fff" stroke="#111" stroke-width="1.8" stroke-linejoin="round"/>
+  <g fill="#111">
+    <ellipse cx="40" cy="58" rx="7" ry="10"/>
+    <ellipse cx="70" cy="58" rx="7" ry="10"/>
+  </g>
+  <g fill="#fff"><circle cx="42" cy="55" r="2.3"/><circle cx="72" cy="55" r="2.3"/></g>
+  <path fill="#111" d="M51 71Q55 68 59 71L55 76Z"/>
+  <path d="M55 75v4m0 0q-5 6-9 0m9 0q5 6 9 0M33 72l-13-3m13 9-13 2m57-8 13-3m-13 9 13 2" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>
+</svg>

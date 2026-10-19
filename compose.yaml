@@ -1,0 +1,47 @@
+name: kittok
+services:
+  db:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_USER: kittok
+      POSTGRES_DB: kittok
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run setup first}
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U kittok -d kittok"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+  app:
+    build: .
+    init: true
+    environment:
+      INSTANCE_NAME: ${INSTANCE_NAME:-Kittok}
+      INSTANCE_DESCRIPTION: ${INSTANCE_DESCRIPTION:-A little corner of the internet for your videos.}
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN in .env}
+      REGISTRATION_MODE: ${REGISTRATION_MODE:-closed}
+      DATABASE_URL: postgresql://kittok:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/kittok
+      SOURCE_URL: ${SOURCE_URL:-/source}
+      MAX_VIDEO_MB: ${MAX_VIDEO_MB:-100}
+      MAX_VIDEO_SECONDS: ${MAX_VIDEO_SECONDS:-600}
+    ports:
+      - "127.0.0.1:${HOST_PORT:-3210}:3210"
+    volumes:
+      - client:/var/lib/kittok/client
+      - media:/var/lib/kittok/media
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, deploy/healthcheck.mjs]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+    restart: unless-stopped
+volumes:
+  postgres:
+  client:
+  media:

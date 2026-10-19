@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 110" role="img" aria-labelledby="title">
+  <title id="title">KitTok</title>
+  <defs>
+    <path id="cat" d="M22 48 20 17Q20 11 26 15L44 29Q55 26 66 29L84 15Q90 11 90 18L88 48Q98 83 70 94Q55 100 39 94Q12 84 22 48Z"/>
+    <path id="o" fill-rule="evenodd" d="M299 44C282 44 273 54 273 71S282 98 299 98 325 88 325 71 316 44 299 44ZM299 57C307 57 310 62 310 71S307 85 299 85 288 80 288 71 291 57 299 57Z"/>
+  </defs>
+  <path fill="#fff" d="M0 0h390v110H0z"/>
+  <use href="#cat" fill="#25F4EE" transform="translate(-5 -3)"/>
+  <use href="#cat" fill="#FE2C55" transform="translate(5 3)"/>
+  <use href="#cat" fill="#fff" stroke="#111" stroke-width="1.8" stroke-linejoin="round"/>
+  <g fill="#111">
+    <ellipse cx="40" cy="58" rx="7" ry="10"/>
+    <ellipse cx="70" cy="58" rx="7" ry="10"/>
+  </g>
+  <g fill="#fff"><circle cx="42" cy="55" r="2.3"/><circle cx="72" cy="55" r="2.3"/></g>
+  <path fill="#111" d="M51 71Q55 68 59 71L55 76Z"/>
+  <path d="M55 75v4m0 0q-5 6-9 0m9 0q5 6 9 0M33 72l-13-3m13 9-13 2m57-8 13-3m-13 9 13 2" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>
+  <g fill="#111">
+    <path d="M121 24h16v30l23-30h19l-28 35 30 38h-20l-24-32v32h-16Z"/>
+    <path d="M185 45h15v52h-15Zm0-21h15v14h-15Z"/>
+    <path d="M211 31h15v14h12v13h-12v22q0 6 7 6h5v11h-9q-18 0-18-17V58h-7V45h7Z"/>
+    <path d="M238 24h52v15h-18v58h-16V39h-18Z"/>
+  </g>
+  <use href="#o" fill="#25F4EE" transform="translate(-3 -2)"/>
+  <use href="#o" fill="#FE2C55" transform="translate(3 2)"/>
+  <use href="#o" fill="#111"/>
+  <path fill="#111" d="M333 24h15v41l15-20h18l-20 24 22 28h-19l-16-22v22h-15Z"/>
+</svg>
