@@ -11,10 +11,10 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Uploads | Authenticated, size/duration bounds, ffmpeg transcoding | Kittok account screen; original Upload link redirects there |
 | Favorites | PostgreSQL `favorites`, read back as `collected`/`stats.collectCount` and the own-profile Favorites tab | Native save/unsave button verified, including after reload |
 | Follows | PostgreSQL `follows`, read back as user/author `relation` | Native feed follow button verified, including after reload |
-| Comments | PostgreSQL `comments`, read back by the comment list and `stats.commentCount` | Native comment list verified; native post button not yet browser-verified |
+| Comments | PostgreSQL `comments`, read back by the comment list and `stats.commentCount` | Native comment list and Post button verified |
 | Comment replies and likes | One-level threads in `comments.parent_id`; likes in `comment_likes` | Native "View N replies", reply paging, and comment heart verified |
-| Comment delete | Comment author, video owner, or admin; deleting a top-level comment removes its replies | API-tested; native menu not yet browser-verified |
-| Follower, following, friend, and suggested lists | `follows`, with per-user stats and `relation` | API-tested; native profile lists not yet browser-verified |
+| Comment delete | Comment author, video owner, or admin; deleting a top-level comment removes its replies | Native "..." menu and confirmation verified. The client does not lower the video's comment count until reload |
+| Follower, following, friend, and suggested lists | `follows`, with per-user stats and `relation` | Native profile Following/Suggested popup and sidebar "Following accounts" verified |
 | Share sheet following list | Your followings from `follows` | Verified: the client's retry loop (about 2 requests per second) stopped |
 | Likes | PostgreSQL `likes`, read back as `digged`/`stats.diggCount` | Native like/unlike verified, including after reload |
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
