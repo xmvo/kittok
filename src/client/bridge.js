@@ -67,6 +67,13 @@
 	document.addEventListener('keydown', Event => {
 		if ((Event.key === 'Enter' || Event.key === ' ') && Event.target instanceof Element && Event.target.closest('[data-kittok-unavailable]')) { Event.preventDefault(); Event.stopImmediatePropagation(); }
 	}, true);
+	const Viewed = new Set();
+	document.addEventListener('playing', Event => {
+		const Id = Event.target instanceof HTMLVideoElement ? Event.target.closest('[id^="xgwrapper-"]')?.id.match(/-(\d+)$/)?.[1] : null;
+		if (!Id || Viewed.has(Id)) return;
+		Viewed.add(Id);
+		NativeFetch('/_kittok/view', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: Id }), keepalive: true }).catch(() => {});
+	}, true);
 	window.addEventListener('securitypolicyviolation', Event => {
 		NativeFetch('/_debug/blocked', {
 			method: 'POST', headers: { 'content-type': 'application/json' },

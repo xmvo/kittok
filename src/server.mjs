@@ -24,7 +24,10 @@ const Blocked = new Map();
 const Limiter = RateLimiter();
 const Uploading = { value: 0 };
 const Csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'";
-const Cleanup = setInterval(() => Pool.query('DELETE FROM sessions WHERE expires_at < now()').catch(() => console.error('SessionCleanupFailed')), 3600000).unref();
+const Cleanup = setInterval(() => {
+	Pool.query('DELETE FROM sessions WHERE expires_at < now()').catch(() => console.error('SessionCleanupFailed'));
+	Pool.query("DELETE FROM video_views WHERE viewed_at < now() - interval '6 hours'").catch(() => console.error('ViewCleanupFailed'));
+}, 3600000).unref();
 
 const Server = createServer(async (Request, Response) => {
 	try {

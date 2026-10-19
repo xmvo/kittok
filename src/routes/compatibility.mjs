@@ -1,7 +1,10 @@
+import { createHmac, randomBytes } from 'node:crypto';
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { RequireCsrf } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveAvatar } from '../media.mjs';
-import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql } from '../store.mjs';
+import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView } from '../store.mjs';
+
+const ViewSecret = randomBytes(32);
 
 const FollowStatus = Value => ({ 1: 1, 2: 2 })[Value] ?? 0;
 const Offset = Value => Math.min(Math.max(Math.floor(Number(Value)) || 0, 0), 100000);
@@ -109,6 +112,13 @@ export async function Compatibility(Context) {
 			status_code: 0, max_time: Start, min_time: Start + List.users.length, has_more: Start + List.users.length < List.total ? 1 : 0,
 			followings: List.users.map(Row => ApiUser(Row, Config.Origin)),
 		}); return true;
+	}
+	if (Path === '/_kittok/view') {
+		RequireMethod(Request, ['POST']);
+		Limiter.Hit(`view:${Request.socket.remoteAddress}`, 120);
+		const VideoId = Id((await ReadBody(Request, 1024)).id);
+		await RecordView(Pool, VideoId, User ? `u:${User.id}` : `ip:${createHmac('sha256', ViewSecret).update(Request.socket.remoteAddress ?? '').digest('hex')}`);
+		Response.writeHead(204).end(); return true;
 	}
 	if (Path === '/api/inbox/notice_count/') {
 		RequireMethod(Request, ['GET']);

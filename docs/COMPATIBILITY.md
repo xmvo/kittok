@@ -17,6 +17,7 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Follower, following, friend, and suggested lists | `follows`, with per-user stats and `relation` | Native profile Following/Suggested popup and sidebar "Following accounts" verified |
 | Profile editing | Name, bio, and avatar in `users`; avatars re-encoded by ffmpeg to 200×200 JPEG without metadata; username changes through the Passport adapter | Native Edit profile dialog verified: photo crop and upload, name, bio, username availability, and username change |
 | Notifications | Derived from likes, comment likes, comments, replies, and follows; one read marker per user (`users.notices_read_at`) | Native inbox verified: unread badge, All activity list with wording and thumbnails, Follow back, and mark-read on open |
+| View counts | `videos.view_count`, reported by the Kittok bridge when a video actually starts playing; one view per viewer per video every 6 hours | Verified: the playing video counts, preloaded videos do not, reloads do not double-count, and the profile grid shows the count |
 | Share sheet following list | Your followings from `follows` | Verified: the client's retry loop (about 2 requests per second) stopped |
 | Likes | PostgreSQL `likes`, read back as `digged`/`stats.diggCount` | Native like/unlike verified, including after reload |
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
@@ -56,6 +57,8 @@ Notices use type 41 for likes (`digg.digg_type` 1 for a video, 3 for a comment),
 | GET `/api/search/item/full/` | `keyword`, `cursor` (0 first), `count` (12) | `item_list` of item structs, `cursor` (last video id), `has_more` |
 | GET `/api/search/general/full/` | `keyword`, `cursor`, `count` | `data[]`: `{type: 4, user_list}` once on the first page, then `{type: 1, item}` per video; `cursor`, `has_more` |
 | GET `/api/search/user/full/` | `keyword` | `user_list[{user_info}]` with snake_case stats (`follower_count`, `following_count`, `aweme_count`, `total_favorited`) and the viewer's `follow_status` |
+
+The client reports no usable play event of its own, and it fetches media with `fetch()` from the browser cache and preloads the next video, so media requests cannot measure views. Instead `src/client/bridge.js` listens for `playing` on videos inside `xgwrapper-<n>-<itemId>` and posts `{id}` to `POST /_kittok/view` once per page. Signed-in viewers are keyed by account; guests by an HMAC of their address with a per-process secret, so raw IPs are never stored and guest deduplication resets on restart. Reports are limited to 120 a minute per address.
 
 Your own account still shows a Follow button in search results; following yourself is rejected.
 

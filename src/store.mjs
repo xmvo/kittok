@@ -60,6 +60,14 @@ export async function MarkActivityRead(Pool, UserId) {
 	await Pool.query('UPDATE users SET notices_read_at = now() WHERE id = $1', [UserId]);
 }
 
+export async function RecordView(Pool, VideoId, Viewer) {
+	await Pool.query(`WITH Video AS (SELECT id FROM videos WHERE id = $1),
+		Seen AS (INSERT INTO video_views(video_id, viewer) SELECT id, $2 FROM Video
+			ON CONFLICT (video_id, viewer) DO UPDATE SET viewed_at = now() WHERE video_views.viewed_at < now() - interval '6 hours'
+			RETURNING video_id)
+		UPDATE videos SET view_count = view_count + 1 WHERE id IN (SELECT video_id FROM Seen)`, [VideoId, Viewer]);
+}
+
 export async function FindUser(Pool, Value, ById = false) {
 	const Result = await Pool.query(`SELECT id, username, display_name, bio, role, avatar_name FROM users WHERE ${ById ? 'id' : 'username'} = $1`, [ById ? Id(Value) : String(Value).toLowerCase()]);
 	if (!Result.rowCount) throw new HttpError(404, 'UserNotFound');
@@ -104,7 +112,7 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 
 export function VideoShape(Row, Origin) {
 	const Author = UserShape({ ...Row, id: Row.author_id }, Origin);
-	const Stats = { diggCount: Row.likes, commentCount: Row.comments, collectCount: Row.favorites, shareCount: 0, playCount: 0 };
+	const Stats = { diggCount: Row.likes, commentCount: Row.comments, collectCount: Row.favorites, shareCount: 0, playCount: Number(Row.view_count ?? 0) };
 	return {
 		id: Row.id, desc: Row.description, createTime: Math.floor(new Date(Row.created_at).getTime() / 1000),
 		author: Author, stats: Stats, statsV2: Object.fromEntries(Object.entries(Stats).map(([Key, Value]) => [Key, String(Value)])),

@@ -177,6 +177,31 @@ test('media byte ranges, suffix ranges, HEAD, and invalid ranges work over HTTP'
 	assert.equal((await fetch(Video.video.playAddr, { headers: { range: `bytes=${Full.length}-` } })).status, 416);
 });
 
+test('bridge play reports count one view per viewer per window and media requests do not count', async () => {
+	const Play = (await (await Call('/api/v1/videos')).json()).items.find(Item => Item.id === VideoId).video.playAddr;
+	const Views = async () => Number((await Pool.query('SELECT view_count FROM videos WHERE id=$1', [VideoId])).rows[0].view_count);
+	const View = (Headers = {}, Id = VideoId) => Call('/_kittok/view', 'POST', { id: Id }, Headers);
+	const Start = await Views();
+	await (await fetch(Play)).arrayBuffer();
+	assert.equal(await Views(), Start);
+	assert.equal((await View()).status, 204);
+	assert.equal(await Views(), Start + 1);
+	await View();
+	assert.equal(await Views(), Start + 1);
+	await View({ cookie: Cookie });
+	assert.equal(await Views(), Start + 2);
+	await View({ cookie: Cookie });
+	assert.equal(await Views(), Start + 2);
+	assert.equal((await View({}, 'nope')).status, 400);
+	assert.equal((await View({}, '1')).status, 204);
+	assert.equal((await Call('/_kittok/view')).status, 405);
+	await Pool.query("UPDATE video_views SET viewed_at = now() - interval '7 hours' WHERE video_id=$1", [VideoId]);
+	await View({ cookie: Cookie });
+	assert.equal(await Views(), Start + 3);
+	const Item = (await (await Call(`/api/item/detail/?itemId=${VideoId}`)).json()).itemInfo.itemStruct;
+	assert.equal(Item.stats.playCount, Start + 3); assert.equal(Item.statsV2.playCount, String(Start + 3));
+});
+
 test('social mutations enforce authentication and CSRF, and repeated likes stay unique', async () => {
 	const Path = `/api/v1/videos/${VideoId}/like`;
 	assert.equal((await Call(Path, 'PUT')).status, 401);
