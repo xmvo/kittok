@@ -87,14 +87,17 @@ export async function AddComment(Pool, VideoId, AuthorId, Text, ParentId = null)
 	const Exists = await Pool.query('SELECT id FROM videos WHERE id = $1', [VideoId]);
 	if (!Exists.rowCount) throw new HttpError(404, 'VideoNotFound');
 	const Added = await Pool.query(`INSERT INTO comments(video_id, author_id, body, parent_id)
-		SELECT $1::bigint, $2::bigint, $3::text, $4::bigint WHERE $4::bigint IS NULL OR EXISTS (SELECT 1 FROM comments WHERE id = $4 AND video_id = $1)
+		SELECT $1::bigint, $2::bigint, $3::text, Parent.root FROM (
+			SELECT NULL::bigint AS root WHERE $4::bigint IS NULL
+			UNION ALL SELECT COALESCE(parent_id, id) FROM comments WHERE id = $4::bigint AND video_id = $1::bigint
+		) Parent
 		RETURNING id, body, created_at, parent_id`, [VideoId, AuthorId, Text.trim(), ParentId]);
 	if (!Added.rowCount) throw new HttpError(404, 'CommentNotFound');
 	return Added.rows[0];
 }
 
 export async function SetRelation(Pool, Table, Columns, Values, Enabled) {
-	const Allowed = { likes: ['user_id', 'video_id'], favorites: ['user_id', 'video_id'], follows: ['follower_id', 'following_id'] };
+	const Allowed = { likes: ['user_id', 'video_id'], favorites: ['user_id', 'video_id'], follows: ['follower_id', 'following_id'], comment_likes: ['user_id', 'comment_id'] };
 	if (JSON.stringify(Allowed[Table]) !== JSON.stringify(Columns)) throw new Error('InvalidRelation');
 	try {
 		if (Enabled) await Pool.query(`INSERT INTO ${Table}(${Columns.join(',')}) VALUES ($1, $2) ON CONFLICT DO NOTHING`, Values);

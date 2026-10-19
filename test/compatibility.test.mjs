@@ -247,9 +247,44 @@ test('original client comment publish persists comments that the list and item c
 	assert.equal((await Publish({ text: 'Orphan', reply_id: '1' })).status, 404);
 	assert.equal((await Publish({ text: 'Missing', aweme_id: '1' })).status, 404);
 	const List = await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=20&cursor=0`)).json();
-	assert.deepEqual(List.comments.slice(0, 2).map(Comment => Comment.text), ['A reply', 'Published natively']);
-	assert.equal(List.comments[1].cid, First.comment.cid);
+	assert.equal(List.comments[0].cid, First.comment.cid); assert.equal(List.comments[0].reply_comment_total, 1);
+	assert.ok(!List.comments.some(Comment => Comment.text === 'A reply')); assert.equal(List.total, Before + 2);
 	assert.equal((await (await Call(`/api/item/detail/?itemId=${VideoId}`)).json()).itemInfo.itemStruct.stats.commentCount, Before + 2);
+});
+
+test('original client reply threads page oldest first and comment likes persist per viewer', async () => {
+	const Publish = Query => Call(`/api/comment/publish/?${new URLSearchParams({ aweme_id: VideoId, reply_to_reply_id: '0', text_extra: '[]', ...Query })}`, 'POST', undefined, Auth());
+	const Root = (await (await Publish({ text: 'Thread root', reply_id: '0' })).json()).comment.cid;
+	const Replies = [];
+	for (const Text of ['R1', 'R2', 'R3', 'R4']) Replies.push((await (await Publish({ text: Text, reply_id: Root })).json()).comment);
+	const Nested = (await (await Publish({ text: 'R5 to R1', reply_id: Replies[0].cid, reply_to_reply_id: Replies[0].cid })).json()).comment;
+	assert.equal(Nested.reply_id, Root);
+	const ReplyPage = Cursor => Call(`/api/comment/list/reply/?comment_id=${Root}&item_id=${VideoId}&cursor=${Cursor}&count=3`).then(Response => Response.json());
+	const PageOne = await ReplyPage('0');
+	assert.equal(PageOne.status_code, 0); assert.deepEqual(PageOne.comments.map(Comment => Comment.text), ['R1', 'R2', 'R3']);
+	assert.equal(PageOne.has_more, 1); assert.equal(PageOne.comments[0].reply_id, Root);
+	const PageTwo = await ReplyPage(PageOne.cursor);
+	assert.deepEqual(PageTwo.comments.map(Comment => Comment.text), ['R4', 'R5 to R1']); assert.equal(PageTwo.has_more, 0);
+	const Top = await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=1&cursor=0`)).json();
+	assert.equal(Top.comments[0].cid, Root); assert.equal(Top.comments[0].reply_comment_total, 5); assert.equal(Top.has_more, 1);
+	const Older = await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=50&cursor=${Top.cursor}`)).json();
+	assert.ok(Older.comments.length > 0 && !Older.comments.some(Comment => Comment.cid === Root)); assert.equal(Older.has_more, 0);
+	const Digg = (Cid, Type, Headers = Auth()) => Call(`/api/comment/digg/?aweme_id=${VideoId}&cid=${Cid}&digg_type=${Type}&channel_id=0`, 'POST', undefined, Headers);
+	assert.equal((await Digg(Root, 1, { cookie: Cookie })).status, 403);
+	assert.deepEqual(await (await Digg(Root, 1)).json(), { status_code: 0, statusCode: 0 });
+	assert.equal((await Digg(Root, 1)).status, 200);
+	assert.equal((await Digg(Replies[1].cid, 1)).status, 200);
+	assert.equal((await Pool.query('SELECT * FROM comment_likes WHERE comment_id=$1', [Root])).rowCount, 1);
+	const Mine = (await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=1&cursor=0`, 'GET', undefined, Auth())).json()).comments[0];
+	assert.equal(Mine.digg_count, 1); assert.equal(Mine.user_digged, 1);
+	const Guest = (await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=1&cursor=0`)).json()).comments[0];
+	assert.equal(Guest.digg_count, 1); assert.equal(Guest.user_digged, 0);
+	const Reply = (await (await Call(`/api/comment/list/reply/?comment_id=${Root}&cursor=0&count=3`, 'GET', undefined, Auth())).json()).comments[1];
+	assert.equal(Reply.digg_count, 1); assert.equal(Reply.user_digged, 1);
+	assert.equal((await Digg(Root, 2)).status, 200);
+	assert.equal((await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=1&cursor=0`, 'GET', undefined, Auth())).json()).comments[0].digg_count, 0);
+	assert.equal((await Digg('1', 1)).status, 404);
+	assert.equal((await Digg(Replies[1].cid, 1)).status, 200);
 });
 
 test('search finds local accounts and paginated feeds do not repeat the final video', async () => {
@@ -286,6 +321,9 @@ test('users, sessions, videos, and social data survive a server restart', async 
 	assert.deepEqual((await (await Call(`/api/user/collect/item_list/?secUid=${Owner.id}`, 'GET', undefined, Auth())).json()).itemList.map(Item => Item.id), [VideoId]);
 	assert.equal((await (await Call('/api/user/detail/?uniqueId=friend', 'GET', undefined, Auth())).json()).userInfo.user.relation, 2);
 	assert.ok((await (await Call(`/api/comment/list/?aweme_id=${VideoId}`)).json()).comments.some(Comment => Comment.text === 'Published natively'));
+	const Thread = (await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=50`, 'GET', undefined, Auth())).json()).comments.find(Comment => Comment.text === 'Thread root');
+	assert.equal(Thread.reply_comment_total, 5);
+	assert.equal((await (await Call(`/api/comment/list/reply/?comment_id=${Thread.cid}&count=3`, 'GET', undefined, Auth())).json()).comments[1].user_digged, 1);
 	assert.equal((await Call('/api/v1/session', 'DELETE', undefined, Auth())).status, 200);
 	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, { cookie: Cookie })).json()).user, null);
 });

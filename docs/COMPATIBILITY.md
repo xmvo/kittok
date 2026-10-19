@@ -12,6 +12,7 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Favorites | PostgreSQL `favorites`, read back as `collected`/`stats.collectCount` and the own-profile Favorites tab | Native save/unsave button verified, including after reload |
 | Follows | PostgreSQL `follows`, read back as user/author `relation` | Native feed follow button verified, including after reload |
 | Comments | PostgreSQL `comments`, read back by the comment list and `stats.commentCount` | Native comment list verified; native post button not yet browser-verified |
+| Comment replies and likes | One-level threads in `comments.parent_id`; likes in `comment_likes` | Native "View N replies", reply paging, and comment heart verified |
 | Likes | Persistent Kittok API | Compatibility handler exists; native gesture not yet verified |
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
 | User search | Local SQL lookup and response adapter | Needs browser acceptance checks |
@@ -35,7 +36,10 @@ These are taken from the cached client bundle. The client sends every parameter 
 | POST `/api/commit/follow/user/` and `/api/follow/` | `user_id`, `type`/`action_type` (1 follow, 0 unfollow) | `status_code`, integer `follow_status`: 0 none, 1 following, 2 mutual (4, requested, is unused) |
 | GET `/api/user/detail/`, feed `author` | — | integer `relation`: 0 none, 1 following, 2 mutual, 6 follows you |
 | POST `/api/comment/publish/` | `aweme_id`, `text`, `reply_id` (`0` for top level), `reply_to_reply_id`, `text_extra` | `status_code` and `comment`, in the same shape as `/api/comment/list/` items |
+| GET `/api/comment/list/` | `aweme_id`, `cursor` (`0` first), `count` | top-level `comments` newest first, `cursor` (last `cid`), `has_more` (1/0), `total` (all comments, used as the video's comment count) |
+| GET `/api/comment/list/reply/` | `comment_id`, `cursor`, `count` (3) | replies oldest first, `cursor`, `has_more` (must be the number 1 to show "View more") |
+| POST `/api/comment/digg/` | `cid`, `digg_type` (1 like, 2 unlike) | `status_code`. Each comment carries `digg_count`, `user_digged` (1/0), and `reply_comment_total` |
 
-Replies are stored with their parent, but `/api/comment/list/reply/` is not implemented yet, so replies appear in the top-level list.
+Threads are one level deep. A reply to a reply is attached to the root comment, and its `reply_to_reply_id` target is not stored.
 
 Next work: verify the remaining native social interactions, integrate profile editing and remaining profile/search interactions, then add moderation and operational features before inviting an untrusted public community.

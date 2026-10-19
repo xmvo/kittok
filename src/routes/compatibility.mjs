@@ -7,9 +7,23 @@ const FollowStatus = Value => ({ 1: 1, 2: 2 })[Value] ?? 0;
 function CommentShape(Row, Origin) {
 	return {
 		cid: Row.id, aweme_id: Row.video_id, text: Row.body, text_extra: [], create_time: Math.floor(new Date(Row.created_at).getTime() / 1000),
-		digg_count: 0, reply_comment_total: 0, user_digged: 0, reply_id: Row.parent_id ?? '0', reply_to_reply_id: '0',
+		digg_count: Row.likes ?? 0, reply_comment_total: Row.replies ?? 0, user_digged: Row.liked ? 1 : 0, reply_id: Row.parent_id ?? '0', reply_to_reply_id: '0',
 		user: { uid: Row.author_id, unique_id: Row.username, nickname: Row.display_name, sec_uid: Row.author_id, avatar_thumb: { url_list: [`${Origin}/public/avatar.svg`] } },
 	};
+}
+
+async function CommentPage(Pool, Origin, Viewer, { video, parent, cursor, count }) {
+	const Limit = Math.min(Math.max(Number(count) || 20, 1), 50);
+	const After = cursor && cursor !== '0' ? Id(cursor) : null;
+	const Result = await Pool.query(`SELECT c.*, u.username, u.display_name,
+		(SELECT count(*)::int FROM comment_likes l WHERE l.comment_id = c.id) AS likes,
+		EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.user_id = $1::bigint) AS liked,
+		(SELECT count(*)::int FROM comments r WHERE r.parent_id = c.id) AS replies
+		FROM comments c JOIN users u ON u.id = c.author_id
+		WHERE ${parent ? 'c.parent_id = $2' : 'c.video_id = $2 AND c.parent_id IS NULL'} AND ($3::bigint IS NULL OR c.id ${parent ? '>' : '<'} $3)
+		ORDER BY c.id ${parent ? 'ASC' : 'DESC'} LIMIT $4`, [Viewer ?? null, parent ?? video, After, Limit + 1]);
+	const Rows = Result.rows.slice(0, Limit);
+	return { status_code: 0, comments: Rows.map(Row => CommentShape(Row, Origin)), cursor: Rows.at(-1)?.id ?? cursor ?? '0', has_more: Result.rows.length > Limit ? 1 : 0 };
 }
 
 export async function Compatibility(Context) {
@@ -61,8 +75,19 @@ export async function Compatibility(Context) {
 	if (Path === '/api/comment/list/') {
 		RequireMethod(Request, ['GET']);
 		const VideoId = Id(Params.get('aweme_id') || Params.get('item_id'));
-		const Result = await Pool.query('SELECT c.*, u.username, u.display_name FROM comments c JOIN users u ON u.id = c.author_id WHERE c.video_id = $1 ORDER BY c.id DESC LIMIT 50', [VideoId]);
-		Json(Response, { status_code: 0, comments: Result.rows.map(Row => CommentShape(Row, Config.Origin)), cursor: 0, has_more: 0, total: Result.rowCount }); return true;
+		const Page = await CommentPage(Pool, Config.Origin, User?.id, { video: VideoId, cursor: Params.get('cursor'), count: Params.get('count') });
+		const Total = await Pool.query('SELECT count(*)::int AS count FROM comments WHERE video_id = $1', [VideoId]);
+		Json(Response, { ...Page, total: Total.rows[0].count }); return true;
+	}
+	if (Path === '/api/comment/list/reply/') {
+		RequireMethod(Request, ['GET']);
+		Json(Response, await CommentPage(Pool, Config.Origin, User?.id, { parent: Id(Params.get('comment_id')), cursor: Params.get('cursor'), count: Params.get('count') ?? 3 })); return true;
+	}
+	if (Path === '/api/comment/digg/') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		await SetRelation(Pool, 'comment_likes', ['user_id', 'comment_id'], [User.id, Id(Body.cid)], String(Body.digg_type ?? '1') === '1');
+		Json(Response, { status_code: 0, statusCode: 0 }); return true;
 	}
 	if (Path === '/api/comment/publish/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
