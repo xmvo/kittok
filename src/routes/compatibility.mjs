@@ -104,7 +104,7 @@ export async function Compatibility(Context) {
 		const Target = Id(Body.itemId || Body.item_id || Body.aweme_id);
 		const Enabled = String(Body.type ?? Body.action ?? '1') === '1';
 		await SetRelation(Pool, Collect ? 'favorites' : 'likes', ['user_id', 'video_id'], [User.id, Target], Enabled);
-		if (!Collect) { Json(Response, { status_code: 0, statusCode: 0, is_digg: Enabled ? 1 : 0 }); return true; }
+		if (!Collect) { Json(Response, { status_code: 0, statusCode: 0, is_digg: Enabled ? 0 : 1 }); return true; }
 		const Count = await Pool.query('SELECT count(*)::int AS count FROM favorites WHERE video_id = $1', [Target]);
 		Json(Response, { status_code: 0, statusCode: 0, collected: Enabled, collectCount: Count.rows[0].count }); return true;
 	}

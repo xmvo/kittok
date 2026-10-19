@@ -211,6 +211,21 @@ test('original client favorite requests toggle persistent favorites and are read
 	assert.equal((await Collect(1)).status, 200);
 });
 
+test('original client like requests persist and never report is_digg equal to the requested type', async () => {
+	const Digg = (Type, Headers = Auth()) => Call(`/api/commit/item/digg/?aweme_id=${VideoId}&channel_id=0&type=${Type}`, 'POST', undefined, Headers);
+	const Item = async () => (await (await Call('/api/recommend/item_list/', 'GET', undefined, Auth())).json()).itemList.find(Item => Item.id === VideoId);
+	assert.equal((await Digg(1, { cookie: Cookie })).status, 403);
+	const Unliked = await (await Digg(0)).json();
+	assert.equal(Unliked.status_code, 0); assert.notEqual(Unliked.is_digg, 0);
+	assert.equal((await Pool.query('SELECT * FROM likes WHERE user_id=$1 AND video_id=$2', [Owner.id, VideoId])).rowCount, 0);
+	assert.equal((await Item()).digged, false); assert.equal((await Item()).stats.diggCount, 0);
+	const Liked = await (await Digg(1)).json();
+	assert.equal(Liked.status_code, 0); assert.notEqual(Liked.is_digg, 1);
+	assert.equal((await Pool.query('SELECT * FROM likes WHERE user_id=$1 AND video_id=$2', [Owner.id, VideoId])).rowCount, 1);
+	assert.equal((await Item()).digged, true); assert.equal((await Item()).stats.diggCount, 1);
+	assert.equal((await Call(`/api/commit/item/digg/?aweme_id=1&type=1`, 'POST', undefined, Auth())).status, 404);
+});
+
 test('original client follow requests persist and return follow_status and relation from the database', async () => {
 	const Friendly = await Login(Pool, 'friend', Password);
 	const AsFriend = { cookie: `kittok_session=${Friendly.Token}`, 'x-csrf-token': Friendly.Csrf };

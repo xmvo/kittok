@@ -13,7 +13,7 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Follows | PostgreSQL `follows`, read back as user/author `relation` | Native feed follow button verified, including after reload |
 | Comments | PostgreSQL `comments`, read back by the comment list and `stats.commentCount` | Native comment list verified; native post button not yet browser-verified |
 | Comment replies and likes | One-level threads in `comments.parent_id`; likes in `comment_likes` | Native "View N replies", reply paging, and comment heart verified |
-| Likes | Persistent Kittok API | Compatibility handler exists; native gesture not yet verified |
+| Likes | PostgreSQL `likes`, read back as `digged`/`stats.diggCount` | Native like/unlike verified, including after reload |
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
 | User search | Local SQL lookup and response adapter | Needs browser acceptance checks |
 | Video search, notifications, DMs, LIVE, shop, coins | Not implemented | Visible original controls do not imply working features |
@@ -31,6 +31,7 @@ These are taken from the cached client bundle. The client sends every parameter 
 
 | Client call | Parameters read | Response read by the client |
 | --- | --- | --- |
+| POST `/api/commit/item/digg/` | `aweme_id`, `type` (1 like, 0 unlike) | `status_code` and `is_digg`. The client treats `is_digg` equal to `type` as a failure and reverts after 3 seconds, so success returns the opposite value. The client sends likes immediately but delays unlikes by about 10 seconds, and sends nothing if the user toggles back within that time |
 | POST `/api/item/collect/` | `itemId`, `action` (1 save, 2 unsave) | `statusCode` (0 = ok; otherwise the client reverts its optimistic update). Kittok also returns `collected` and `collectCount` |
 | GET `/api/user/collect/item_list/` | `secUid`, `cursor`, `count` | `itemList`, `cursor`, `hasMore`. Favorites are private: other users' tabs return an empty list |
 | POST `/api/commit/follow/user/` and `/api/follow/` | `user_id`, `type`/`action_type` (1 follow, 0 unfollow) | `status_code`, integer `follow_status`: 0 none, 1 following, 2 mutual (4, requested, is unused) |
