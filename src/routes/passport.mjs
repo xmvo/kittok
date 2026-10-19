@@ -39,7 +39,8 @@ export async function Passport(Context) {
 			Json(Response, { message: 'success', data: PassportUser(Session.User, Config) });
 		} catch (Error) {
 			if (!Error.status) throw Error;
-			Json(Response, { message: 'error', data: { error_code: Error.status === 429 ? 7 : 1001, description: Error.status === 429 ? 'Too many attempts. Try again later.' : 'Username or password is incorrect.' } });
+			const Description = { 429: 'Too many attempts. Try again later.', 403: 'This account is suspended.' }[Error.status] ?? 'Username or password is incorrect.';
+			Json(Response, { message: 'error', data: { error_code: Error.status === 429 ? 7 : 1001, description: Description } });
 		}
 		return true;
 	}

@@ -73,7 +73,7 @@ export async function SaveAvatar(Config, UserId, Bytes) {
 }
 
 export const AvatarExists = async (Config, Name) => (await stat(join(Config.MediaDir, Name)).catch(() => null))?.isFile() ?? false;
-export const RemoveAvatar = (Config, Name) => rm(join(Config.MediaDir, Name), { force: true });
+export const RemoveMedia = (Config, Name) => rm(join(Config.MediaDir, Name), { force: true });
 
 export async function ReceiveVideo(Request, Config) {
 	await mkdir(join(Config.MediaDir, '.incoming'), { recursive: true });

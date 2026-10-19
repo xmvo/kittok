@@ -55,7 +55,7 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	Html = Html.replace(/<link\b[^>]*\brel="(?:preconnect|dns-prefetch|canonical|alternate|manifest)"[^>]*>/g, '');
 	Html = Html.replace(/\s+(?:integrity|nonce)="[^"]*"/g, '');
 	Html = RewriteAssets(Html, Origin);
-	const Instance = { name: Config?.Name ?? 'Kittok', account: User ? { username: User.username, displayName: User.display_name } : null, csrfToken: User?.csrf_token ?? null };
+	const Instance = { name: Config?.Name ?? 'Kittok', account: User ? { username: User.username, displayName: User.display_name, role: User.role } : null, csrfToken: User?.csrf_token ?? null };
 	Html = Html.replace(/<title>[\s\S]*?<\/title>/, `<title>${Instance.name.replace(/[<&]/g, '')}</title>`);
 	return Html.replace('<head>', `<head><link rel="icon" href="/public/avatar.svg"><link rel="stylesheet" href="/public/brand.css"><script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);
 }

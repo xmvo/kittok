@@ -51,6 +51,7 @@ export async function Login(Pool, Username, Password) {
 	const User = Result.rows[0];
 	const Valid = await PasswordMatches(Password, User?.password_hash ?? await Dummy);
 	if (!User || !Valid) throw new HttpError(401, 'InvalidLogin');
+	if (User.suspended_at) throw new HttpError(403, 'AccountSuspended');
 	const SessionToken = Token();
 	const Csrf = Token();
 	await Pool.query("INSERT INTO sessions(token_hash, user_id, csrf_token, expires_at) VALUES ($1, $2, $3, now() + interval '30 days')", [Hash(SessionToken), User.id, Csrf]);
@@ -60,7 +61,7 @@ export async function Login(Pool, Username, Password) {
 export async function Viewer(Pool, Request) {
 	const Cookie = Request.headers.cookie?.split(';').map(Value => Value.trim()).find(Value => Value.startsWith('kittok_session='))?.slice('kittok_session='.length);
 	if (!Cookie || !/^[a-f0-9]{64}$/.test(Cookie)) return null;
-	const Result = await Pool.query('SELECT u.id, u.username, u.display_name, u.bio, u.role, u.avatar_name, s.csrf_token, s.token_hash FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now()', [Hash(Cookie)]);
+	const Result = await Pool.query('SELECT u.id, u.username, u.display_name, u.bio, u.role, u.avatar_name, s.csrf_token, s.token_hash FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now() AND u.suspended_at IS NULL', [Hash(Cookie)]);
 	return Result.rows[0] ?? null;
 }
 

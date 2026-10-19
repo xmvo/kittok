@@ -14,6 +14,18 @@
 				Channel.title = 'This sign-in method is not configured for this instance.';
 			}
 		}
+		const Upload = document.querySelector('a[data-e2e="nav-upload"]');
+		if (Instance.account?.role === 'admin' && Upload && !document.querySelector('[data-e2e="nav-kittok-admin"]')) {
+			const Slot = Upload.parentElement.parentElement;
+			const Item = Slot.cloneNode(true);
+			const Link = Item.querySelector('a');
+			Link.href = '/admin'; Link.setAttribute('data-e2e', 'nav-kittok-admin');
+			Item.querySelector('button')?.setAttribute('aria-label', 'Admin');
+			const Label = Item.querySelector('.TUXButton-label'); if (Label) Label.textContent = 'Admin';
+			const Icon = Item.querySelector('svg');
+			if (Icon) Icon.outerHTML = '<svg fill="currentColor" viewBox="0 0 48 48" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M24 3 7 9.5V22c0 11 7.2 20.3 17 23 9.8-2.7 17-12 17-23V9.5L24 3Zm0 4.3 13 5v9.7c0 8.9-5.6 16.6-13 19.1-7.4-2.5-13-10.2-13-19.1v-9.7l13-5Zm7.3 9.3a1 1 0 0 1 1.4 0l1.4 1.4a1 1 0 0 1 0 1.4L22.4 31.1a1 1 0 0 1-1.4 0l-6.1-6.1a1 1 0 0 1 0-1.4l1.4-1.4a1 1 0 0 1 1.4 0l5 5 8.6-10.6Z"/></svg>';
+			Slot.after(Item);
+		}
 		if (document.body && !document.getElementById('kittok-source')) {
 			const Source = document.createElement('a'); Source.id = 'kittok-source'; Source.href = '/about'; Source.textContent = 'Kittok · Source'; document.body.append(Source);
 		}

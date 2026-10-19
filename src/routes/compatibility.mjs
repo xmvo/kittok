@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { RequireCsrf } from '../auth.mjs';
-import { SaveAvatar, AvatarExists, RemoveAvatar } from '../media.mjs';
+import { SaveAvatar, AvatarExists, RemoveMedia } from '../media.mjs';
 import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
@@ -161,7 +161,7 @@ export async function Compatibility(Context) {
 		const Updated = (await Pool.query(`UPDATE users u SET display_name = COALESCE($2, u.display_name), bio = COALESCE($3, u.bio), avatar_name = COALESCE($4, u.avatar_name)
 			FROM (SELECT avatar_name FROM users WHERE id = $1) Previous WHERE u.id = $1
 			RETURNING u.id, u.username, u.display_name, u.bio, u.avatar_name, Previous.avatar_name AS previous_avatar`, [User.id, Nickname, Bio, Avatar])).rows[0];
-		if (Updated.previous_avatar && Updated.previous_avatar !== Updated.avatar_name) await RemoveAvatar(Config, Updated.previous_avatar);
+		if (Updated.previous_avatar && Updated.previous_avatar !== Updated.avatar_name) await RemoveMedia(Config, Updated.previous_avatar);
 		const Url = { url_list: [AvatarUrl(Updated, Config.Origin)] };
 		Json(Response, { status_code: 0, status_msg: '', user: { uid: Updated.id, sec_uid: Updated.id, unique_id: Updated.username, nickname: Updated.display_name, signature: Updated.bio, avatar_thumb: Url, avatar_medium: Url, avatar_larger: Url } }); return true;
 	}

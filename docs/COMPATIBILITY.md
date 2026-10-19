@@ -23,7 +23,7 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
 | User and video search | Usernames and display names; video captions, newest first | Native Top, Users, and Videos tabs verified. Photos and LIVE return empty results |
 | Video search, notifications, DMs, LIVE, shop, coins | Not implemented | Visible original controls do not imply working features |
-| Moderation and admin panel | Operator CLI and admin debug routes only | Full administration UI remains to be built |
+| Admin panel | `/admin` inside the original client: overview, users (suspend, role, delete), videos, comments, invites, and an audit log in `admin_actions` | Verified in the browser: sidebar Admin entry, every action, hash navigation, Back, and leaving through the sidebar. There are no user reports yet |
 
 The client can emit nonfatal errors for unsupported service calls. Unknown APIs return HTTP 501 and are counted in `/_debug/unknown` for logged-in administrators. API success alone does not establish a working screen. Browser verification and database tests must be reported separately.
 
@@ -57,6 +57,8 @@ Notices use type 41 for likes (`digg.digg_type` 1 for a video, 3 for a comment),
 | GET `/api/search/item/full/` | `keyword`, `cursor` (0 first), `count` (12) | `item_list` of item structs, `cursor` (last video id), `has_more` |
 | GET `/api/search/general/full/` | `keyword`, `cursor`, `count` | `data[]`: `{type: 4, user_list}` once on the first page, then `{type: 1, item}` per video; `cursor`, `has_more` |
 | GET `/api/search/user/full/` | `keyword` | `user_list[{user_info}]` with snake_case stats (`follower_count`, `following_count`, `aweme_count`, `total_favorited`) and the viewer's `follow_status` |
+
+The client has no `/admin` route, so `/admin` serves the original client with an inline script that renames the URL to `/@.kittok-admin` before the client starts (a profile no account can have, which renders the normal layout). `public/admin.js` then restores `/admin`, hides the client's content in `main`, and mounts the panel there using the client's TUX button classes and `--tux-*` colour tokens. Section changes use `#hash` with `history.replaceState`, and the inline script stops `popstate`/`hashchange` on `/admin` from reaching the client router, which would otherwise redirect to its server-side 404. Admins see an extra Admin item in the sidebar, cloned from the Upload item by the bridge.
 
 The client reports no usable play event of its own, and it fetches media with `fetch()` from the browser cache and preloads the next video, so media requests cannot measure views. Instead `src/client/bridge.js` listens for `playing` on videos inside `xgwrapper-<n>-<itemId>` and posts `{id}` to `POST /_kittok/view` once per page. Signed-in viewers are keyed by account; guests by an HMAC of their address with a per-process secret, so raw IPs are never stored and guest deduplication resets on restart. Reports are limited to 120 a minute per address.
 

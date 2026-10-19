@@ -27,3 +27,21 @@ Uploads currently process synchronously. Allow enough request time for ffmpeg. T
 The client-compatibility API paths are experimental and documented by their handlers in `src/routes/compatibility.mjs`. Kittok API tests do not guarantee that the captured client's controls use the expected paths or session state.
 
 The original username/password form posts to `/passport/web/user/login/`. This adapter accepts the native SDK’s form encoding and returns its success/error envelope while issuing a Kittok session cookie. `/passport/web/account/info/` and `/passport/account/info/v2/` expose the current local account; authenticated CSRF-protected POST `/passport/web/logout/` revokes it. These routes do not contact TikTok.
+
+## Admin
+
+Admins open `/admin` (also linked from the sidebar and `/account`). The panel calls these JSON routes; non-admins get 404. Writes need the session's `X-CSRF-Token` and are recorded in `admin_actions`. Admins cannot suspend, demote, or delete themselves.
+
+| Method | Route | Behavior |
+| --- | --- | --- |
+| GET | `/_kittok/admin/overview` | Instance counts, the last 20 admin actions, and the most frequent unimplemented client calls |
+| GET | `/_kittok/admin/users?q=&before=ID` | Users, newest first, 50 per page |
+| POST | `/_kittok/admin/users/ID/suspend` / `unsuspend` | Suspending signs the user out everywhere and blocks login |
+| POST | `/_kittok/admin/users/ID/role` | JSON `{role}`: `admin` or `member` |
+| POST | `/_kittok/admin/users/ID/delete` | JSON `{confirm}` must equal the username; deletes the account, its videos and their files, and its avatar |
+| GET | `/_kittok/admin/videos?before=ID` | Videos with views, likes, and comment counts, 30 per page |
+| POST | `/_kittok/admin/videos/ID/delete` | Deletes the video and its files |
+| GET | `/_kittok/admin/comments?before=ID` | Comments, newest first, 50 per page |
+| POST | `/_kittok/admin/comments/ID/delete` | Deletes the comment and its replies |
+| GET / POST | `/_kittok/admin/invites` | List open invites, or create one with JSON `{uses, days}` (1–100 uses, 1–90 days); the code is returned once |
+| POST | `/_kittok/admin/invites/HASH/delete` | Revokes an invite |

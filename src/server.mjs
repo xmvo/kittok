@@ -14,6 +14,7 @@ import { Api } from './routes/api.mjs';
 import { Compatibility } from './routes/compatibility.mjs';
 import { Account } from './routes/account.mjs';
 import { Passport } from './routes/passport.mjs';
+import { Admin } from './routes/admin.mjs';
 
 const Config = LoadConfig();
 const Pool = Database(Config.DatabaseUrl);
@@ -92,14 +93,14 @@ const Server = createServer(async (Request, Response) => {
 			return Json(Response, { ok: true });
 		}
 		const User = await Viewer(Pool, Request);
-		const Context = { Request, Response, Url, Pool, Config, User, Limiter, Uploading };
+		const Context = { Request, Response, Url, Pool, Config, User, Limiter, Uploading, Unknown, ClientShell: () => Shell(Raw, Config.Origin, { Config, User }) };
 		if (Path.startsWith('/_debug/')) {
 			RequireMethod(Request, ['GET']);
 			if (User?.role !== 'admin') throw new HttpError(403, 'AdminRequired');
 			if (Path === '/_debug/unknown') return Json(Response, Object.fromEntries(Unknown));
 			if (Path === '/_debug/blocked') return Json(Response, Object.fromEntries(Blocked));
 		}
-		if (await Account(Context) || await Api(Context) || await Passport(Context) || await Compatibility(Context)) return;
+		if (await Admin(Context) || await Account(Context) || await Api(Context) || await Passport(Context) || await Compatibility(Context)) return;
 		if (/^\/(?:api|passport|node-webapp|tiktok)\//.test(Path)) {
 			const Key = `${Request.method} ${Path}`;
 			if (Unknown.size < 500) Unknown.set(Key, (Unknown.get(Key) ?? 0) + 1);
