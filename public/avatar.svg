@@ -1,18 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 110" role="img" aria-labelledby="title">
-  <title id="title">KitTok</title>
+  <title id="title">Kittok</title>
   <defs>
-    <path id="cat" d="M22 48 20 17Q20 11 26 15L44 29Q55 26 66 29L84 15Q90 11 90 18L88 48Q98 83 70 94Q55 100 39 94Q12 84 22 48Z"/>
-
+    <path id="cat" d="M20 50 18 18Q18 10 25 14L44 28Q55 25 66 28L85 14Q92 10 92 18L90 50Q99 84 71 95Q55 101 39 95Q11 84 20 50Z"/>
   </defs>
-  <path fill="#fff" d="M0 0h110v110H0z"/>
-  <use href="#cat" fill="#25F4EE" transform="translate(-5 -3)"/>
-  <use href="#cat" fill="#FE2C55" transform="translate(5 3)"/>
-  <use href="#cat" fill="#fff" stroke="#111" stroke-width="1.8" stroke-linejoin="round"/>
-  <g fill="#111">
-    <ellipse cx="40" cy="58" rx="7" ry="10"/>
-    <ellipse cx="70" cy="58" rx="7" ry="10"/>
+  <use href="#cat" fill="#25F4EE" transform="translate(-4 -3)"/>
+  <use href="#cat" fill="#FE2C55" transform="translate(4 3)"/>
+  <use href="#cat" fill="#fff" stroke="#161823" stroke-width="2.4" stroke-linejoin="round"/>
+  <path fill="#FFC2D1" d="M27 22 41 33Q32 37 28 44Z M83 22 69 33Q78 37 82 44Z"/>
+  <g fill="#161823">
+    <ellipse cx="40" cy="59" rx="7" ry="10"/>
+    <ellipse cx="70" cy="59" rx="7" ry="10"/>
   </g>
-  <g fill="#fff"><circle cx="42" cy="55" r="2.3"/><circle cx="72" cy="55" r="2.3"/></g>
-  <path fill="#111" d="M51 71Q55 68 59 71L55 76Z"/>
-  <path d="M55 75v4m0 0q-5 6-9 0m9 0q5 6 9 0M33 72l-13-3m13 9-13 2m57-8 13-3m-13 9 13 2" fill="none" stroke="#111" stroke-width="1.8" stroke-linecap="round"/>
+  <g fill="#fff"><circle cx="42.5" cy="55.5" r="2.6"/><circle cx="72.5" cy="55.5" r="2.6"/></g>
+  <path fill="#FE2C55" d="M50.5 71.5Q55 68.5 59.5 71.5L55 77Z"/>
+  <path d="M55 76.5v3.5m0 0q-5 6-9.5 0m9.5 0q5 6 9.5 0M36 73l-11-2.5m11 8.5-11 2m49-8 11-2.5m-11 8.5 11 2" fill="none" stroke="#161823" stroke-width="2" stroke-linecap="round"/>
 </svg>
