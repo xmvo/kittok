@@ -7,7 +7,8 @@ export function Json(Response, Value, Code = 200) {
 	Response.end(JSON.stringify(Value));
 }
 
-export async function ReadBody(Request, Limit = 16384) {
+export async function ReadRaw(Request, Limit) {
+	if (Number(Request.headers['content-length']) > Limit) throw new HttpError(413, 'BodyTooLarge');
 	const Chunks = [];
 	let Size = 0;
 	for await (const Chunk of Request) {
@@ -15,7 +16,11 @@ export async function ReadBody(Request, Limit = 16384) {
 		if (Size > Limit) throw new HttpError(413, 'BodyTooLarge');
 		Chunks.push(Chunk);
 	}
-	const Text = Buffer.concat(Chunks).toString('utf8');
+	return Buffer.concat(Chunks);
+}
+
+export async function ReadBody(Request, Limit = 16384) {
+	const Text = (await ReadRaw(Request, Limit)).toString('utf8');
 	try {
 		if (Request.headers['content-type']?.startsWith('application/json')) {
 			const Value = JSON.parse(Text || '{}');

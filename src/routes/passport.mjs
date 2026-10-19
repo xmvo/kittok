@@ -1,5 +1,6 @@
 import { Login, RequireCsrf, SessionCookie } from '../auth.mjs';
 import { HttpError, Json, ReadBody, RequireMethod } from '../http.mjs';
+import { AvatarUrl } from '../store.mjs';
 
 export function DecodePassportValue(Value, Mixed) {
 	if (typeof Value !== 'string' || Value.length > 2048) throw new HttpError(400, 'InvalidLogin');
@@ -15,7 +16,7 @@ export function PassportUser(User, Config) {
 	return {
 		user_id: User.id, user_id_str: User.id, uid: User.id, sec_user_id: User.id,
 		username: User.username, screen_name: User.display_name, name: User.display_name,
-		avatar_url: `${Config.Origin}/public/avatar.svg`, user_verified: false,
+		avatar_url: AvatarUrl(User, Config.Origin), user_verified: false,
 		has_password: true, has_email: false, has_mobile: false, is_new_user: false,
 		redirect_url: Config.Origin,
 	};
@@ -45,6 +46,20 @@ export async function Passport(Context) {
 	if (['/passport/web/account/info/', '/passport/account/info/v2/'].includes(Path)) {
 		RequireMethod(Request, ['GET']);
 		Json(Response, User ? { message: 'success', data: PassportUser(User, Config) } : { message: 'error', data: { error_code: 8, description: 'NotLoggedIn' } }); return true;
+	}
+	if (Path === '/passport/web/login_name/update/') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		Limiter.Hit(`username:${User.id}`, 5, 3600000);
+		const Name = String((await ReadBody(Request)).login_name ?? Url.searchParams.get('login_name') ?? '').trim().toLowerCase();
+		if (!/^[a-z0-9_]{3,24}$/.test(Name)) { Json(Response, { message: 'error', data: { error_code: 1027, description: 'Use 3 to 24 lowercase letters, numbers, or underscores.' } }); return true; }
+		try {
+			const Updated = (await Pool.query('UPDATE users SET username = $2 WHERE id = $1 RETURNING id, username, display_name, avatar_name', [User.id, Name])).rows[0];
+			Json(Response, { message: 'success', data: PassportUser(Updated, Config) });
+		} catch (Error) {
+			if (Error.code !== '23505') throw Error;
+			Json(Response, { message: 'error', data: { error_code: 1024, description: 'This username is taken.' } });
+		}
+		return true;
 	}
 	if (Path === '/passport/web/logout/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);

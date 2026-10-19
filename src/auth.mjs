@@ -60,7 +60,7 @@ export async function Login(Pool, Username, Password) {
 export async function Viewer(Pool, Request) {
 	const Cookie = Request.headers.cookie?.split(';').map(Value => Value.trim()).find(Value => Value.startsWith('kittok_session='))?.slice('kittok_session='.length);
 	if (!Cookie || !/^[a-f0-9]{64}$/.test(Cookie)) return null;
-	const Result = await Pool.query('SELECT u.id, u.username, u.display_name, u.bio, u.role, s.csrf_token, s.token_hash FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now()', [Hash(Cookie)]);
+	const Result = await Pool.query('SELECT u.id, u.username, u.display_name, u.bio, u.role, u.avatar_name, s.csrf_token, s.token_hash FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now()', [Hash(Cookie)]);
 	return Result.rows[0] ?? null;
 }
 
@@ -75,8 +75,8 @@ export function RequireUser(User) {
 
 export function RequireCsrf(Request, User, Supplied) {
 	RequireUser(User);
-	const Value = String(Supplied ?? Request.headers['x-csrf-token'] ?? '');
-	if (!/^[a-f0-9]{64}$/.test(Value) || !timingSafeEqual(Buffer.from(Value), Buffer.from(User.csrf_token))) throw new HttpError(403, 'InvalidCsrf');
+	const Values = String(Supplied ?? Request.headers['x-csrf-token'] ?? '').split(',').map(Value => Value.trim());
+	if (!Values.every(Value => /^[a-f0-9]{64}$/.test(Value) && timingSafeEqual(Buffer.from(Value), Buffer.from(User.csrf_token)))) throw new HttpError(403, 'InvalidCsrf');
 }
 
 export function RateLimiter() {

@@ -15,6 +15,7 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Comment replies and likes | One-level threads in `comments.parent_id`; likes in `comment_likes` | Native "View N replies", reply paging, and comment heart verified |
 | Comment delete | Comment author, video owner, or admin; deleting a top-level comment removes its replies | Native "..." menu and confirmation verified. The client does not lower the video's comment count until reload |
 | Follower, following, friend, and suggested lists | `follows`, with per-user stats and `relation` | Native profile Following/Suggested popup and sidebar "Following accounts" verified |
+| Profile editing | Name, bio, and avatar in `users`; avatars re-encoded by ffmpeg to 200×200 JPEG without metadata; username changes through the Passport adapter | Native Edit profile dialog verified: photo crop and upload, name, bio, username availability, and username change |
 | Share sheet following list | Your followings from `follows` | Verified: the client's retry loop (about 2 requests per second) stopped |
 | Likes | PostgreSQL `likes`, read back as `digged`/`stats.diggCount` | Native like/unlike verified, including after reload |
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
@@ -41,6 +42,12 @@ These are taken from the cached client bundle. The client sends every parameter 
 | GET `/api/user/list/` | `scene` (21 following, 67 followers, 150 friends, 151 suggested), optional `secUid`, `minCursor` (0 first), `count` | `userList[{user, stats, statsV2}]`, `minCursor` (next offset), `hasMore`, `total`. Without `secUid` the lists are the viewer's own |
 | GET `/api/im/spotlight/relation` | `max_time` (0 first), `count` | `status_code`, `followings[]` (`uid`, `sec_uid`, `unique_id`, `nickname`, `avatar_thumb`, `follow_status`, `follower_status`), `min_time` (next offset), `has_more` (1/0). On any failure the client retries continuously |
 | POST `/api/comment/delete/` | `cid` | `status_code`. Not found and not allowed both return 404 |
+| POST `/api/upload/image/` | multipart `file`, `source` | `status_code`, `data.uri` (sent back as `avatar_uri`), `data.url_list[0]` for the preview. Images over 5 MB or 4096 px, and anything other than PNG, JPEG, or WebP, are rejected |
+| POST `/api/update/profile/` | form `nickname`, `signature`, `avatar_uri`, `tt_csrf_token` (each only when changed) | `status_code` (2550 = invalid name, shown under the field) and `user`. The profile page reloads 3 seconds after a successful save. The client's 7-day name and 30-day username limits are its own warnings; Kittok does not enforce them |
+| GET `/api/uniqueid/check/` | `unique_id` | `status_code`, `is_valid`. Kittok usernames are 3–24 lowercase letters, digits, or underscores, so names with periods show as unavailable |
+| POST `/passport/web/login_name/update/` | form `login_name` | Passport envelope: `message: "success"`, or `message: "error"` with `data.error_code` 1024 (taken) or 1027 (invalid) |
+
+The client's security SDK re-opens XHR requests and replays their headers, so `X-CSRF-Token` can arrive as `token, token`. Kittok accepts that only when every copy matches the session token.
 | POST `/api/commit/follow/user/` and `/api/follow/` | `user_id`, `type`/`action_type` (1 follow, 0 unfollow) | `status_code`, integer `follow_status`: 0 none, 1 following, 2 mutual (4, requested, is unused) |
 | GET `/api/user/detail/`, feed `author` | — | integer `relation`: 0 none, 1 following, 2 mutual, 6 follows you |
 | POST `/api/comment/publish/` | `aweme_id`, `text`, `reply_id` (`0` for top level), `reply_to_reply_id`, `text_extra` | `status_code` and `comment`, in the same shape as `/api/comment/list/` items |

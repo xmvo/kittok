@@ -1,6 +1,7 @@
-import { HttpError, Id, Json, ReadBody, RequireMethod } from '../http.mjs';
+import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { RequireCsrf } from '../auth.mjs';
-import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList } from '../store.mjs';
+import { SaveAvatar, AvatarExists, RemoveAvatar } from '../media.mjs';
+import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl } from '../store.mjs';
 
 const FollowStatus = Value => ({ 1: 1, 2: 2 })[Value] ?? 0;
 const Offset = Value => Math.min(Math.max(Math.floor(Number(Value)) || 0, 0), 100000);
@@ -10,14 +11,14 @@ function CommentShape(Row, Origin) {
 	return {
 		cid: Row.id, aweme_id: Row.video_id, text: Row.body, text_extra: [], create_time: Math.floor(new Date(Row.created_at).getTime() / 1000),
 		digg_count: Row.likes ?? 0, reply_comment_total: Row.replies ?? 0, user_digged: Row.liked ? 1 : 0, reply_id: Row.parent_id ?? '0', reply_to_reply_id: '0',
-		user: { uid: Row.author_id, unique_id: Row.username, nickname: Row.display_name, sec_uid: Row.author_id, avatar_thumb: { url_list: [`${Origin}/public/avatar.svg`] } },
+		user: { uid: Row.author_id, unique_id: Row.username, nickname: Row.display_name, sec_uid: Row.author_id, avatar_thumb: { url_list: [AvatarUrl(Row, Origin)] } },
 	};
 }
 
 async function CommentPage(Pool, Origin, Viewer, { video, parent, cursor, count }) {
 	const Limit = PageSize(count, 20);
 	const After = cursor && cursor !== '0' ? Id(cursor) : null;
-	const Result = await Pool.query(`SELECT c.*, u.username, u.display_name,
+	const Result = await Pool.query(`SELECT c.*, u.username, u.display_name, u.avatar_name,
 		(SELECT count(*)::int FROM comment_likes l WHERE l.comment_id = c.id) AS likes,
 		EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.user_id = $1::bigint) AS liked,
 		(SELECT count(*)::int FROM comments r WHERE r.parent_id = c.id) AS replies
@@ -83,11 +84,45 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']);
 		const Start = Offset(Params.get('max_time'));
 		const List = User ? await FollowList(Pool, User.id, User.id, 'following', Start, PageSize(Params.get('count'), 30)) : { users: [], total: 0 };
-		const Avatar = { url_list: [`${Config.Origin}/public/avatar.svg`] };
 		Json(Response, {
 			status_code: 0, max_time: Start, min_time: Start + List.users.length, has_more: Start + List.users.length < List.total ? 1 : 0,
-			followings: List.users.map(Row => ({ uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio, avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: Row.relation === 2 ? 1 : 0 })),
+			followings: List.users.map(Row => {
+				const Avatar = { url_list: [AvatarUrl(Row, Config.Origin)] };
+				return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio, avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: Row.relation === 2 ? 1 : 0 };
+			}),
 		}); return true;
+	}
+	if (Path === '/api/upload/image/') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		Limiter.Hit(`avatar:${User.id}`, 20, 3600000);
+		const Form = await new globalThis.Response(await ReadRaw(Request, 5 * 1024 * 1024), { headers: { 'content-type': Request.headers['content-type'] ?? '' } }).formData().catch(() => null);
+		const File = Form?.get('file');
+		if (!(File instanceof Blob)) throw new HttpError(400, 'InvalidUpload');
+		const Name = await SaveAvatar(Config, User.id, Buffer.from(await File.arrayBuffer()));
+		Json(Response, { status_code: 0, data: { uri: Name, url_list: [`${Config.Origin}/media/${Name}`] } }); return true;
+	}
+	if (Path === '/api/update/profile/') {
+		RequireMethod(Request, ['POST']);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		RequireCsrf(Request, User, Request.headers['x-csrf-token'] ?? Body.tt_csrf_token);
+		const Nickname = Body.nickname === undefined ? null : String(Body.nickname).trim();
+		const Bio = Body.signature === undefined ? null : String(Body.signature).trim();
+		const Avatar = Body.avatar_uri === undefined ? null : String(Body.avatar_uri);
+		if (Nickname !== null && (Nickname.length < 1 || Nickname.length > 50)) { Json(Response, { status_code: 2550, status_msg: 'InvalidNickname' }); return true; }
+		if (Bio !== null && Bio.length > 160) throw new HttpError(400, 'BioTooLong');
+		if (Avatar !== null && !(new RegExp(`^avatar-${User.id}-[0-9a-f-]{36}\\.jpg$`).test(Avatar) && await AvatarExists(Config, Avatar))) throw new HttpError(400, 'InvalidAvatar');
+		const Updated = (await Pool.query(`UPDATE users u SET display_name = COALESCE($2, u.display_name), bio = COALESCE($3, u.bio), avatar_name = COALESCE($4, u.avatar_name)
+			FROM (SELECT avatar_name FROM users WHERE id = $1) Previous WHERE u.id = $1
+			RETURNING u.id, u.username, u.display_name, u.bio, u.avatar_name, Previous.avatar_name AS previous_avatar`, [User.id, Nickname, Bio, Avatar])).rows[0];
+		if (Updated.previous_avatar && Updated.previous_avatar !== Updated.avatar_name) await RemoveAvatar(Config, Updated.previous_avatar);
+		const Url = { url_list: [AvatarUrl(Updated, Config.Origin)] };
+		Json(Response, { status_code: 0, status_msg: '', user: { uid: Updated.id, sec_uid: Updated.id, unique_id: Updated.username, nickname: Updated.display_name, signature: Updated.bio, avatar_thumb: Url, avatar_medium: Url, avatar_larger: Url } }); return true;
+	}
+	if (Path === '/api/uniqueid/check/') {
+		RequireMethod(Request, ['GET']);
+		const Name = String(Params.get('unique_id') ?? '').toLowerCase();
+		const Valid = /^[a-z0-9_]{3,24}$/.test(Name) && (Name === User?.username || !(await Pool.query('SELECT 1 FROM users WHERE username = $1', [Name])).rowCount);
+		Json(Response, { status_code: 0, is_valid: Valid }); return true;
 	}
 	if (Path === '/api/user/collection_list/') {
 		RequireMethod(Request, ['GET']);
@@ -96,8 +131,8 @@ export async function Compatibility(Context) {
 	if (Path === '/api/search/user/full/') {
 		RequireMethod(Request, ['GET']);
 		const Query = `%${(Params.get('keyword') ?? '').slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`;
-		const Result = await Pool.query("SELECT id, username, display_name, bio FROM users WHERE username ILIKE $1 ESCAPE '\\' OR display_name ILIKE $1 ESCAPE '\\' ORDER BY username LIMIT 20", [Query]);
-		Json(Response, { status_code: 0, user_list: await Promise.all(Result.rows.map(async Row => ({ user_info: { ...UserShape(Row, Config.Origin), uid: Row.id, unique_id: Row.username, sec_uid: Row.id, nickname: Row.display_name, avatar_thumb: { url_list: [`${Config.Origin}/public/avatar.svg`] }, ...await UserStats(Pool, Row.id) } }))), cursor: 0, has_more: 0 }); return true;
+		const Result = await Pool.query("SELECT id, username, display_name, bio, avatar_name FROM users WHERE username ILIKE $1 ESCAPE '\\' OR display_name ILIKE $1 ESCAPE '\\' ORDER BY username LIMIT 20", [Query]);
+		Json(Response, { status_code: 0, user_list: await Promise.all(Result.rows.map(async Row => ({ user_info: { ...UserShape(Row, Config.Origin), uid: Row.id, unique_id: Row.username, sec_uid: Row.id, nickname: Row.display_name, avatar_thumb: { url_list: [AvatarUrl(Row, Config.Origin)] }, ...await UserStats(Pool, Row.id) } }))), cursor: 0, has_more: 0 }); return true;
 	}
 	if (Path === '/api/comment/list/') {
 		RequireMethod(Request, ['GET']);

@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rm, stat } from 'node:fs/promises';
+import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
@@ -10,7 +10,7 @@ import { HttpError } from './http.mjs';
 export const Mime = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.mp4': 'video/mp4', '.json': 'application/json', '.ico': 'image/x-icon' };
 const SafeName = /^[a-zA-Z0-9_-]+\.(?:mp4|jpg|png|svg)$/;
 
-function Run(Executable, Args) {
+function Run(Executable, Args, Failure = 'InvalidVideo') {
 	return new Promise((Resolve, Reject) => {
 		const Process = spawn(Executable, Args, { stdio: ['ignore', 'pipe', 'pipe'] });
 		const Chunks = [];
@@ -21,7 +21,7 @@ function Run(Executable, Args) {
 		Process.once('error', () => { clearTimeout(Timer); Reject(new HttpError(503, 'VideoToolsUnavailable')); });
 		Process.once('exit', Code => {
 			clearTimeout(Timer);
-			if (Code !== 0) Reject(new HttpError(422, 'InvalidVideo'));
+			if (Code !== 0) Reject(new HttpError(422, Failure));
 			else Resolve(Buffer.concat(Chunks).toString('utf8'));
 		});
 	});
@@ -56,6 +56,24 @@ export async function ImportVideo(Pool, Config, UserId, Input, Description = '')
 		throw Error;
 	}
 }
+
+export async function SaveAvatar(Config, UserId, Bytes) {
+	await mkdir(join(Config.MediaDir, '.incoming'), { recursive: true });
+	const Input = join(Config.MediaDir, '.incoming', randomUUID());
+	const Name = `avatar-${UserId}-${randomUUID()}.jpg`;
+	const Whitelist = ['-protocol_whitelist', 'file', '-format_whitelist', 'png_pipe,jpeg_pipe,webp_pipe'];
+	try {
+		await writeFile(Input, Bytes, { flag: 'wx', mode: 0o600 });
+		const Track = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', ...Whitelist, '-show_streams', '-of', 'json', Input], 'InvalidImage')).streams?.[0];
+		if (!Track || Track.width > 4096 || Track.height > 4096) throw new HttpError(422, 'InvalidImage');
+		await Run(Config.FFmpeg, ['-hide_banner', '-loglevel', 'error', '-nostdin', ...Whitelist, '-i', Input, '-frames:v', '1', '-map_metadata', '-1',
+			'-vf', 'scale=200:200:force_original_aspect_ratio=increase,crop=200:200', '-q:v', '3', '-threads', '1', '-n', join(Config.MediaDir, Name)], 'InvalidImage');
+		return Name;
+	} finally { await rm(Input, { force: true }); }
+}
+
+export const AvatarExists = async (Config, Name) => (await stat(join(Config.MediaDir, Name)).catch(() => null))?.isFile() ?? false;
+export const RemoveAvatar = (Config, Name) => rm(join(Config.MediaDir, Name), { force: true });
 
 export async function ReceiveVideo(Request, Config) {
 	await mkdir(join(Config.MediaDir, '.incoming'), { recursive: true });

@@ -181,6 +181,8 @@ test('social mutations enforce authentication and CSRF, and repeated likes stay 
 	const Path = `/api/v1/videos/${VideoId}/like`;
 	assert.equal((await Call(Path, 'PUT')).status, 401);
 	assert.equal((await Call(Path, 'PUT', undefined, { cookie: Cookie })).status, 403);
+	assert.equal((await Call(Path, 'PUT', undefined, Auth({ 'x-csrf-token': `${Session.csrfToken}, ${'0'.repeat(64)}` }))).status, 403);
+	assert.equal((await Call(Path, 'PUT', undefined, Auth({ 'x-csrf-token': `${Session.csrfToken}, ${Session.csrfToken}` }))).status, 200);
 	assert.equal((await Call(Path, 'PUT', undefined, Auth())).status, 200);
 	assert.equal((await Call(Path, 'PUT', undefined, Auth())).status, 200);
 	assert.equal((await Pool.query('SELECT * FROM likes WHERE video_id=$1', [VideoId])).rowCount, 1);
@@ -352,6 +354,54 @@ test('original client comment delete lets authors, video owners, and nobody else
 	assert.equal((await Delete(Mine)).status, 404);
 	assert.ok((await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=50`)).json()).comments.some(Comment => Comment.cid === Kept));
 	assert.equal((await Delete(Kept)).status, 200);
+});
+
+test('original client profile editing saves name, bio, and a re-encoded avatar that every user shape reads back', async () => {
+	const Image = join(Directory, 'avatar.png');
+	assert.equal(spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=360x300', '-frames:v', '1', Image]).status, 0);
+	const Upload = async (Bytes, Headers = Auth()) => { const Form = new FormData(); Form.append('file', new Blob([Bytes], { type: 'image/png' }), 'blob'); Form.append('source', '0'); return fetch(Origin + '/api/upload/image/', { method: 'POST', headers: Headers, body: Form }); };
+	const Save = (Fields, Headers = Auth()) => fetch(Origin + '/api/update/profile/', { method: 'POST', headers: { ...Headers, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...Fields, tt_csrf_token: Session.csrfToken }) });
+	assert.equal((await Upload(await readFile(Image), { cookie: Cookie })).status, 403);
+	assert.equal((await Upload(Buffer.from('not an image'))).status, 422);
+	const First = await (await Upload(await readFile(Image))).json();
+	assert.equal(First.status_code, 0); assert.match(First.data.uri, new RegExp(`^avatar-${Owner.id}-[0-9a-f-]{36}\\.jpg$`));
+	const Served = await fetch(First.data.url_list[0]); assert.equal(Served.headers.get('content-type'), 'image/jpeg');
+	const Probe = JSON.parse(spawnSync('ffprobe', ['-v', 'error', '-show_streams', '-of', 'json', join(Directory, First.data.uri)]).stdout);
+	assert.equal(Probe.streams[0].width, 200); assert.equal(Probe.streams[0].height, 200);
+	assert.deepEqual(await (await Save({ nickname: '   ' })).json(), { status_code: 2550, status_msg: 'InvalidNickname' });
+	assert.equal((await Save({ signature: 'x'.repeat(161) })).status, 400);
+	assert.equal((await Save({ avatar_uri: First.data.uri.replace(Owner.id, Friend.id) })).status, 400);
+	assert.equal((await Save({ avatar_uri: `avatar-${Owner.id}-00000000-0000-0000-0000-000000000000.jpg` })).status, 400);
+	const Saved = await (await Save({ nickname: ' Kitten Owner ', signature: 'Making local videos', avatar_uri: First.data.uri })).json();
+	assert.equal(Saved.status_code, 0); assert.equal(Saved.user.nickname, 'Kitten Owner'); assert.equal(Saved.user.signature, 'Making local videos');
+	const AvatarUrl = `${Origin}/media/${First.data.uri}`;
+	const Detail = (await (await Call('/api/user/detail/?uniqueId=owner')).json()).userInfo.user;
+	assert.equal(Detail.nickname, 'Kitten Owner'); assert.equal(Detail.signature, 'Making local videos'); assert.equal(Detail.avatarThumb, AvatarUrl);
+	assert.equal((await (await Call('/api/recommend/item_list/')).json()).itemList.find(Item => Item.id === VideoId).author.avatarLarger, AvatarUrl);
+	const Page = ReadJsonScript(await (await Call('/', 'GET', undefined, { cookie: Cookie })).text(), '__UNIVERSAL_DATA_FOR_REHYDRATION__').__DEFAULT_SCOPE__['webapp.app-context'];
+	assert.deepEqual(Page.user.avatarUri, [AvatarUrl]); assert.equal(Page.user.nickName, 'Kitten Owner');
+	const Bio = await (await Save({ signature: '' })).json(); assert.equal(Bio.user.signature, ''); assert.equal(Bio.user.nickname, 'Kitten Owner');
+	const Second = await (await Upload(await readFile(Image))).json();
+	await Save({ avatar_uri: Second.data.uri });
+	assert.equal((await fetch(AvatarUrl)).status, 404);
+	assert.equal((await fetch(Second.data.url_list[0])).status, 200);
+});
+
+test('original client username checks and changes enforce local username rules', async () => {
+	const Kitten = await Login(Pool, 'newkitten', Password);
+	const AsKitten = { cookie: `kittok_session=${Kitten.Token}`, 'x-csrf-token': Kitten.Csrf };
+	const Check = async (Name, Headers = AsKitten) => (await (await Call(`/api/uniqueid/check/?unique_id=${encodeURIComponent(Name)}`, 'GET', undefined, Headers)).json()).is_valid;
+	assert.equal(await Check('newkitten'), true); assert.equal(await Check('owner'), false); assert.equal(await Check('Fresh_Name'), true);
+	assert.equal(await Check('ab'), false); assert.equal(await Check('has.dot'), false);
+	const Rename = (Name, Headers = AsKitten) => fetch(Origin + '/passport/web/login_name/update/', { method: 'POST', headers: { ...Headers, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ login_name: Name }) });
+	assert.equal((await Rename('fresh_name', { cookie: AsKitten.cookie })).status, 403);
+	assert.equal((await (await Rename('owner')).json()).data.error_code, 1024);
+	assert.equal((await (await Rename('bad name!')).json()).data.error_code, 1027);
+	const Renamed = await (await Rename('Fresh_Name')).json();
+	assert.equal(Renamed.message, 'success'); assert.equal(Renamed.data.username, 'fresh_name');
+	assert.equal((await (await Call('/api/user/detail/?uniqueId=fresh_name')).json()).userInfo.user.uniqueId, 'fresh_name');
+	assert.equal((await Call('/api/user/detail/?uniqueId=newkitten')).status, 404);
+	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, { cookie: AsKitten.cookie })).json()).user.uniqueId, 'fresh_name');
 });
 
 test('search finds local accounts and paginated feeds do not repeat the final video', async () => {
