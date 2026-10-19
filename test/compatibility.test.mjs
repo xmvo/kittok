@@ -2,14 +2,14 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, readdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AssetUrl, ClientDir, LocalAsset, ReadJsonScript, Root, LoginManifestUrl, RewriteAssets } from '../src/client/archive.mjs';
 import { Shell } from '../src/client/shell.mjs';
 import { LoadConfig } from '../src/config.mjs';
 import { Database, Migrate } from '../src/db.mjs';
-import { CreateUser, Hash, Token, PasswordMatches } from '../src/auth.mjs';
+import { CreateUser, Hash, Token, PasswordMatches, Login } from '../src/auth.mjs';
 import { ImportVideo } from '../src/media.mjs';
 import { runInNewContext } from 'node:vm';
 import { DecodePassportValue } from '../src/routes/passport.mjs';
@@ -142,7 +142,7 @@ test('captured client bootstrap uses local domains without leaked guest identifi
 });
 
 test('migrations are idempotent and passwords and session tokens are hashed at rest', async () => {
-	assert.equal((await Pool.query('SELECT * FROM schema_migrations')).rowCount, 1);
+	assert.equal((await Pool.query('SELECT * FROM schema_migrations')).rowCount, (await readdir(join(Root, 'migrations'))).filter(Name => /^\d+.*\.sql$/.test(Name)).length);
 	const User = (await Pool.query('SELECT password_hash FROM users WHERE id=$1', [Owner.id])).rows[0];
 	assert.notEqual(User.password_hash, Password); assert.ok(await PasswordMatches(Password, User.password_hash));
 	const Sessions = await Pool.query('SELECT token_hash FROM sessions WHERE user_id=$1', [Owner.id]);
@@ -191,6 +191,67 @@ test('social mutations enforce authentication and CSRF, and repeated likes stay 
 	assert.equal((await Pool.query('SELECT * FROM follows WHERE follower_id=$1 AND following_id=$2', [Owner.id, Friend.id])).rowCount, 1);
 });
 
+test('original client favorite requests toggle persistent favorites and are read back on feed, detail, and profile', async () => {
+	const Collect = Action => Call(`/api/item/collect/?aid=1988&itemId=${VideoId}&action=${Action}&secUid=${Owner.id}`, 'POST', undefined, Auth());
+	assert.equal((await Call(`/api/item/collect/?itemId=${VideoId}&action=1`, 'POST', undefined, { cookie: Cookie })).status, 403);
+	assert.deepEqual(await (await Collect(1)).json(), { status_code: 0, statusCode: 0, collected: true, collectCount: 1 });
+	assert.equal((await Collect(1)).status, 200);
+	assert.equal((await Pool.query('SELECT * FROM favorites WHERE user_id=$1 AND video_id=$2', [Owner.id, VideoId])).rowCount, 1);
+	const Item = (await (await Call('/api/recommend/item_list/', 'GET', undefined, Auth())).json()).itemList.find(Item => Item.id === VideoId);
+	assert.equal(Item.collected, true); assert.equal(Item.stats.collectCount, 1); assert.equal(Item.statsV2.collectCount, '1');
+	assert.equal((await (await Call(`/api/item/detail/?itemId=${VideoId}`, 'GET', undefined, Auth())).json()).itemInfo.itemStruct.collected, true);
+	assert.equal((await (await Call(`/api/item/detail/?itemId=${VideoId}`)).json()).itemInfo.itemStruct.collected, false);
+	const Saved = await (await Call(`/api/user/collect/item_list/?secUid=${Owner.id}&count=30&cursor=0`, 'GET', undefined, Auth())).json();
+	assert.equal(Saved.statusCode, 0); assert.deepEqual(Saved.itemList.map(Item => Item.id), [VideoId]);
+	assert.deepEqual((await (await Call(`/api/user/collect/item_list/?secUid=${Friend.id}`, 'GET', undefined, Auth())).json()).itemList, []);
+	assert.deepEqual((await (await Call(`/api/user/collect/item_list/?secUid=${Owner.id}`)).json()).itemList, []);
+	assert.deepEqual(await (await Collect(2)).json(), { status_code: 0, statusCode: 0, collected: false, collectCount: 0 });
+	assert.deepEqual((await (await Call(`/api/user/collect/item_list/?secUid=${Owner.id}`, 'GET', undefined, Auth())).json()).itemList, []);
+	assert.equal((await Call('/api/item/collect/?itemId=1&action=1', 'POST', undefined, Auth())).status, 404);
+	assert.equal((await Collect(1)).status, 200);
+});
+
+test('original client follow requests persist and return follow_status and relation from the database', async () => {
+	const Friendly = await Login(Pool, 'friend', Password);
+	const AsFriend = { cookie: `kittok_session=${Friendly.Token}`, 'x-csrf-token': Friendly.Csrf };
+	const Follow = (Path, Type, Target, Headers) => Call(`${Path}?type=${Type}&action_type=${Type}&user_id=${Target.id}&sec_user_id=${Target.id}&from=18&channel_id=0&from_pre=0&fromWeb=1`, 'POST', undefined, Headers);
+	const RelationTo = async (Target, Headers) => (await (await Call(`/api/user/detail/?uniqueId=${Target.username}`, 'GET', undefined, Headers)).json()).userInfo.user.relation;
+	assert.equal((await Follow('/api/commit/follow/user/', 1, Friend, { cookie: Cookie })).status, 403);
+	assert.deepEqual(await (await Follow('/api/commit/follow/user/', 0, Friend, Auth())).json(), { status_code: 0, statusCode: 0, follow_status: 0 });
+	assert.equal((await Pool.query('SELECT * FROM follows WHERE follower_id=$1 AND following_id=$2', [Owner.id, Friend.id])).rowCount, 0);
+	assert.equal(await RelationTo(Friend, Auth()), 0);
+	assert.equal((await (await Follow('/api/commit/follow/user/', 1, Friend, Auth())).json()).follow_status, 1);
+	assert.equal(await RelationTo(Friend, Auth()), 1);
+	assert.equal(await RelationTo(Owner, AsFriend), 6);
+	assert.equal((await (await Call('/api/recommend/item_list/', 'GET', undefined, AsFriend)).json()).itemList.find(Item => Item.id === VideoId).author.relation, 6);
+	assert.equal((await (await Follow('/api/follow/', 1, Owner, AsFriend)).json()).follow_status, 2);
+	assert.equal(await RelationTo(Friend, Auth()), 2);
+	assert.equal((await (await Call('/api/recommend/item_list/', 'GET', undefined, AsFriend)).json()).itemList.find(Item => Item.id === VideoId).author.relation, 2);
+	assert.equal(await RelationTo(Friend), 0);
+	assert.equal(await RelationTo(Owner, Auth()), 0);
+	assert.equal((await Follow('/api/commit/follow/user/', 1, Owner, Auth())).status, 400);
+	assert.equal((await Follow('/api/commit/follow/user/', 1, { id: '1' }, Auth())).status, 404);
+});
+
+test('original client comment publish persists comments that the list and item counts read back', async () => {
+	const Publish = (Query, Headers = Auth()) => Call(`/api/comment/publish/?${new URLSearchParams({ aweme_id: VideoId, reply_id: '0', reply_to_reply_id: '0', text_extra: '[]', ...Query })}`, 'POST', undefined, Headers);
+	const Before = (await Pool.query('SELECT count(*)::int AS count FROM comments WHERE video_id=$1', [VideoId])).rows[0].count;
+	assert.equal((await Publish({ text: 'Nope' }, { cookie: Cookie })).status, 403);
+	assert.equal((await Publish({ text: '   ' })).status, 400);
+	const First = await (await Publish({ text: ' Published natively ' })).json();
+	assert.equal(First.status_code, 0); assert.equal(First.comment.text, 'Published natively'); assert.equal(First.comment.aweme_id, VideoId);
+	assert.equal(First.comment.reply_id, '0'); assert.equal(First.comment.user.unique_id, 'owner'); assert.match(First.comment.cid, /^\d+$/);
+	const Reply = await (await Publish({ text: 'A reply', reply_id: First.comment.cid })).json();
+	assert.equal(Reply.comment.reply_id, First.comment.cid);
+	assert.equal((await Pool.query('SELECT parent_id FROM comments WHERE id=$1', [Reply.comment.cid])).rows[0].parent_id, First.comment.cid);
+	assert.equal((await Publish({ text: 'Orphan', reply_id: '1' })).status, 404);
+	assert.equal((await Publish({ text: 'Missing', aweme_id: '1' })).status, 404);
+	const List = await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=20&cursor=0`)).json();
+	assert.deepEqual(List.comments.slice(0, 2).map(Comment => Comment.text), ['A reply', 'Published natively']);
+	assert.equal(List.comments[1].cid, First.comment.cid);
+	assert.equal((await (await Call(`/api/item/detail/?itemId=${VideoId}`)).json()).itemInfo.itemStruct.stats.commentCount, Before + 2);
+});
+
 test('search finds local accounts and paginated feeds do not repeat the final video', async () => {
 	const Users = await (await Call('/api/search/user/full/?keyword=owner')).json(); assert.equal(Users.user_list[0].user_info.unique_id, 'owner');
 	const Next = await (await Call(`/api/recommend/item_list/?cursor=${VideoId}`)).json(); assert.deepEqual(Next.itemList, []);
@@ -220,6 +281,11 @@ test('users, sessions, videos, and social data survive a server restart', async 
 	const Current = await (await Call('/api/v1/session', 'GET', undefined, { cookie: Cookie })).json(); assert.equal(Current.user.uniqueId, 'owner');
 	assert.equal((await Pool.query('SELECT * FROM likes WHERE video_id=$1', [VideoId])).rowCount, 1);
 	const Feed = await (await Call('/api/recommend/item_list/')).json(); assert.equal(Feed.itemList.length, 2);
+	const Item = (await (await Call('/api/recommend/item_list/', 'GET', undefined, Auth())).json()).itemList.find(Item => Item.id === VideoId);
+	assert.equal(Item.collected, true); assert.equal(Item.stats.collectCount, 1);
+	assert.deepEqual((await (await Call(`/api/user/collect/item_list/?secUid=${Owner.id}`, 'GET', undefined, Auth())).json()).itemList.map(Item => Item.id), [VideoId]);
+	assert.equal((await (await Call('/api/user/detail/?uniqueId=friend', 'GET', undefined, Auth())).json()).userInfo.user.relation, 2);
+	assert.ok((await (await Call(`/api/comment/list/?aweme_id=${VideoId}`)).json()).comments.some(Comment => Comment.text === 'Published natively'));
 	assert.equal((await Call('/api/v1/session', 'DELETE', undefined, Auth())).status, 200);
 	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, { cookie: Cookie })).json()).user, null);
 });

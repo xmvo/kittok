@@ -5,8 +5,18 @@ export function UserShape(User, Origin) {
 		id: User.id, uniqueId: User.username, nickname: User.display_name, secUid: User.id,
 		signature: User.bio ?? '', verified: false, privateAccount: false, secret: false,
 		avatarThumb: `${Origin}/public/avatar.svg`, avatarMedium: `${Origin}/public/avatar.svg`, avatarLarger: `${Origin}/public/avatar.svg`,
-		following: 0, relation: 0,
+		following: 0, relation: User.relation ?? 0,
 	};
+}
+
+const RelationSql = (Viewer, Target) => `CASE
+	WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Viewer} AND following_id = ${Target})
+		THEN CASE WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Target} AND following_id = ${Viewer}) THEN 2 ELSE 1 END
+	WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Target} AND following_id = ${Viewer}) THEN 6 ELSE 0 END`;
+
+export async function Relation(Pool, Viewer, Target) {
+	const Result = await Pool.query(`SELECT ${RelationSql('$1::bigint', '$2::bigint')} AS relation`, [Viewer ?? null, Target]);
+	return Result.rows[0].relation;
 }
 
 export async function FindUser(Pool, Value, ById = false) {
@@ -42,7 +52,8 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 		(SELECT count(*)::int FROM comments c WHERE c.video_id = v.id) AS comments,
 		(SELECT count(*)::int FROM favorites f WHERE f.video_id = v.id) AS favorites,
 		EXISTS (SELECT 1 FROM likes l WHERE l.video_id = v.id AND l.user_id = $1) AS liked,
-		EXISTS (SELECT 1 FROM favorites f WHERE f.video_id = v.id AND f.user_id = $1) AS saved
+		EXISTS (SELECT 1 FROM favorites f WHERE f.video_id = v.id AND f.user_id = $1) AS saved,
+		${RelationSql('$1', 'v.author_id')} AS relation
 		FROM videos v JOIN users u ON u.id = v.author_id ${Conditions.length ? `WHERE ${Conditions.join(' AND ')}` : ''}
 		ORDER BY v.id DESC LIMIT $${Values.length}`, Values);
 	const HasMore = Result.rows.length === Values.at(-1);
@@ -69,6 +80,17 @@ export function VideoShape(Row, Origin) {
 		officalItem: false, secret: false, privateItem: false, shareEnabled: true, duetEnabled: false, stitchEnabled: false,
 		forFriend: false, originalItem: false, isAd: false, item_control: {}, contents: [],
 	};
+}
+
+export async function AddComment(Pool, VideoId, AuthorId, Text, ParentId = null) {
+	if (typeof Text !== 'string' || !Text.trim() || Text.length > 1500) throw new HttpError(400, 'InvalidComment');
+	const Exists = await Pool.query('SELECT id FROM videos WHERE id = $1', [VideoId]);
+	if (!Exists.rowCount) throw new HttpError(404, 'VideoNotFound');
+	const Added = await Pool.query(`INSERT INTO comments(video_id, author_id, body, parent_id)
+		SELECT $1::bigint, $2::bigint, $3::text, $4::bigint WHERE $4::bigint IS NULL OR EXISTS (SELECT 1 FROM comments WHERE id = $4 AND video_id = $1)
+		RETURNING id, body, created_at, parent_id`, [VideoId, AuthorId, Text.trim(), ParentId]);
+	if (!Added.rowCount) throw new HttpError(404, 'CommentNotFound');
+	return Added.rows[0];
 }
 
 export async function SetRelation(Pool, Table, Columns, Values, Enabled) {

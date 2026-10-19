@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { HttpError, Id, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { CreateUser, Login, RequireCsrf, SessionCookie } from '../auth.mjs';
-import { UserShape, UserStats, FindUser, Videos, SetRelation } from '../store.mjs';
+import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment } from '../store.mjs';
 import { ImportVideo, ReceiveVideo } from '../media.mjs';
 
 export async function Api(Context) {
@@ -62,12 +62,8 @@ export async function Api(Context) {
 			}
 			RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 			Limiter.Hit(`comment:${User.id}`, 30);
-			const Body = await ReadBody(Request);
-			if (typeof Body.text !== 'string' || !Body.text.trim() || Body.text.length > 1500) throw new HttpError(400, 'InvalidComment');
-			const Exists = await Pool.query('SELECT id FROM videos WHERE id = $1', [VideoId]);
-			if (!Exists.rowCount) throw new HttpError(404, 'VideoNotFound');
-			const Added = await Pool.query('INSERT INTO comments(video_id, author_id, body) VALUES ($1,$2,$3) RETURNING id, body, created_at', [VideoId, User.id, Body.text.trim()]);
-			Json(Response, Added.rows[0], 201); return true;
+			const { id, body, created_at } = await AddComment(Pool, VideoId, User.id, (await ReadBody(Request)).text);
+			Json(Response, { id, body, created_at }, 201); return true;
 		}
 		RequireMethod(Request, ['PUT', 'DELETE']); RequireCsrf(Request, User);
 		await SetRelation(Pool, Match[2] === 'like' ? 'likes' : 'favorites', ['user_id', 'video_id'], [User.id, VideoId], Request.method === 'PUT');
