@@ -19,6 +19,18 @@ export async function Relation(Pool, Viewer, Target) {
 	return Result.rows[0].relation;
 }
 
+export async function FollowList(Pool, Viewer, Target, Scene, Offset, Limit) {
+	const From = {
+		following: 'follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = $2',
+		followers: 'follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = $2',
+		friends: 'follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = $2 AND EXISTS (SELECT 1 FROM follows b WHERE b.follower_id = u.id AND b.following_id = $2)',
+		suggested: 'users u WHERE u.id <> $2 AND NOT EXISTS (SELECT 1 FROM follows b WHERE b.follower_id = $2 AND b.following_id = u.id)',
+	}[Scene];
+	const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, ${RelationSql('$1::bigint', 'u.id')} AS relation, count(*) OVER ()::int AS total
+		FROM ${From} ORDER BY ${Scene === 'suggested' ? 'u.created_at' : 'f.created_at'} DESC, u.id DESC OFFSET $3 LIMIT $4`, [Viewer ?? null, Target, Offset, Limit]);
+	return { users: Result.rows, total: Result.rows[0]?.total ?? 0 };
+}
+
 export async function FindUser(Pool, Value, ById = false) {
 	const Result = await Pool.query(`SELECT id, username, display_name, bio, role FROM users WHERE ${ById ? 'id' : 'username'} = $1`, [ById ? Id(Value) : String(Value).toLowerCase()]);
 	if (!Result.rowCount) throw new HttpError(404, 'UserNotFound');

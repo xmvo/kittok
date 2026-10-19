@@ -302,6 +302,58 @@ test('original client reply threads page oldest first and comment likes persist 
 	assert.equal((await Digg(Replies[1].cid, 1)).status, 200);
 });
 
+test('original client follower, following, friend, and suggested lists page from the database', async () => {
+	const Kitten = (await Pool.query("SELECT id FROM users WHERE username='newkitten'")).rows[0].id;
+	await Pool.query('INSERT INTO follows(follower_id, following_id) VALUES ($1, $2)', [Kitten, Owner.id]);
+	const List = (Query, Headers = Auth()) => Call(`/api/user/list/?${new URLSearchParams({ maxCursor: 0, minCursor: 0, count: 30, ...Query })}`, 'GET', undefined, Headers).then(Response => Response.json());
+	const Names = Result => Result.userList.map(Entry => Entry.user.uniqueId);
+	const Following = await List({ scene: 21 });
+	assert.equal(Following.statusCode, 0); assert.deepEqual(Names(Following), ['friend']);
+	assert.equal(Following.userList[0].user.relation, 2); assert.equal(Following.userList[0].stats.followerCount, 1); assert.equal(Following.userList[0].statsV2.followerCount, '1');
+	assert.deepEqual(Names(await List({ scene: 67 })), ['newkitten', 'friend']);
+	assert.deepEqual(Names(await List({ scene: 150 })), ['friend']);
+	assert.deepEqual(Names(await List({ scene: 151 })), ['newkitten']);
+	const First = await List({ scene: 67, count: 1 });
+	assert.deepEqual(Names(First), ['newkitten']); assert.equal(First.userList[0].user.relation, 6); assert.equal(First.hasMore, true); assert.equal(First.total, 2);
+	const Second = await List({ scene: 67, count: 1, minCursor: First.minCursor });
+	assert.deepEqual(Names(Second), ['friend']); assert.equal(Second.hasMore, false);
+	assert.deepEqual(Names(await List({ scene: 21, secUid: Friend.id })), ['owner']);
+	assert.deepEqual(Names(await List({ scene: 67, secUid: Friend.id }, {})), ['owner']);
+	assert.deepEqual(Names(await List({ scene: 21 }, {})), []);
+	assert.deepEqual(Names(await List({ scene: 999 })), []);
+	const Spotlight = await (await Call('/api/im/spotlight/relation?source=web&with_fstatus=1&count=30&max_time=0&min_time=0', 'GET', undefined, Auth())).json();
+	assert.equal(Spotlight.status_code, 0); assert.equal(Spotlight.has_more, 0);
+	assert.deepEqual(Spotlight.followings.map(User => [User.unique_id, User.follow_status, User.follower_status]), [['friend', 2, 1]]);
+	assert.deepEqual(await (await Call('/api/im/spotlight/relation?count=30&max_time=0')).json(), { status_code: 0, max_time: 0, min_time: 0, has_more: 0, followings: [] });
+});
+
+test('liked and favorites tabs stay private and collection lists return an empty native shape', async () => {
+	assert.deepEqual((await (await Call(`/api/favorite/item_list/?secUid=${Owner.id}&count=30&cursor=0`, 'GET', undefined, Auth())).json()).itemList.map(Item => Item.id), [VideoId]);
+	assert.deepEqual((await (await Call(`/api/favorite/item_list/?secUid=${Owner.id}`)).json()).itemList, []);
+	assert.deepEqual((await (await Call(`/api/favorite/item_list/?secUid=${Friend.id}`, 'GET', undefined, Auth())).json()).itemList, []);
+	assert.deepEqual(await (await Call(`/api/user/collection_list/?secUid=${Owner.id}&count=30&cursor=0`, 'GET', undefined, Auth())).json(), { statusCode: 0, status_code: 0, collectionList: [], cursor: '0', hasMore: false });
+});
+
+test('original client comment delete lets authors, video owners, and nobody else remove comments', async () => {
+	const Friendly = await Login(Pool, 'friend', Password);
+	const AsFriend = { cookie: `kittok_session=${Friendly.Token}`, 'x-csrf-token': Friendly.Csrf };
+	const Publish = (Text, Headers, Reply = '0') => Call(`/api/comment/publish/?aweme_id=${VideoId}&text=${encodeURIComponent(Text)}&reply_id=${Reply}`, 'POST', undefined, Headers).then(Response => Response.json()).then(Result => Result.comment.cid);
+	const Delete = (Cid, Headers = Auth()) => Call(`/api/comment/delete/?cid=${Cid}`, 'POST', undefined, Headers);
+	const Mine = await Publish('Owner will delete this', Auth());
+	const Child = await Publish('Reply goes with it', AsFriend, Mine);
+	const Theirs = await Publish('Friend wrote this', AsFriend);
+	const Kept = await Publish('Owner keeps this', Auth());
+	assert.equal((await Delete(Mine, { cookie: Cookie })).status, 403);
+	assert.equal((await Delete(Mine, {})).status, 401);
+	assert.equal((await Delete(Kept, AsFriend)).status, 404);
+	assert.deepEqual(await (await Delete(Mine)).json(), { status_code: 0, statusCode: 0 });
+	assert.equal((await Pool.query('SELECT * FROM comments WHERE id = ANY($1)', [[Mine, Child]])).rowCount, 0);
+	assert.equal((await Delete(Theirs)).status, 200);
+	assert.equal((await Delete(Mine)).status, 404);
+	assert.ok((await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=50`)).json()).comments.some(Comment => Comment.cid === Kept));
+	assert.equal((await Delete(Kept)).status, 200);
+});
+
 test('search finds local accounts and paginated feeds do not repeat the final video', async () => {
 	const Users = await (await Call('/api/search/user/full/?keyword=owner')).json(); assert.equal(Users.user_list[0].user_info.unique_id, 'owner');
 	const Next = await (await Call(`/api/recommend/item_list/?cursor=${VideoId}`)).json(); assert.deepEqual(Next.itemList, []);

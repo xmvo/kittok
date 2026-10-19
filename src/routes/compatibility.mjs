@@ -1,8 +1,10 @@
 import { HttpError, Id, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { RequireCsrf } from '../auth.mjs';
-import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment } from '../store.mjs';
+import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList } from '../store.mjs';
 
 const FollowStatus = Value => ({ 1: 1, 2: 2 })[Value] ?? 0;
+const Offset = Value => Math.min(Math.max(Math.floor(Number(Value)) || 0, 0), 100000);
+const PageSize = (Value, Default) => Math.min(Math.max(Number(Value) || Default, 1), 50);
 
 function CommentShape(Row, Origin) {
 	return {
@@ -13,7 +15,7 @@ function CommentShape(Row, Origin) {
 }
 
 async function CommentPage(Pool, Origin, Viewer, { video, parent, cursor, count }) {
-	const Limit = Math.min(Math.max(Number(count) || 20, 1), 50);
+	const Limit = PageSize(count, 20);
 	const After = cursor && cursor !== '0' ? Id(cursor) : null;
 	const Result = await Pool.query(`SELECT c.*, u.username, u.display_name,
 		(SELECT count(*)::int FROM comment_likes l WHERE l.comment_id = c.id) AS likes,
@@ -46,11 +48,10 @@ export async function Compatibility(Context) {
 		const Filter = { viewer: User?.id, before: Params.get('cursor') === '0' ? undefined : Params.get('cursor'), limit: Params.get('count') };
 		if (Path.includes('/following/')) { if (!User) throw new HttpError(401, 'NotLoggedIn'); Filter.following = User.id; }
 		if (Path.includes('/post/')) Filter.author = (await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'))).id;
-		if (Path.includes('/favorite/')) Filter.likedBy = (await FindUser(Pool, Params.get('secUid') || User?.id, true)).id;
 		if (Path.includes('/collection/')) { if (!User) throw new HttpError(401, 'NotLoggedIn'); Filter.savedBy = User.id; }
-		if (Path.includes('/user/collect/')) {
+		if (Path.includes('/favorite/') || Path.includes('/user/collect/')) {
 			if (!User || (Params.get('secUid') && Params.get('secUid') !== User.id)) { Json(Response, { statusCode: 0, status_code: 0, itemList: [], cursor: '0', hasMore: false, extra: { logid: 'kittok' } }); return true; }
-			Filter.savedBy = User.id;
+			Filter[Path.includes('/favorite/') ? 'likedBy' : 'savedBy'] = User.id;
 		}
 		const Feed = await Videos(Pool, Config.Origin, Filter);
 		Json(Response, { statusCode: 0, status_code: 0, itemList: Feed.items, cursor: Feed.cursor, hasMore: Feed.hasMore, extra: { logid: 'kittok' } }); return true;
@@ -65,6 +66,32 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']);
 		const Target = await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'));
 		Json(Response, { statusCode: 0, userInfo: { user: UserShape({ ...Target, relation: await Relation(Pool, User?.id, Target.id) }, Config.Origin), stats: await UserStats(Pool, Target.id) } }); return true;
+	}
+	if (Path === '/api/user/list/') {
+		RequireMethod(Request, ['GET']);
+		const Scene = { 21: 'following', 67: 'followers', 150: 'friends', 151: 'suggested' }[Params.get('scene')];
+		const Target = Params.get('secUid') && Scene !== 'suggested' ? Id(Params.get('secUid')) : User?.id;
+		const Start = Offset(Params.get('minCursor'));
+		const List = Scene && Target ? await FollowList(Pool, User?.id, Target, Scene, Start, PageSize(Params.get('count'), 30)) : { users: [], total: 0 };
+		const UserList = await Promise.all(List.users.map(async Row => {
+			const Stats = await UserStats(Pool, Row.id);
+			return { user: UserShape(Row, Config.Origin), stats: Stats, statsV2: Object.fromEntries(Object.entries(Stats).map(([Key, Value]) => [Key, String(Value)])) };
+		}));
+		Json(Response, { statusCode: 0, status_code: 0, userList: UserList, total: List.total, minCursor: Start + UserList.length, maxCursor: 0, hasMore: Start + UserList.length < List.total }); return true;
+	}
+	if (Path === '/api/im/spotlight/relation' || Path === '/api/im/spotlight/relation/') {
+		RequireMethod(Request, ['GET']);
+		const Start = Offset(Params.get('max_time'));
+		const List = User ? await FollowList(Pool, User.id, User.id, 'following', Start, PageSize(Params.get('count'), 30)) : { users: [], total: 0 };
+		const Avatar = { url_list: [`${Config.Origin}/public/avatar.svg`] };
+		Json(Response, {
+			status_code: 0, max_time: Start, min_time: Start + List.users.length, has_more: Start + List.users.length < List.total ? 1 : 0,
+			followings: List.users.map(Row => ({ uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio, avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: Row.relation === 2 ? 1 : 0 })),
+		}); return true;
+	}
+	if (Path === '/api/user/collection_list/') {
+		RequireMethod(Request, ['GET']);
+		Json(Response, { statusCode: 0, status_code: 0, collectionList: [], cursor: '0', hasMore: false }); return true;
 	}
 	if (Path === '/api/search/user/full/') {
 		RequireMethod(Request, ['GET']);
@@ -82,6 +109,13 @@ export async function Compatibility(Context) {
 	if (Path === '/api/comment/list/reply/') {
 		RequireMethod(Request, ['GET']);
 		Json(Response, await CommentPage(Pool, Config.Origin, User?.id, { parent: Id(Params.get('comment_id')), cursor: Params.get('cursor'), count: Params.get('count') ?? 3 })); return true;
+	}
+	if (Path === '/api/comment/delete/') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		const Deleted = await Pool.query('DELETE FROM comments c USING videos v WHERE c.id = $1 AND v.id = c.video_id AND (c.author_id = $2 OR v.author_id = $2 OR $3) RETURNING c.id', [Id(Body.cid), User.id, User.role === 'admin']);
+		if (!Deleted.rowCount) throw new HttpError(404, 'CommentNotFound');
+		Json(Response, { status_code: 0, statusCode: 0 }); return true;
 	}
 	if (Path === '/api/comment/digg/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
