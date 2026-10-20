@@ -41,6 +41,18 @@ export async function BlockList(Pool, Viewer, Offset, Limit) {
 	return { users: Result.rows, total: Result.rows[0]?.total ?? 0 };
 }
 
+export const DmAudiences = { dm_setting_friends: 'dm_friends', dm_setting_potential_connection: 'dm_potential', dm_setting_others: 'dm_others' };
+
+export async function DmSettings(Pool, UserId) {
+	const Row = (await Pool.query('SELECT dm_friends, dm_potential, dm_others FROM users WHERE id = $1', [UserId])).rows[0];
+	return Object.fromEntries(Object.entries(DmAudiences).map(([Field, Column]) => [Field, Row[Column]]));
+}
+
+export async function SetDmSetting(Pool, UserId, Field, Value) {
+	if (!DmAudiences[Field] || ![1, 3].includes(Number(Value))) throw new HttpError(400, 'InvalidMessageSetting');
+	await Pool.query(`UPDATE users SET ${DmAudiences[Field]} = $2 WHERE id = $1`, [UserId, Number(Value)]);
+}
+
 export async function Relation(Pool, Viewer, Target) {
 	const Result = await Pool.query(`SELECT ${RelationSql('$1::bigint', '$2::bigint')} AS relation`, [Viewer ?? null, Target]);
 	return Result.rows[0].relation;

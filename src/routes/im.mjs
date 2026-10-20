@@ -85,7 +85,10 @@ function PushTo(UserIds, Response) {
 }
 
 async function MayMessage(Pool, Sender, Recipient) {
-	const Result = await Pool.query(`SELECT dm_policy = 'everyone' OR (dm_policy = 'following' AND EXISTS (SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1)) AS allowed FROM users WHERE id = $2`, [Sender, Recipient]);
+	const Result = await Pool.query(`SELECT CASE
+		WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2) AND EXISTS (SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) THEN dm_friends
+		WHEN EXISTS (SELECT 1 FROM follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)) THEN dm_potential
+		ELSE dm_others END = 1 AS allowed FROM users WHERE id = $2`, [Sender, Recipient]);
 	return Result.rows[0]?.allowed === true;
 }
 

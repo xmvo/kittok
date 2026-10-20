@@ -1,5 +1,6 @@
 import { Escape, HttpError, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { CreateUser, Login, RequireCsrf, SessionCookie, ClientInfo } from '../auth.mjs';
+import { DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
 export function Page(Config, Title, Content) {
 	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${Escape(Title)} · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="/public/account.css"><body><main><a class="brand" href="/"><img src="/brand/icon" alt="">${Escape(Config.Name)}</a>${Content}</main></body></html>`;
@@ -7,9 +8,10 @@ export function Page(Config, Title, Content) {
 
 async function MessageForm(Pool, Config, User) {
 	if (Config.Features?.messages === false) return '';
-	const Policy = (await Pool.query('SELECT dm_policy FROM users WHERE id = $1', [User.id])).rows[0].dm_policy;
-	const Options = [['everyone', 'Everyone'], ['following', 'People you follow'], ['nobody', 'No one']].map(([Value, Label]) => `<option value="${Value}"${Value === Policy ? ' selected' : ''}>${Label}</option>`).join('');
-	return `<h2>Direct messages</h2><form action="/account/messages" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><label>Who can message you<select name="policy">${Options}</select></label><button class="secondary">Save</button></form>`;
+	const Settings = await DmSettings(Pool, User.id);
+	const Labels = { dm_setting_friends: 'Friends', dm_setting_potential_connection: 'Potential connections', dm_setting_others: 'Others' };
+	const Fields = Object.keys(DmAudiences).map(Field => `<label>${Labels[Field]}<select name="${Field}">${[[1, 'Receive in inbox'], [3, "Don't receive"]].map(([Value, Label]) => `<option value="${Value}"${Settings[Field] === Value ? ' selected' : ''}>${Label}</option>`).join('')}</select></label>`).join('');
+	return `<h2>Direct messages</h2><form action="/account/messages" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}">${Fields}<button class="secondary">Save</button></form>`;
 }
 
 export async function Account(Context) {
@@ -23,8 +25,9 @@ export async function Account(Context) {
 		RequireMethod(Request, ['POST']);
 		const Body = await ReadBody(Request);
 		RequireCsrf(Request, User, Body.csrf);
-		if (!['everyone', 'following', 'nobody'].includes(Body.policy)) throw new HttpError(400, 'InvalidMessagePolicy');
-		await Pool.query('UPDATE users SET dm_policy = $2 WHERE id = $1', [User.id, Body.policy]);
+		const Fields = Object.keys(DmAudiences).filter(Field => Body[Field] !== undefined);
+		if (Fields.some(Field => !['1', '3'].includes(String(Body[Field])))) throw new HttpError(400, 'InvalidMessageSetting');
+		for (const Field of Fields) await SetDmSetting(Pool, User.id, Field, Body[Field]);
 		Response.writeHead(303, { location: '/account' }); Response.end(); return true;
 	}
 	if (Url.pathname === '/account/login' || Url.pathname === '/account/register' || Url.pathname === '/account/logout') {

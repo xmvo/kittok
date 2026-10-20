@@ -2,7 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { RequireCsrf, RecordEvent, ClientInfo } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveMedia } from '../media.mjs';
-import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween } from '../store.mjs';
+import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
 
@@ -116,6 +116,49 @@ export async function Compatibility(Context) {
 			status_code: 0, max_time: Start, min_time: Start + List.users.length, has_more: Start + List.users.length < List.total ? 1 : 0,
 			followings: List.users.map(Row => ApiUser(Row, Config.Origin)),
 		}); return true;
+	}
+	const SettingDefaults = {
+		'/tiktok/region/change/status/get/v1': { is_change_region_enabled: false },
+		'/api/compliance/settings/': {},
+		'/api/privacy/user/effected_count/v1': { no_pa_control_settings: {} },
+	};
+	if (SettingDefaults[Path]) {
+		RequireMethod(Request, ['GET']);
+		Json(Response, { status_code: 0, statusCode: 0, ...SettingDefaults[Path] }); return true;
+	}
+	if (Path === '/api/privacy/setting/restriction/v1/' || Path === '/api/privacy/setting/restriction/v1') {
+		RequireMethod(Request, ['GET']);
+		const Messages = User && Config.Features?.messages !== false;
+		const Choice = { show_type: 0, values: [{ value: 1, show_type: 0 }, { value: 2, show_type: 2 }, { value: 3, show_type: 0 }] };
+		const Account = { comment: { show_type: 2 }, private_account: { show_type: 2 }, ...(Messages ? { direct_message: { show_type: 0 }, ...Object.fromEntries(Object.keys(DmAudiences).map(Key => [Key, Choice])) } : {}) };
+		Json(Response, { status_code: 0, statusCode: 0, privacy_restriction: { account: Account }, privacy_settings: { private_account: 0, ...(Messages ? await DmSettings(Pool, User.id) : {}) } }); return true;
+	}
+	if (Path === '/api/privacy/unified_config/v1') {
+		RequireMethod(Request, ['GET']);
+		const Configs = {};
+		if (User && Config.Features?.messages !== false) {
+			Configs.main = { page_tag: 'main', contents: [{ section_tag: 'interactions', section_header: 'Interactions', items: [{ item_type: 0, item_tag: 'direct_message_entrance', item_info: { item_title: 'Direct messages', restriction_key: 'direct_message', setting_key: 'direct_message' } }] }] };
+			const Audiences = [['dm_setting_friends', 'dm_friends', 'Friends'], ['dm_setting_potential_connection', 'dm_potential_connection', 'Potential connections'], ['dm_setting_others', 'dm_others', 'Others']];
+			Configs.direct_message_permission = { page_tag: 'direct_message_permission', page_title: 'Direct messages', contents: [{ section_tag: 'dm_entrances', section_header: 'Who can send you direct messages', items: Audiences.map(([Key, Page, Title]) => ({
+				item_type: 0, item_tag: `${Page}_permission_entrance`, item_info: { item_title: Title, restriction_key: Key, setting_key: Key, label_config: [{ option_value: 1, label_title: 'Receive in inbox' }, { option_value: 3, label_title: "Don't receive" }] } })) }] };
+			for (const [Key, Page, Title] of Audiences) {
+				Configs[Page] = { page_tag: Page, page_title: Title, contents: [{ section_tag: `${Page}_options`, items: [{ item_type: 2, item_tag: `${Page}_permission_item`, item_info: { item_title: Title, restriction_key: Key, setting_key: Key, options: [
+					{ option_value: 1, option_title: 'Receive in inbox', option_tag: 'options_inbox' }, { option_value: 2, option_title: 'Receive as message request', option_tag: 'options_request' }, { option_value: 3, option_title: "Don't receive", option_tag: 'options_dont_receive' },
+				] } }] }] };
+			}
+		}
+		Json(Response, { status_code: 0, statusCode: 0, configs: JSON.stringify(Configs) }); return true;
+	}
+	if (Path === '/api/privacy/user/settings/update/v1') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		if (!DmAudiences[Body.field] || ![1, 3].includes(Number(Body.value)) || Config.Features?.messages === false) { Json(Response, { status_code: 1, statusCode: 1, status_msg: 'This setting is not available on this instance.' }); return true; }
+		await SetDmSetting(Pool, User.id, Body.field, Body.value);
+		Json(Response, { status_code: 0, statusCode: 0, privacy_settings: await DmSettings(Pool, User.id) }); return true;
+	}
+	if (Path === '/api/privacy/user/private_account/update/v1') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		Json(Response, { status_code: 1, statusCode: 1, status_msg: 'Private accounts are not available on this instance.' }); return true;
 	}
 	if (Path === '/tiktok/v1/im/user/profile/') {
 		RequireMethod(Request, ['GET']);
