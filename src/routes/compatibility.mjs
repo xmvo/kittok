@@ -2,7 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { RequireCsrf, RecordEvent, ClientInfo } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveMedia } from '../media.mjs';
-import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView } from '../store.mjs';
+import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
 
@@ -20,7 +20,7 @@ function CommentShape(Row, Origin) {
 
 function ApiUser(Row, Origin) {
 	const Avatar = { url_list: [AvatarUrl(Row, Origin)] };
-	return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio ?? '', avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0 };
+	return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio ?? '', avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, is_block: Row.relation === 4 };
 }
 
 const NoticeKinds = { 500: ['like', 'comment_like', 'comment', 'follow'], 3: ['like', 'comment_like'], 505: ['like', 'comment_like'], 2: ['comment'], 7: ['follow'] };
@@ -51,7 +51,7 @@ async function CommentPage(Pool, Origin, Viewer, { video, parent, cursor, count 
 		EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.user_id = $1::bigint) AS liked,
 		(SELECT count(*)::int FROM comments r WHERE r.parent_id = c.id) AS replies
 		FROM comments c JOIN users u ON u.id = c.author_id
-		WHERE ${parent ? 'c.parent_id = $2' : 'c.video_id = $2 AND c.parent_id IS NULL'} AND ($3::bigint IS NULL OR c.id ${parent ? '>' : '<'} $3)
+		WHERE ${parent ? 'c.parent_id = $2' : 'c.video_id = $2 AND c.parent_id IS NULL'} AND ($3::bigint IS NULL OR c.id ${parent ? '>' : '<'} $3) AND NOT ${BlockedBetween('$1::bigint', 'c.author_id')}
 		ORDER BY c.id ${parent ? 'ASC' : 'DESC'} LIMIT $4`, [Viewer ?? null, parent ?? video, After, Limit + 1]);
 	const Rows = Result.rows.slice(0, Limit);
 	return { status_code: 0, comments: Rows.map(Row => CommentShape(Row, Origin)), cursor: Rows.at(-1)?.id ?? cursor ?? '0', has_more: Result.rows.length > Limit ? 1 : 0 };
@@ -204,7 +204,7 @@ export async function Compatibility(Context) {
 		if (Config.Features?.search === false) return [];
 		const Query = `%${(Params.get('keyword') ?? '').slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`;
 		const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, ${RelationSql('$3::bigint', 'u.id')} AS relation FROM users u
-			WHERE u.username ILIKE $1 ESCAPE '\\' OR u.display_name ILIKE $1 ESCAPE '\\' ORDER BY u.username LIMIT $2`, [Query, Limit, User?.id ?? null]);
+			WHERE (u.username ILIKE $1 ESCAPE '\\' OR u.display_name ILIKE $1 ESCAPE '\\') AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = u.id AND b.blocked_id = $3::bigint) ORDER BY u.username LIMIT $2`, [Query, Limit, User?.id ?? null]);
 		return Promise.all(Result.rows.map(async Row => {
 			const Stats = await UserStats(Pool, Row.id);
 			return { user_info: { ...ApiUser(Row, Config.Origin), follower_count: Stats.followerCount, following_count: Stats.followingCount, aweme_count: Stats.videoCount, total_favorited: Stats.heartCount } };
@@ -287,6 +287,21 @@ export async function Compatibility(Context) {
 		const Target = Id(Body.user_id || Body.sec_user_id);
 		await SetRelation(Pool, 'follows', ['follower_id', 'following_id'], [User.id, Target], String(Body.type ?? Body.action_type ?? '1') === '1');
 		Json(Response, { status_code: 0, statusCode: 0, follow_status: FollowStatus(await Relation(Pool, User.id, Target)) }); return true;
+	}
+	if (Path === '/api/user/block/') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		const Blocking = String(Body.block_type ?? '1') === '1';
+		await SetBlock(Pool, User.id, Id(Body.sec_user_id || Body.user_id), Blocking);
+		Json(Response, { status_code: 0, statusCode: 0, block_status: Blocking ? 1 : 0 }); return true;
+	}
+	if (Path === '/api/block/user_list/') {
+		RequireMethod(Request, ['GET']);
+		if (!User) throw new HttpError(401, 'NotLoggedIn');
+		const Start = Offset(Params.get('offset'));
+		const List = await BlockList(Pool, User.id, Start, PageSize(Params.get('count'), 20));
+		const UserList = await Promise.all(List.users.map(async Row => ({ user: UserShape(Row, Config.Origin), stats: await UserStats(Pool, Row.id) })));
+		Json(Response, { status_code: 0, statusCode: 0, userList: UserList, total: List.total, offset: String(Start + UserList.length), hasMore: Start + UserList.length < List.total }); return true;
 	}
 	return false;
 }

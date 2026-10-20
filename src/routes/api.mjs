@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { HttpError, Id, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { CreateUser, Login, RequireCsrf, SessionCookie, ClientInfo } from '../auth.mjs';
-import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment } from '../store.mjs';
+import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment, SetBlock } from '../store.mjs';
 import { ImportVideo, ReceiveVideo } from '../media.mjs';
 
 export async function Api(Context) {
@@ -71,11 +71,12 @@ export async function Api(Context) {
 		await SetRelation(Pool, Match[2] === 'like' ? 'likes' : 'favorites', ['user_id', 'video_id'], [User.id, VideoId], Request.method === 'PUT');
 		Json(Response, { ok: true }); return true;
 	}
-	const Follow = Path.match(/^\/api\/v1\/users\/([a-z0-9_]+)\/follow$/);
+	const Follow = Path.match(/^\/api\/v1\/users\/([a-z0-9_]+)\/(follow|block)$/);
 	if (Follow) {
 		RequireMethod(Request, ['PUT', 'DELETE']); RequireCsrf(Request, User);
 		const Target = await FindUser(Pool, Follow[1]);
-		await SetRelation(Pool, 'follows', ['follower_id', 'following_id'], [User.id, Target.id], Request.method === 'PUT');
+		if (Follow[2] === 'block') await SetBlock(Pool, User.id, Target.id, Request.method === 'PUT');
+		else await SetRelation(Pool, 'follows', ['follower_id', 'following_id'], [User.id, Target.id], Request.method === 'PUT');
 		Json(Response, { ok: true }); return true;
 	}
 	return false;

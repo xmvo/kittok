@@ -19,6 +19,7 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Notifications | Derived from likes, comment likes, comments, replies, and follows; one read marker per user (`users.notices_read_at`) | Native inbox verified: unread badge, All activity list with wording and thumbnails, Follow back, and mark-read on open |
 | View counts | `videos.view_count`, reported by the Kittok bridge when a video actually starts playing; one view per viewer per video every 6 hours | Verified: the playing video counts, preloaded videos do not, reloads do not double-count, and the profile grid shows the count |
 | Share sheet following list | Your followings from `follows` | Verified: the client's retry loop (about 2 requests per second) stopped |
+| Blocking | PostgreSQL `blocks`; blocking removes follows both ways. A blocked pair cannot follow each other or comment on each other's videos, and is hidden from each other's feeds, item detail, comments, follow lists, suggestions, and notifications. Search hides people who blocked you | Not yet verified in the browser |
 | Likes | PostgreSQL `likes`, read back as `digged`/`stats.diggCount` | Native like/unlike verified, including after reload |
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
 | User and video search | Usernames and display names; video captions, newest first | Native Top, Users, and Videos tabs verified. Photos and LIVE return empty results |
@@ -67,7 +68,9 @@ Your own account still shows a Follow button in search results; following yourse
 
 The client's security SDK re-opens XHR requests and replays their headers, so `X-CSRF-Token` can arrive as `token, token`. Kittok accepts that only when every copy matches the session token.
 | POST `/api/commit/follow/user/` and `/api/follow/` | `user_id`, `type`/`action_type` (1 follow, 0 unfollow) | `status_code`, integer `follow_status`: 0 none, 1 following, 2 mutual (4, requested, is unused) |
-| GET `/api/user/detail/`, feed `author` | — | integer `relation`: 0 none, 1 following, 2 mutual, 6 follows you |
+| GET `/api/user/detail/`, feed `author` | — | integer `relation`: 0 none, 1 following, 2 mutual, 4 you blocked them, 5 they blocked you, 6 follows you |
+| POST `/api/user/block/` | `sec_user_id`, `block_type` (1 block, 0 unblock), `source` | `status_code` only; on 0 the client sets `relation` to 4 or 0 itself. Kittok also returns `block_status`. Following a blocked pair either way returns 403 |
+| GET `/api/block/user_list/` | `offset` (`"0"` first), `count` (20) | `userList[{user, stats}]`, `offset` (next offset, string), `hasMore`. The Settings > Privacy blocked-accounts list; the client marks every entry `relation` 4 |
 | POST `/api/comment/publish/` | `aweme_id`, `text`, `reply_id` (`0` for top level), `reply_to_reply_id`, `text_extra` | `status_code` and `comment`, in the same shape as `/api/comment/list/` items |
 | GET `/api/comment/list/` | `aweme_id`, `cursor` (`0` first), `count` | top-level `comments` newest first, `cursor` (last `cid`), `has_more` (1/0), `total` (all comments, used as the video's comment count) |
 | GET `/api/comment/list/reply/` | `comment_id`, `cursor`, `count` (3) | replies oldest first, `cursor`, `has_more` (must be the number 1 to show "View more") |

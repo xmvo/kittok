@@ -15,7 +15,8 @@ All routes are on the instance's configured public origin. Responses are JSON. I
 | PUT / DELETE | `/api/v1/videos/ID/favorite` | Save/unsave idempotently |
 | GET | `/api/v1/videos/ID/comments` | Up to 50 newest comments |
 | POST | `/api/v1/videos/ID/comments` | Add a comment with JSON `{text}` |
-| PUT / DELETE | `/api/v1/users/USERNAME/follow` | Follow/unfollow idempotently |
+| PUT / DELETE | `/api/v1/users/USERNAME/follow` | Follow/unfollow idempotently; 403 when either user has blocked the other |
+| PUT / DELETE | `/api/v1/users/USERNAME/block` | Block/unblock idempotently; blocking removes follows in both directions |
 | GET | `/health/live` | Process liveness |
 | GET | `/health/ready` | PostgreSQL readiness |
 | GET | `/source` | Current packaged instance source, if generated |

@@ -676,6 +676,47 @@ test('original client reports reach the admin queue, deduplicate, and close toge
 	await Pool.query('DELETE FROM reports');
 });
 
+test('original client block requests persist, sever follows, and hide each side from the other', async () => {
+	const Grumpy = await CreateUser(Pool, { username: 'grumpy', displayName: 'Grumpy Cat', password: Password }, 'closed', true);
+	const Grumped = await Login(Pool, 'grumpy', Password);
+	const AsGrumpy = { cookie: `kittok_session=${Grumped.Token}`, 'x-csrf-token': Grumped.Csrf };
+	const Block = (Target, Type, Headers) => Call(`/api/user/block/?sec_user_id=${Target.id}&block_type=${Type}&source=3`, 'POST', undefined, Headers);
+	const Follow = (Target, Headers) => Call(`/api/commit/follow/user/?type=1&action_type=1&user_id=${Target.id}&fromWeb=1`, 'POST', undefined, Headers);
+	const RelationTo = async (Target, Headers) => (await (await Call(`/api/user/detail/?uniqueId=${Target.username}`, 'GET', undefined, Headers)).json()).userInfo.user.relation;
+	const SeesVideo = async Headers => (await (await Call('/api/recommend/item_list/?count=50', 'GET', undefined, Headers)).json()).itemList.some(Item => Item.id === VideoId);
+	assert.equal((await Follow(Owner, AsGrumpy)).status, 200);
+	await Pool.query('INSERT INTO follows(follower_id, following_id) VALUES ($1, $2)', [Owner.id, Grumpy.id]);
+	assert.equal(await RelationTo(Grumpy, Auth()), 2);
+	assert.equal((await Block(Grumpy, 1, { cookie: Cookie })).status, 403);
+	assert.deepEqual(await (await Block(Grumpy, 1, Auth())).json(), { status_code: 0, statusCode: 0, block_status: 1 });
+	assert.equal((await Block(Grumpy, 1, Auth())).status, 200);
+	assert.equal((await Pool.query('SELECT * FROM blocks WHERE blocker_id=$1 AND blocked_id=$2', [Owner.id, Grumpy.id])).rowCount, 1);
+	assert.equal((await Pool.query('SELECT * FROM follows WHERE (follower_id=$1 AND following_id=$2) OR (follower_id=$2 AND following_id=$1)', [Owner.id, Grumpy.id])).rowCount, 0);
+	assert.equal(await RelationTo(Grumpy, Auth()), 4);
+	assert.equal(await RelationTo(Owner, AsGrumpy), 5);
+	assert.equal(await SeesVideo(AsGrumpy), false);
+	assert.equal(await SeesVideo(), true);
+	assert.equal((await Call(`/api/item/detail/?itemId=${VideoId}`, 'GET', undefined, AsGrumpy)).status, 404);
+	assert.equal((await Call(`/api/comment/publish/?aweme_id=${VideoId}&text=hiss&reply_id=0`, 'POST', undefined, AsGrumpy)).status, 403);
+	assert.equal((await Follow(Owner, AsGrumpy)).status, 403);
+	assert.equal((await Follow(Grumpy, Auth())).status, 403);
+	assert.equal((await Call('/api/v1/users/owner/follow', 'PUT', undefined, AsGrumpy)).status, 403);
+	assert.deepEqual((await (await Call('/api/search/user/full/?keyword=owner', 'GET', undefined, AsGrumpy)).json()).user_list, []);
+	assert.equal((await (await Call('/api/search/user/full/?keyword=grumpy', 'GET', undefined, Auth())).json()).user_list[0].user_info.is_block, true);
+	const Blocked = await (await Call('/api/block/user_list/?offset=0&count=20', 'GET', undefined, Auth())).json();
+	assert.equal(Blocked.status_code, 0); assert.equal(Blocked.offset, '1'); assert.equal(Blocked.hasMore, false);
+	assert.deepEqual(Blocked.userList.map(Entry => [Entry.user.uniqueId, Entry.user.relation, typeof Entry.stats.followerCount]), [['grumpy', 4, 'number']]);
+	assert.deepEqual((await (await Call('/api/block/user_list/?offset=0', 'GET', undefined, AsGrumpy)).json()).userList, []);
+	assert.equal((await Call('/api/block/user_list/?offset=0')).status, 401);
+	assert.equal((await Block(Owner, 1, Auth())).status, 400);
+	assert.equal((await Block({ id: '1' }, 1, Auth())).status, 404);
+	assert.deepEqual(await (await Block(Grumpy, 0, Auth())).json(), { status_code: 0, statusCode: 0, block_status: 0 });
+	assert.equal(await RelationTo(Grumpy, Auth()), 0);
+	assert.equal(await SeesVideo(AsGrumpy), true);
+	assert.equal((await Call('/api/v1/users/grumpy/block', 'PUT', undefined, Auth())).status, 200);
+	assert.equal(await RelationTo(Owner, AsGrumpy), 5);
+});
+
 test('users, sessions, videos, and social data survive a server restart', async () => {
 	await Stop(); await Start();
 	const Current = await (await Call('/api/v1/session', 'GET', undefined, { cookie: Cookie })).json(); assert.equal(Current.user.uniqueId, 'owner');
@@ -686,6 +727,7 @@ test('users, sessions, videos, and social data survive a server restart', async 
 	assert.equal(Item.collected, true); assert.equal(Item.stats.collectCount, 1);
 	assert.deepEqual((await (await Call(`/api/user/collect/item_list/?secUid=${Owner.id}`, 'GET', undefined, Auth())).json()).itemList.map(Item => Item.id), [VideoId]);
 	assert.equal((await (await Call('/api/user/detail/?uniqueId=friend', 'GET', undefined, Auth())).json()).userInfo.user.relation, 2);
+	assert.equal((await (await Call('/api/user/detail/?uniqueId=grumpy', 'GET', undefined, Auth())).json()).userInfo.user.relation, 4);
 	assert.ok((await (await Call(`/api/comment/list/?aweme_id=${VideoId}`)).json()).comments.some(Comment => Comment.text === 'Published natively'));
 	const Thread = (await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=50`, 'GET', undefined, Auth())).json()).comments.find(Comment => Comment.text === 'Thread root');
 	assert.equal(Thread.reply_comment_total, 5);

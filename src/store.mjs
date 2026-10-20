@@ -1,4 +1,5 @@
 import { HttpError, Id } from './http.mjs';
+import { Transaction } from './db.mjs';
 
 export const AvatarUrl = (User, Origin) => User.avatar_name ? `${Origin}/media/${User.avatar_name}` : `${Origin}/public/avatar.svg`;
 
@@ -12,10 +13,33 @@ export function UserShape(User, Origin) {
 	};
 }
 
+export const BlockedBetween = (A, B) => `EXISTS (SELECT 1 FROM blocks WHERE (blocker_id = ${A} AND blocked_id = ${B}) OR (blocker_id = ${B} AND blocked_id = ${A}))`;
+
 export const RelationSql = (Viewer, Target) => `CASE
+	WHEN EXISTS (SELECT 1 FROM blocks WHERE blocker_id = ${Viewer} AND blocked_id = ${Target}) THEN 4
+	WHEN EXISTS (SELECT 1 FROM blocks WHERE blocker_id = ${Target} AND blocked_id = ${Viewer}) THEN 5
 	WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Viewer} AND following_id = ${Target})
 		THEN CASE WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Target} AND following_id = ${Viewer}) THEN 2 ELSE 1 END
 	WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Target} AND following_id = ${Viewer}) THEN 6 ELSE 0 END`;
+
+export async function SetBlock(Pool, Blocker, Blocked, On) {
+	if (Blocker === Blocked) throw new HttpError(400, 'CannotBlockYourself');
+	return Transaction(Pool, async Client => {
+		if (!(await Client.query('SELECT 1 FROM users WHERE id = $1', [Blocked])).rowCount) throw new HttpError(404, 'UserNotFound');
+		if (On) {
+			await Client.query('INSERT INTO blocks(blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [Blocker, Blocked]);
+			await Client.query('DELETE FROM follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)', [Blocker, Blocked]);
+		} else {
+			await Client.query('DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [Blocker, Blocked]);
+		}
+	});
+}
+
+export async function BlockList(Pool, Viewer, Offset, Limit) {
+	const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, 4 AS relation, count(*) OVER ()::int AS total
+		FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = $1 ORDER BY b.created_at DESC, u.id DESC OFFSET $2 LIMIT $3`, [Viewer, Offset, Limit]);
+	return { users: Result.rows, total: Result.rows[0]?.total ?? 0 };
+}
 
 export async function Relation(Pool, Viewer, Target) {
 	const Result = await Pool.query(`SELECT ${RelationSql('$1::bigint', '$2::bigint')} AS relation`, [Viewer ?? null, Target]);
@@ -30,7 +54,7 @@ export async function FollowList(Pool, Viewer, Target, Scene, Offset, Limit) {
 		suggested: 'users u WHERE u.id <> $2 AND NOT EXISTS (SELECT 1 FROM follows b WHERE b.follower_id = $2 AND b.following_id = u.id)',
 	}[Scene];
 	const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, ${RelationSql('$1::bigint', 'u.id')} AS relation, count(*) OVER ()::int AS total
-		FROM ${From} ORDER BY ${Scene === 'suggested' ? 'u.created_at' : 'f.created_at'} DESC, u.id DESC OFFSET $3 LIMIT $4`, [Viewer ?? null, Target, Offset, Limit]);
+		FROM ${From} AND NOT ${BlockedBetween('$1::bigint', 'u.id')} ORDER BY ${Scene === 'suggested' ? 'u.created_at' : 'f.created_at'} DESC, u.id DESC OFFSET $3 LIMIT $4`, [Viewer ?? null, Target, Offset, Limit]);
 	return { users: Result.rows, total: Result.rows[0]?.total ?? 0 };
 }
 
@@ -46,13 +70,13 @@ export async function Activity(Pool, UserId, Kinds, { Before = null, After = nul
 		a.video_id, v.author_id AS video_author, v.cover_name, v.description, a.comment_id, c.body, c.parent_id, p.author_id AS parent_author
 		FROM (${ActivitySql}) a JOIN users me ON me.id = $1 JOIN users u ON u.id = a.actor
 		LEFT JOIN videos v ON v.id = a.video_id LEFT JOIN comments c ON c.id = a.comment_id LEFT JOIN comments p ON p.id = c.parent_id
-		WHERE a.kind = ANY($2) AND ($3::float8 IS NULL OR a.at < to_timestamp($3)) AND ($5::float8 IS NULL OR a.at > to_timestamp($5))
+		WHERE a.kind = ANY($2) AND NOT ${BlockedBetween('$1', 'a.actor')} AND ($3::float8 IS NULL OR a.at < to_timestamp($3)) AND ($5::float8 IS NULL OR a.at > to_timestamp($5))
 		ORDER BY a.at DESC LIMIT $4`, [UserId, Kinds, Before, Limit, After]);
 	return Result.rows;
 }
 
 export async function UnreadActivity(Pool, UserId) {
-	const Result = await Pool.query(`SELECT a.kind, count(*)::int AS count FROM (${ActivitySql}) a JOIN users me ON me.id = $1 WHERE a.at > me.notices_read_at GROUP BY a.kind`, [UserId]);
+	const Result = await Pool.query(`SELECT a.kind, count(*)::int AS count FROM (${ActivitySql}) a JOIN users me ON me.id = $1 WHERE a.at > me.notices_read_at AND NOT ${BlockedBetween('$1', 'a.actor')} GROUP BY a.kind`, [UserId]);
 	return Object.fromEntries(Result.rows.map(Row => [Row.kind, Row.count]));
 }
 
@@ -95,6 +119,7 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 	if (savedBy) Where('EXISTS (SELECT 1 FROM favorites f WHERE f.user_id = ? AND f.video_id = v.id)', savedBy);
 	if (id) Where('v.id = ?', Id(id));
 	if (query) Where("v.description ILIKE ? ESCAPE '\\'", `%${String(query).slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`);
+	Conditions.push(`NOT ${BlockedBetween('$1', 'v.author_id')}`);
 	Values.push(Math.min(Math.max(Number(limit) || 20, 1), 50) + 1);
 	const Result = await Pool.query(`SELECT v.*, u.username, u.display_name, u.bio, u.avatar_name,
 		(SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes,
@@ -133,8 +158,9 @@ export function VideoShape(Row, Origin) {
 
 export async function AddComment(Pool, VideoId, AuthorId, Text, ParentId = null) {
 	if (typeof Text !== 'string' || !Text.trim() || Text.length > 1500) throw new HttpError(400, 'InvalidComment');
-	const Exists = await Pool.query('SELECT id FROM videos WHERE id = $1', [VideoId]);
+	const Exists = await Pool.query('SELECT author_id FROM videos WHERE id = $1', [VideoId]);
 	if (!Exists.rowCount) throw new HttpError(404, 'VideoNotFound');
+	if ((await Pool.query(`SELECT ${BlockedBetween('$1', '$2')} AS blocked`, [AuthorId, Exists.rows[0].author_id])).rows[0].blocked) throw new HttpError(403, 'BlockedRelationship');
 	const Added = await Pool.query(`INSERT INTO comments(video_id, author_id, body, parent_id)
 		SELECT $1::bigint, $2::bigint, $3::text, Parent.root FROM (
 			SELECT NULL::bigint AS root WHERE $4::bigint IS NULL
@@ -148,6 +174,7 @@ export async function AddComment(Pool, VideoId, AuthorId, Text, ParentId = null)
 export async function SetRelation(Pool, Table, Columns, Values, Enabled) {
 	const Allowed = { likes: ['user_id', 'video_id'], favorites: ['user_id', 'video_id'], follows: ['follower_id', 'following_id'], comment_likes: ['user_id', 'comment_id'] };
 	if (JSON.stringify(Allowed[Table]) !== JSON.stringify(Columns)) throw new Error('InvalidRelation');
+	if (Table === 'follows' && Enabled && (await Pool.query(`SELECT ${BlockedBetween('$1::bigint', '$2::bigint')} AS blocked`, Values)).rows[0].blocked) throw new HttpError(403, 'BlockedRelationship');
 	try {
 		if (Enabled) await Pool.query(`INSERT INTO ${Table}(${Columns.join(',')}) VALUES ($1, $2) ON CONFLICT DO NOTHING`, Values);
 		else await Pool.query(`DELETE FROM ${Table} WHERE ${Columns[0]} = $1 AND ${Columns[1]} = $2`, Values);
