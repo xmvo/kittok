@@ -16,7 +16,7 @@ import { Account } from './routes/account.mjs';
 import { Passport } from './routes/passport.mjs';
 import { Admin } from './routes/admin.mjs';
 import { Im, HandleRequest, Proto } from './routes/im.mjs';
-import { Upgrade } from './im/frontier.mjs';
+import { Upgrade, Sweep } from './im/frontier.mjs';
 import { LoadSettings } from './settings.mjs';
 
 const Config = LoadConfig();
@@ -130,6 +130,11 @@ const Server = createServer(async (Request, Response) => {
 		}
 	}
 });
+async function LiveSessions(Hashes) {
+	const Result = await Pool.query('SELECT s.token_hash FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ANY($1) AND s.expires_at > now() AND u.suspended_at IS NULL', [Hashes]);
+	return new Set(Result.rows.map(Row => Row.token_hash));
+}
+const SocketSweep = setInterval(() => Sweep(Hashes => Config.Features?.messages === false ? new Set() : LiveSessions(Hashes)).catch(() => console.error('SocketSweepFailed')), 10000).unref();
 Server.on('upgrade', async (Request, Socket) => {
 	try {
 		const Local = Config.IsLocal ? [`localhost:${Config.Port}`, `127.0.0.1:${Config.Port}`] : [];
@@ -137,8 +142,9 @@ Server.on('upgrade', async (Request, Socket) => {
 		if (![new URL(Config.Origin).host, ...Local].includes(Request.headers.host) || !Origins.includes(Request.headers.origin) || new URL(Request.url, Config.Origin).pathname !== '/ws/v2') {
 			Socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n'); return;
 		}
-		const User = await Viewer(Pool, Request);
+		const User = Config.Features?.messages === false ? null : await Viewer(Pool, Request);
 		Upgrade(Request, Socket, { User, OnBinary: async Bytes => {
+			if (Config.Features?.messages === false || !(await LiveSessions([User.token_hash])).size) throw new Error('SessionEnded');
 			const Frame = Proto.Decode('Frame', Bytes);
 			if (Frame.payload_type !== 'pb' || !Frame.payload) return null;
 			const Payload = await HandleRequest({ Pool, Config, User, Limiter, Unknown }, Frame.payload);
@@ -153,7 +159,7 @@ let Closing = false;
 async function Shutdown() {
 	if (Closing) return;
 	Closing = true;
-	clearInterval(Cleanup); Limiter.Close();
+	clearInterval(Cleanup); clearInterval(SocketSweep); Limiter.Close();
 	const Timer = setTimeout(() => process.exit(1), 10000).unref();
 	Server.close(async () => { await Pool.end(); clearTimeout(Timer); process.exit(0); });
 }

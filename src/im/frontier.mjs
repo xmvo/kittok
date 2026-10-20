@@ -25,6 +25,7 @@ export function Upgrade(Request, Socket, { User, OnBinary }) {
 	const Accept = createHash('sha1').update(Key + Guid).digest('base64');
 	Socket.write(['HTTP/1.1 101 Switching Protocols', 'upgrade: websocket', 'connection: Upgrade', `sec-websocket-accept: ${Accept}`, ...(Protocol ? [`sec-websocket-protocol: ${Protocol}`] : []), '', ''].join('\r\n'));
 	Socket.setNoDelay(true);
+	Socket.SessionHash = User.token_hash;
 	const Connections = Sockets.get(User.id) ?? new Set();
 	Connections.add(Socket); Sockets.set(User.id, Connections);
 	let Buffered = Buffer.alloc(0), Fragments = [], FragmentOpcode = 0;
@@ -65,6 +66,13 @@ export function Upgrade(Request, Socket, { User, OnBinary }) {
 			if (Kind === 2) Promise.resolve(OnBinary(Message)).then(Reply => { if (Reply) Send(Socket, 2, Reply); }).catch(() => Close());
 		}
 	});
+}
+
+export async function Sweep(Valid) {
+	const All = [...Sockets.values()].flatMap(Connections => [...Connections]);
+	if (!All.length) return;
+	const Live = await Valid([...new Set(All.map(Socket => Socket.SessionHash))]);
+	for (const Socket of All) if (!Live.has(Socket.SessionHash)) Socket.destroy();
 }
 
 export function Push(UserId, Bytes) {

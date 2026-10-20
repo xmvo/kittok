@@ -1,8 +1,15 @@
-import { Escape, Json, ReadBody, RequireMethod } from '../http.mjs';
+import { Escape, HttpError, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { CreateUser, Login, RequireCsrf, SessionCookie, ClientInfo } from '../auth.mjs';
 
 export function Page(Config, Title, Content) {
 	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${Escape(Title)} · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="/public/account.css"><body><main><a class="brand" href="/"><img src="/brand/icon" alt="">${Escape(Config.Name)}</a>${Content}</main></body></html>`;
+}
+
+async function MessageForm(Pool, Config, User) {
+	if (Config.Features?.messages === false) return '';
+	const Policy = (await Pool.query('SELECT dm_policy FROM users WHERE id = $1', [User.id])).rows[0].dm_policy;
+	const Options = [['everyone', 'Everyone'], ['following', 'People you follow'], ['nobody', 'No one']].map(([Value, Label]) => `<option value="${Value}"${Value === Policy ? ' selected' : ''}>${Label}</option>`).join('');
+	return `<h2>Direct messages</h2><form action="/account/messages" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><label>Who can message you<select name="policy">${Options}</select></label><button class="secondary">Save</button></form>`;
 }
 
 export async function Account(Context) {
@@ -11,6 +18,14 @@ export async function Account(Context) {
 		RequireMethod(Request, ['GET']);
 		Response.setHeader('content-type', 'text/html; charset=utf-8');
 		Response.end(Page(Config, 'About', `<h1>${Escape(Config.Name)}</h1><p>${Escape(Config.Description)}</p><p>Powered by Kittok 0.1.0. This is an independent instance.</p><p><a href="${Escape(Config.SourceUrl === '/about' ? '/source' : Config.SourceUrl)}">Instance source</a> · <a href="/account">Your account</a></p>`)); return true;
+	}
+	if (Url.pathname === '/account/messages') {
+		RequireMethod(Request, ['POST']);
+		const Body = await ReadBody(Request);
+		RequireCsrf(Request, User, Body.csrf);
+		if (!['everyone', 'following', 'nobody'].includes(Body.policy)) throw new HttpError(400, 'InvalidMessagePolicy');
+		await Pool.query('UPDATE users SET dm_policy = $2 WHERE id = $1', [User.id, Body.policy]);
+		Response.writeHead(303, { location: '/account' }); Response.end(); return true;
 	}
 	if (Url.pathname === '/account/login' || Url.pathname === '/account/register' || Url.pathname === '/account/logout') {
 		RequireMethod(Request, ['POST']);
@@ -35,7 +50,7 @@ export async function Account(Context) {
 	const Notice = Url.searchParams.get('error');
 	let Content = Notice ? `<p class="error" role="alert">${Escape(Notice)}</p>` : '';
 	if (User) {
-		Content += `<h1>Hey, ${Escape(User.display_name)}.</h1><p>@${Escape(User.username)} · ${Escape(User.role)}</p><a class="button" href="/">Watch videos</a>${User.role === 'admin' ? '<a class="button secondary" href="/admin">Admin panel</a>' : ''}${Config.Features?.upload === false ? '' : '<h2>Upload a video</h2>'}<form id="upload"${Config.Features?.upload === false ? ' hidden' : ''}><label>Video<input required name="video" type="file" accept="video/*"></label><label>Caption<textarea name="description" maxlength="2200" rows="3"></textarea></label><button>Upload</button><p id="status" role="status"></p></form><form action="/account/logout" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><button class="secondary">Log out</button></form><script id="upload-config" type="application/json">${JSON.stringify({ csrf: User.csrf_token }).replaceAll('<', '\\u003c')}</script><script src="/public/upload.js"></script>`;
+		Content += `<h1>Hey, ${Escape(User.display_name)}.</h1><p>@${Escape(User.username)} · ${Escape(User.role)}</p><a class="button" href="/">Watch videos</a>${User.role === 'admin' ? '<a class="button secondary" href="/admin">Admin panel</a>' : ''}${Config.Features?.upload === false ? '' : '<h2>Upload a video</h2>'}<form id="upload"${Config.Features?.upload === false ? ' hidden' : ''}><label>Video<input required name="video" type="file" accept="video/*"></label><label>Caption<textarea name="description" maxlength="2200" rows="3"></textarea></label><button>Upload</button><p id="status" role="status"></p></form>${await MessageForm(Pool, Config, User)}<form action="/account/logout" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><button class="secondary">Log out</button></form><script id="upload-config" type="application/json">${JSON.stringify({ csrf: User.csrf_token }).replaceAll('<', '\\u003c')}</script><script src="/public/upload.js"></script>`;
 	} else {
 		Content += `<h1>Welcome to ${Escape(Config.Name)}.</h1><p>This account belongs to this instance.</p><form action="/account/login" method="post"><label>Username<input name="username" autocomplete="username" required minlength="3" maxlength="24"></label><label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label><button>Log in</button></form>`;
 		if (Config.Registration !== 'closed') Content += `<details><summary>Create an account</summary><form action="/account/register" method="post"><label>Username<input name="username" required pattern="[a-z0-9_]{3,24}" autocomplete="username"></label><label>Display name<input name="displayName" required maxlength="50"></label><label>Password<input name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label>${Config.Registration === 'invite' ? '<label>Invite code<input name="invite" required></label>' : ''}${Config.Rules ? '<p>By signing up you agree to the <a href="/rules">rules</a>.</p>' : ''}<button>Sign up</button></form></details>`;

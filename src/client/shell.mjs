@@ -5,7 +5,7 @@ const Slot = Name => `[class*="DivMainNavContainer"] > :has([data-e2e="${Name}"]
 const FeatureSelectors = {
 	shop: [Slot('nav-shop')], explore: [Slot('nav-explore')], following: [Slot('nav-following')], shortDrama: [Slot('nav-short-drama')], live: [Slot('nav-live')],
 	upload: [Slot('nav-upload'), 'a[href^="/tiktokstudio/upload"]'], search: ['[data-e2e="nav-search"]', '[data-e2e="search-user-input"]'],
-	comments: ['[data-e2e="comment-input"]', '[data-e2e="comment-post"]'],
+	comments: ['[data-e2e="comment-input"]', '[data-e2e="comment-post"]'], messages: [Slot('nav-messages')],
 };
 
 export function Shell(Raw, Origin, { Config, User } = {}) {
@@ -22,7 +22,7 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 			uid: User.id, secUid: User.id, uniqueId: User.username, nickName: User.display_name,
 			signature: User.bio ?? '', avatarUri: [AvatarUrl(User, Origin)],
 			ftcUser: false, isPrivateAccount: false, region: App.region, storeRegion: App.region,
-			hasSearchPermission: true, hasIMPermission: true, hasLivePermission: false,
+			hasSearchPermission: true, hasIMPermission: Config?.Features?.messages !== false, hasLivePermission: false,
 			hasSearchLivePermission: false, hasExtendedViewingPermission: false,
 			roomId: '', suggestAccountBind: false, showPrivateBanner: false, showScheduleTips: false,
 			redDot: [], proAccountInfo: { status: 0, analyticsOn: false, businessSuiteEntrance: false, downloadLink: {} },

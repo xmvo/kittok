@@ -12,7 +12,7 @@ const Cmd = { SendMessage: 100, MessagesByUser: 200, MessagesByUserInitV2: 203, 
 	MgetParticipants: 654, InputStatus: 411, InputStatusNotify: 510, ReadIndexV3: 2000, MinIndexV3: 2001, UserConversationList: 2006, StrangerConversations: 1000,
 	StrangerUnreadCount: 1007, UnreadCount: 2030, BatchReadIndex: 2038 };
 const Status = { Ok: 0, InvalidRequest: 4, InvalidCommand: 5, UserForbidden: 11, ResourceExhausted: 429, ConversationNotExist: 1001 };
-const SendStatus = { Succeeded: 0, NotInConversation: 1, Blocked: 5 };
+const SendStatus = { Succeeded: 0, NotInConversation: 1, NotAllowed: 2, Blocked: 5 };
 const BodyField = Object.fromEntries(Object.entries(Schema.ResponseBody).map(([Field, [Id]]) => [Id, Field]));
 const RequestField = Object.fromEntries(Object.entries(Schema.RequestBody).map(([Field, [Id]]) => [Id, Field]));
 const ConversationKey = (A, B) => `0:1:${[A, B].sort((X, Y) => (BigInt(X) < BigInt(Y) ? -1 : 1)).join(':')}`;
@@ -84,12 +84,18 @@ function PushTo(UserIds, Response) {
 	for (const UserId of UserIds) Push(UserId, Bytes);
 }
 
+async function MayMessage(Pool, Sender, Recipient) {
+	const Result = await Pool.query(`SELECT dm_policy = 'everyone' OR (dm_policy = 'following' AND EXISTS (SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1)) AS allowed FROM users WHERE id = $2`, [Sender, Recipient]);
+	return Result.rows[0]?.allowed === true;
+}
+
 async function CreateDirect(Pool, Viewer, Participants) {
 	const Others = [...new Set(Participants.map(String))].filter(Id => Id !== Viewer);
 	if (Others.length !== 1) throw new ImError(Status.InvalidRequest, 'OneToOneOnly');
 	const Other = Others[0];
 	if (!(await Pool.query('SELECT 1 FROM users WHERE id = $1 AND suspended_at IS NULL', [Other])).rowCount) throw new ImError(Status.InvalidRequest, 'UserNotFound');
 	if ((await Pool.query(`SELECT ${BlockedBetween('$1::bigint', '$2::bigint')} AS blocked`, [Viewer, Other])).rows[0].blocked) throw new ImError(Status.UserForbidden, 'BlockedRelationship');
+	if (!(await MayMessage(Pool, Viewer, Other))) throw new ImError(Status.UserForbidden, 'MessagesNotAllowed');
 	const Key = ConversationKey(Viewer, Other);
 	await Transaction(Pool, async Client => {
 		const Created = await Client.query('INSERT INTO conversations(conversation_key, conversation_type, creator_id) VALUES ($1, 1, $2) ON CONFLICT (conversation_key) DO NOTHING RETURNING id', [Key, Viewer]);
@@ -105,6 +111,7 @@ async function SendMessage(Context, Body) {
 	const Others = Room.members.map(Member => Member.user_id).filter(Id => Id !== User.id);
 	const Fail = Code => ({ status: Code, client_message_id: Body.client_message_id ?? '', server_message_id: '0', check_code: '0', check_message: '' });
 	if (Room.conversation_type === 1 && (await Pool.query(`SELECT ${BlockedBetween('$1::bigint', '$2::bigint')} AS blocked`, [User.id, Others[0]])).rows[0].blocked) return Fail(SendStatus.Blocked);
+	if (Room.conversation_type === 1 && !(await MayMessage(Pool, User.id, Others[0]))) return Fail(SendStatus.NotAllowed);
 	const Content = String(Body.content ?? '');
 	const ClientId = String(Body.client_message_id ?? '');
 	const Type = Number(Body.message_type ?? 0);
@@ -278,6 +285,7 @@ export async function Im(Context) {
 	const { Request, Response, Url, User } = Context;
 	if (!/^\/v[1-3]\/[a-z_/]+$/.test(Url.pathname) || Request.method !== 'POST' || !Request.headers['content-type']?.startsWith('application/x-protobuf')) return false;
 	if (!User) throw new HttpError(401, 'NotLoggedIn');
+	if (Context.Config.Features?.messages === false) throw new HttpError(403, 'MessagesDisabled');
 	const Bytes = await HandleRequest(Context, await ReadRaw(Request, 1024 * 1024));
 	Response.writeHead(200, { 'content-type': 'application/x-protobuf', 'cache-control': 'no-store' });
 	Response.end(Bytes);

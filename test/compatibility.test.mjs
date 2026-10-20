@@ -808,6 +808,46 @@ test('original client direct messages persist through the IM protocol over HTTP 
 	assert.deepEqual([Profiles.status_code, Profiles.users[0].im_user_profile.unique_id, Profiles.users[0].im_user_profile.follow_status], [0, 'friend', 2]);
 });
 
+test('direct messages honor recipient privacy, end with the session, and follow the admin switch', async () => {
+	const Friendly = await Login(Pool, 'friend', Password);
+	const AsFriend = { cookie: `kittok_session=${Friendly.Token}` };
+	const Im = async (Cmd, Field, Body, Headers = Auth()) => {
+		const Sent = await fetch(`${Origin}/v1/kittok`, { method: 'POST', headers: { ...Headers, 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: Cmd, sequence_id: '3', inbox_type: 0, body: { [Field]: Body } }) });
+		return Sent.status === 200 ? Proto.Decode('Response', Buffer.from(await Sent.arrayBuffer())) : Sent.status;
+	};
+	const Policy = Value => fetch(`${Origin}/account/messages`, { method: 'POST', redirect: 'manual', headers: { ...AsFriend, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: Friendly.Csrf, policy: Value }) });
+	const Short = (await Pool.query('SELECT id FROM conversations WHERE conversation_key = $1', [`0:1:${Owner.id}:${Friend.id}`])).rows[0].id;
+	const Send = ClientId => Im(100, 'send_message_body', { conversation_short_id: Short, conversation_type: 1, message_type: 7, content: '{"aweType":0,"text":"Knock knock"}', client_message_id: ClientId });
+	assert.equal((await Policy('nobody')).status, 303);
+	assert.equal((await Pool.query('SELECT dm_policy FROM users WHERE id = $1', [Friend.id])).rows[0].dm_policy, 'nobody');
+	assert.equal((await Send('private-1')).body.send_message_body.status, 2);
+	assert.equal((await Im(609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Friend.id] })).status_code, 11);
+	assert.equal((await Policy('following')).status, 303);
+	assert.equal((await Send('private-2')).body.send_message_body.status, 0);
+	const Followed = (await Pool.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2 RETURNING created_at', [Friend.id, Owner.id])).rows[0].created_at;
+	assert.equal((await Send('private-3')).body.send_message_body.status, 2);
+	await Pool.query('INSERT INTO follows(follower_id, following_id, created_at) VALUES ($1, $2, $3)', [Friend.id, Owner.id, Followed]);
+	assert.equal((await Policy('everyone')).status, 303);
+	assert.equal((await fetch(`${Origin}/account/messages`, { method: 'POST', redirect: 'manual', headers: { ...AsFriend, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: Friendly.Csrf, policy: 'anyone' }) })).status, 303);
+	assert.equal((await Pool.query('SELECT dm_policy FROM users WHERE id = $1', [Friend.id])).rows[0].dm_policy, 'everyone');
+	const Socket = new WebSocket(Origin.replace('http', 'ws') + '/ws/v2', { protocols: ['pbbp2'], headers: { ...AsFriend, origin: Origin } });
+	await new Promise((Resolve, Reject) => { Socket.onopen = Resolve; Socket.onerror = Reject; });
+	const Closed = new Promise(Resolve => { Socket.onclose = Resolve; });
+	await Pool.query('DELETE FROM sessions WHERE token_hash = $1', [Hash(Friendly.Token)]);
+	Socket.send(Proto.Encode('Frame', { seqid: '1', service: 5, method: 1, payload_type: 'pb', payload: Proto.Encode('Request', { cmd: 203, sequence_id: '1' }) }));
+	await Closed;
+	const Settings = await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json();
+	const Switch = Value => Call('/_kittok/admin/settings/features', 'POST', { value: { ...Settings.features, messages: Value } }, Auth());
+	assert.equal((await Switch(false)).status, 200);
+	assert.equal(await Im(203, 'messages_per_user_init_v2_body', {}), 403);
+	const Page = await (await Call('/', 'GET', undefined, { cookie: Cookie })).text();
+	assert.ok(Page.includes('"hasIMPermission":false')); assert.ok(Page.includes('[data-e2e="nav-messages"]'));
+	const Refused = new WebSocket(Origin.replace('http', 'ws') + '/ws/v2', { headers: { cookie: Cookie, origin: Origin } });
+	assert.equal(await new Promise(Resolve => { Refused.onopen = () => Resolve('Open'); Refused.onerror = () => Resolve('Refused'); }), 'Refused');
+	assert.equal((await Switch(true)).status, 200);
+	assert.equal((await Im(203, 'messages_per_user_init_v2_body', {})).status_code, 0);
+});
+
 test('users, sessions, videos, and social data survive a server restart', async () => {
 	await Stop(); await Start();
 	const Current = await (await Call('/api/v1/session', 'GET', undefined, { cookie: Cookie })).json(); assert.equal(Current.user.uniqueId, 'owner');
@@ -820,7 +860,7 @@ test('users, sessions, videos, and social data survive a server restart', async 
 	assert.equal((await (await Call('/api/user/detail/?uniqueId=friend', 'GET', undefined, Auth())).json()).userInfo.user.relation, 2);
 	assert.equal((await (await Call('/api/user/detail/?uniqueId=grumpy', 'GET', undefined, Auth())).json()).userInfo.user.relation, 4);
 	const Inbox = await fetch(`${Origin}/v2/message/get_by_user_init`, { method: 'POST', headers: { ...Auth(), 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: 203, sequence_id: '1', inbox_type: 0 }) });
-	assert.deepEqual(Proto.Decode('Response', Buffer.from(await Inbox.arrayBuffer())).body.messages_per_user_init_v2_body.messages.map(Message => JSON.parse(Message.content).text), ['Hello friend', 'Second note']);
+	assert.deepEqual(Proto.Decode('Response', Buffer.from(await Inbox.arrayBuffer())).body.messages_per_user_init_v2_body.messages.map(Message => JSON.parse(Message.content).text), ['Hello friend', 'Second note', 'Knock knock']);
 	assert.ok((await (await Call(`/api/comment/list/?aweme_id=${VideoId}`)).json()).comments.some(Comment => Comment.text === 'Published natively'));
 	const Thread = (await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=50`, 'GET', undefined, Auth())).json()).comments.find(Comment => Comment.text === 'Thread root');
 	assert.equal(Thread.reply_comment_total, 5);

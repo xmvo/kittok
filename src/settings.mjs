@@ -1,6 +1,6 @@
 import { HttpError } from './http.mjs';
 
-export const Features = { shop: 'Shop', explore: 'Explore', following: 'Following feed', shortDrama: 'Short dramas', live: 'LIVE', search: 'Search', upload: 'Uploads', comments: 'Comments' };
+export const Features = { shop: 'Shop', explore: 'Explore', following: 'Following feed', shortDrama: 'Short dramas', live: 'LIVE', search: 'Search', upload: 'Uploads', comments: 'Comments', messages: 'Direct messages' };
 export const BrandSlots = { wordmarkDark: '/public/logo.svg', wordmarkLight: '/public/logo-light.svg', icon: '/public/avatar.svg', favicon: '/public/avatar.svg' };
 
 function Validate(Key, Value) {
