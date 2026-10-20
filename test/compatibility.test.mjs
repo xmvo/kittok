@@ -831,7 +831,7 @@ test('direct messages honor recipient privacy, end with the session, and follow 
 	const Send = ClientId => Im(100, 'send_message_body', { conversation_short_id: Short, conversation_type: 1, message_type: 7, content: '{"aweType":0,"text":"Knock knock"}', client_message_id: ClientId });
 	const Restriction = await (await Call('/api/privacy/setting/restriction/v1/', 'GET', undefined, AsFriend)).json();
 	assert.deepEqual(Restriction.privacy_settings, { private_account: 0, dm_setting_friends: 1, dm_setting_potential_connection: 1, dm_setting_others: 1 });
-	assert.deepEqual(Restriction.privacy_restriction.account.dm_setting_others.values.map(Option => [Option.value, Option.show_type]), [[1, 0], [2, 2], [3, 0]]);
+	assert.deepEqual(Restriction.privacy_restriction.account.dm_setting_others.values.map(Option => [Option.value, Option.show_type]), [[1, 0], [2, 0], [3, 0]]);
 	assert.equal(Restriction.privacy_restriction.account.comment.show_type, 2);
 	const Pages = JSON.parse((await (await Call('/api/privacy/unified_config/v1', 'GET', undefined, AsFriend)).json()).configs);
 	assert.deepEqual(Object.keys(Pages), ['main', 'direct_message_permission', 'dm_friends', 'dm_potential_connection', 'dm_others']);
@@ -842,7 +842,7 @@ test('direct messages honor recipient privacy, end with the session, and follow 
 	assert.equal(Saved.status_code, 0); assert.equal(Saved.privacy_settings.dm_setting_friends, 3);
 	assert.equal((await Send('private-1')).body.send_message_body.status, 2);
 	assert.equal((await Im(609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Friend.id] })).status_code, 11);
-	assert.equal((await Native('dm_setting_friends', 2)).status_code, 1);
+	assert.equal((await Native('dm_setting_friends', 4)).status_code, 1);
 	assert.equal((await Native('private_account', 1)).status_code, 1);
 	assert.equal((await Stored()).dm_friends, 3);
 	assert.equal((await Form({ dm_setting_friends: '1' })).status, 303);
@@ -854,7 +854,7 @@ test('direct messages honor recipient privacy, end with the session, and follow 
 	assert.equal((await Native('dm_setting_potential_connection', 1)).status_code, 0);
 	assert.equal((await Send('private-4')).body.send_message_body.status, 0);
 	await Pool.query('INSERT INTO follows(follower_id, following_id, created_at) VALUES ($1, $2, $3)', [Friend.id, Owner.id, Followed]);
-	assert.equal((await Form({ dm_setting_others: '1', dm_setting_friends: '2' })).status, 303);
+	assert.equal((await Form({ dm_setting_others: '1', dm_setting_friends: '4' })).status, 303);
 	assert.deepEqual(await Stored(), { dm_friends: 1, dm_potential: 1, dm_others: 3 });
 	assert.equal((await Form({ dm_setting_others: '1' })).status, 303);
 	assert.deepEqual(await Stored(), { dm_friends: 1, dm_potential: 1, dm_others: 1 });
@@ -874,6 +874,44 @@ test('direct messages honor recipient privacy, end with the session, and follow 
 	assert.equal(await new Promise(Resolve => { Refused.onopen = () => Resolve('Open'); Refused.onerror = () => Resolve('Refused'); }), 'Refused');
 	assert.equal((await Switch(true)).status, 200);
 	assert.equal((await Im(203, 'messages_per_user_init_v2_body', {})).status_code, 0);
+});
+
+test('message requests stay out of the inbox until accepted, and reported messages reach the queue and can be removed', async () => {
+	const Asker = await CreateUser(Pool, { username: 'asker', displayName: 'Asker', password: Password }, 'closed', true);
+	const Host = await CreateUser(Pool, { username: 'host', displayName: 'Host', password: Password }, 'closed', true);
+	await Pool.query('UPDATE users SET dm_others = 2 WHERE id = $1', [Host.id]);
+	const Session = async Name => { const Signed = await Login(Pool, Name, Password); return { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf }; };
+	const AsAsker = await Session('asker'), AsHost = await Session('host');
+	const Im = async (Headers, Cmd, Field, Body) => Proto.Decode('Response', Buffer.from(await (await fetch(`${Origin}/v1/kittok`, { method: 'POST', headers: { ...Headers, 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: Cmd, sequence_id: '1', inbox_type: 0, body: { [Field]: Body } }) })).arrayBuffer()));
+	const Chat = (await Im(AsAsker, 609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Host.id] })).body.create_conversation_v2_body.conversation;
+	const Sent = (await Im(AsAsker, 100, 'send_message_body', { conversation_short_id: Chat.conversation_short_id, conversation_type: 1, message_type: 7, content: '{"aweType":0,"text":"hi stranger"}', client_message_id: 'req-1' })).body.send_message_body;
+	assert.equal(Sent.status, 0);
+	const Inbox = async () => (await Im(AsHost, 203, 'messages_per_user_init_v2_body', {})).body.messages_per_user_init_v2_body.conversations?.map(Row => Row.conversation_short_id) ?? [];
+	assert.ok(!(await Inbox()).includes(Chat.conversation_short_id));
+	const Requests = (await Im(AsHost, 1001, 'get_stranger_conversation_body', { cursor: '0', count: '10', show_total_unread: true })).body.get_stranger_conversation_body;
+	assert.equal(Requests.total_unread, 1); assert.deepEqual(Requests.conversation_list.map(Row => [Row.conversation_short_id, JSON.parse(Row.last_message.content).text]), [[Chat.conversation_short_id, 'hi stranger']]);
+	assert.equal((await Im(AsHost, 1008, 'get_stranger_unread_count_body', {})).body.get_stranger_unread_count_body.user_unread_count, '1');
+	const Thread = (await Im(AsHost, 1002, 'get_stranger_messages_body', { conversation_short_id: Chat.conversation_short_id, reset_unread_count: true })).body.get_stranger_messages_body.messages;
+	assert.deepEqual(Thread.map(Message => Message.server_message_id), [Sent.server_message_id]);
+	assert.equal((await Im(AsHost, 1008, 'get_stranger_unread_count_body', {})).body.get_stranger_unread_count_body.user_unread_count, '0');
+	assert.equal((await (await Call('/api/im/stranger/unlimit?aid=1988', 'POST', { conversation_id: Chat.conversation_id, to_user_id: Asker.id }, AsHost)).json()).status_code, 0);
+	assert.ok((await Inbox()).includes(Chat.conversation_short_id));
+	assert.equal((await Im(AsHost, 1001, 'get_stranger_conversation_body', { cursor: '0', count: '10' })).body.get_stranger_conversation_body.conversation_list?.length ?? 0, 0);
+
+	const Report = await Call(`/aweme/v2/aweme/feedback/?${new URLSearchParams({ report_type: 'im', reason: 102, object_id: Chat.conversation_short_id, owner_id: Asker.id, msg_list: `${Sent.server_message_id},1` })}`, 'GET', undefined, AsHost);
+	assert.equal((await Report.json()).status_code, 0);
+	const Admin = Route => Call(`/_kittok/admin/${Route}`, 'GET', undefined, Auth());
+	const Ticket = (await (await Admin('tickets?type=message')).json()).tickets[0];
+	assert.deepEqual([Ticket.id, Ticket.preview, Ticket.owner.username, Ticket.top], [Sent.server_message_id, 'hi stranger', 'asker', 'harassment']);
+	const Review = await (await Admin(`tickets/message/${Sent.server_message_id}`)).json();
+	assert.deepEqual(Review.content.thread.map(Row => [Row.username, Row.text]), [['asker', 'hi stranger']]);
+	const Decided = await Call(`/_kittok/admin/reports/${Review.open[0]}/decide`, 'POST', { verdict: 'violation', category: 'harassment', reason: 'Unwanted message', content_action: 'remove', account_action: 'strike' }, Auth());
+	assert.equal(Decided.status, 200); assert.equal((await Decided.json()).decision.feature, 'message');
+	assert.equal((await Im(AsHost, 301, 'messages_in_conversation_body', { conversation_short_id: Chat.conversation_short_id, conversation_type: 1, direction: 1, limit: 20 })).body.messages_in_conversation_body.messages?.length ?? 0, 0);
+	assert.equal((await (await Call('/api/share/settings/?device_platform=webapp_pc&mode=1', 'GET', undefined, AsHost)).json()).share_platforms[0].platform_id, 'message');
+	assert.equal((await (await Call(`/api/im/item_detail/?itemId=${VideoId}`, 'GET', undefined, AsHost)).json()).itemInfo.itemStruct.id, VideoId);
+	assert.equal((await (await Call('/api/im/item_detail/?itemId=12345', 'GET', undefined, AsHost)).json()).statusCode, 10204);
+	await Pool.query('DELETE FROM reports');
 });
 
 test('moderation gives warnings, per-feature strikes, timed feature restrictions, and threshold bans in the shapes the client shows', async () => {

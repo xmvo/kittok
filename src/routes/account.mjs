@@ -18,7 +18,7 @@ async function AccountStatus(Pool, Config, User) {
 		...Object.entries(Status.strikes.policy).map(([Policy, Count]) => [Policy.replace('_', ' '), Count, Status.thresholds.policy[Policy] ?? Status.thresholds.feature])];
 	const Restrictions = Status.restrictions.map(Row => `<li><strong>${Escape(RestrictableFeatures[Row.feature])}</strong> ${Row.expires_at ? `until ${Escape(Until(Row))}` : 'until lifted'}</li>`).join('');
 	const History = Status.decisions.map(Row => {
-		const Label = [Row.content_action === 'remove' ? `${Row.target_type === 'video' ? 'Video' : 'Comment'} removed` : Row.content_action === 'fyf_ineligible' ? 'Not eligible for For You' : '', Actions[Row.account_action]].filter(Boolean).join(' · ') || 'Feature restriction';
+		const Label = [Row.content_action === 'remove' ? `${{ video: 'Video', comment: 'Comment', message: 'Message' }[Row.target_type]} removed` : Row.content_action === 'fyf_ineligible' ? 'Not eligible for For You' : '', Actions[Row.account_action]].filter(Boolean).join(' · ') || 'Feature restriction';
 		const Appealable = !Row.reversed_at && !Row.appeal_status;
 		const State = Row.reversed_at ? 'Reversed' : Row.appeal_status === 'pending' ? 'Appeal in review' : Row.appeal_status === 'upheld' ? 'Appeal upheld' : '';
 		return `<li><strong>${Escape(Label)}</strong> · ${Escape(Row.category.replace('_', ' '))}<br><span>${Escape(Row.reason)}</span><br><small>${new Date(Row.created_at).toISOString().slice(0, 10)}${State ? ` · ${State}` : ''}</small>${Appealable ? `<details><summary>Appeal</summary><form action="/account/appeal" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><input type="hidden" name="decision" value="${Escape(Row.id)}"><label>Why should we review this?<textarea name="reason" required maxlength="1000" rows="3"></textarea></label><button class="secondary">Submit appeal</button></form></details>` : ''}</li>`;
@@ -30,7 +30,7 @@ async function MessageForm(Pool, Config, User) {
 	if (Config.Features?.messages === false) return '';
 	const Settings = await DmSettings(Pool, User.id);
 	const Labels = { dm_setting_friends: 'Friends', dm_setting_potential_connection: 'Potential connections', dm_setting_others: 'Others' };
-	const Fields = Object.keys(DmAudiences).map(Field => `<label>${Labels[Field]}<select name="${Field}">${[[1, 'Receive in inbox'], [3, "Don't receive"]].map(([Value, Label]) => `<option value="${Value}"${Settings[Field] === Value ? ' selected' : ''}>${Label}</option>`).join('')}</select></label>`).join('');
+	const Fields = Object.keys(DmAudiences).map(Field => `<label>${Labels[Field]}<select name="${Field}">${[[1, 'Receive in inbox'], [2, 'Receive as message request'], [3, "Don't receive"]].map(([Value, Label]) => `<option value="${Value}"${Settings[Field] === Value ? ' selected' : ''}>${Label}</option>`).join('')}</select></label>`).join('');
 	return `<h2>Direct messages</h2><form action="/account/messages" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}">${Fields}<button class="secondary">Save</button></form>`;
 }
 
@@ -53,7 +53,7 @@ export async function Account(Context) {
 		const Body = await ReadBody(Request);
 		RequireCsrf(Request, User, Body.csrf);
 		const Fields = Object.keys(DmAudiences).filter(Field => Body[Field] !== undefined);
-		if (Fields.some(Field => !['1', '3'].includes(String(Body[Field])))) throw new HttpError(400, 'InvalidMessageSetting');
+		if (Fields.some(Field => !['1', '2', '3'].includes(String(Body[Field])))) throw new HttpError(400, 'InvalidMessageSetting');
 		for (const Field of Fields) await SetDmSetting(Pool, User.id, Field, Body[Field]);
 		Response.writeHead(303, { location: '/account' }); Response.end(); return true;
 	}

@@ -7,8 +7,12 @@ export const ViolationFeatures = { video: 'Videos', comment: 'Comments', message
 export const RestrictableFeatures = { upload: 'Posting videos', comment: 'Commenting', message: 'Sending direct messages', live: 'Going LIVE', follow: 'Following accounts', profile: 'Editing your profile' };
 export const RestrictionHours = [1, 24, 48, 72, 168, 720];
 export const DefaultThresholds = { strikeDays: 90, feature: 5, total: 10, policy: { spam: 6, harassment: 4, hate: 3, nudity: 4, violence: 3, self_harm: 4, misinformation: 5, impersonation: 3, copyright: 5, other: 5 } };
-const TargetFeature = { video: 'video', comment: 'comment', user: 'profile' };
+const TargetFeature = { video: 'video', comment: 'comment', user: 'profile', message: 'message' };
 const PolicyNames = { spam: 'spam', harassment: 'harassment and bullying', hate: 'hateful behavior', nudity: 'nudity and sexual content', violence: 'violent and graphic content', self_harm: 'suicide and self-harm', misinformation: 'misinformation', impersonation: 'impersonation', copyright: 'intellectual property', other: 'our Community Guidelines' };
+
+export function MessageText(Content) {
+	try { const Parsed = JSON.parse(Content); return typeof Parsed?.text === 'string' ? Parsed.text : ''; } catch { return String(Content ?? ''); }
+}
 
 export const RemovedSql = (Type, Target) => `EXISTS (SELECT 1 FROM moderation_decisions md WHERE md.target_type = '${Type}' AND md.target_id = ${Target} AND md.content_action = 'remove' AND md.reversed_at IS NULL)`;
 export const ForYouIneligibleSql = Target => `EXISTS (SELECT 1 FROM moderation_decisions mf WHERE mf.target_type = 'video' AND mf.target_id = ${Target} AND mf.content_action = 'fyf_ineligible' AND mf.reversed_at IS NULL)`;
@@ -77,7 +81,9 @@ async function Decide(Client, Moderator, Input, Thresholds) {
 		video: 'SELECT author_id AS owner, description AS text, cover_name FROM videos WHERE id = $1',
 		comment: 'SELECT author_id AS owner, body AS text, video_id FROM comments WHERE id = $1',
 		user: 'SELECT id AS owner, display_name AS text, username FROM users WHERE id = $1',
+		message: 'SELECT sender_id AS owner, content, conversation_id FROM messages WHERE id = $1',
 	}[Type], [TargetId])).rows[0];
+	if (Target && Type === 'message') { Target.text = MessageText(Target.content); delete Target.content; }
 	if (!Target) throw new HttpError(404, 'TargetNotFound');
 	const Owner = (await Client.query('SELECT id, role, username FROM users WHERE id = $1', [Target.owner])).rows[0];
 	if (Owner.id === Moderator.id || Owner.role === 'admin') throw new HttpError(400, 'CannotModerateAdmin');
@@ -189,7 +195,7 @@ export async function Standing(Pool, UserId, Thresholds = DefaultThresholds) {
 	return { state: State, strikes: Counts, thresholds: Thresholds, restrictions: Restrictions, decisions: Decisions };
 }
 
-const TargetNames = { video: 'video', comment: 'comment', user: 'account' };
+const TargetNames = { video: 'video', comment: 'comment', user: 'account', message: 'message' };
 
 function DecisionText(Decision, Restrictions) {
 	const Policy = PolicyNames[Decision.category];

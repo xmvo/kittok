@@ -3,6 +3,7 @@ import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.m
 import { RequireCsrf, RecordEvent, ClientInfo } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveMedia } from '../media.mjs';
 import { ActiveRestriction, RestrictionText, RemovedSql, ModerationNotices, UnreadModerationNotices, MarkModerationNoticesRead, ReadBanTicket, ActiveBan, BanText, Appeal } from '../moderation.mjs';
+import { AcceptRequest } from './im.mjs';
 import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
@@ -42,7 +43,7 @@ function NoticeShape(Row, Viewer, Origin) {
 
 const ReportReasons = [[101, 'spam', 'Spam or scams'], [102, 'harassment', 'Harassment or bullying'], [103, 'hate', 'Hate speech'], [104, 'nudity', 'Nudity or sexual content'], [105, 'violence', 'Violent or graphic content'],
 	[106, 'self_harm', 'Suicide or self-harm'], [107, 'misinformation', 'False information'], [108, 'impersonation', 'Impersonation'], [109, 'copyright', 'Copyright or intellectual property'], [110, 'other', 'Something else']];
-const ReportTargets = { video: 'video', photo_mode: 'video', comment: 'comment', user: 'user' };
+const ReportTargets = { video: 'video', photo_mode: 'video', comment: 'comment', user: 'user', im: 'message' };
 
 async function CommentPage(Pool, Origin, Viewer, { video, parent, cursor, count }) {
 	const Limit = PageSize(count, 20);
@@ -92,6 +93,11 @@ export async function Compatibility(Context) {
 		if (!Result.items.length) throw new HttpError(404, 'VideoNotFound');
 		Json(Response, { statusCode: 0, itemInfo: { itemStruct: Result.items[0] } }); return true;
 	}
+	if (Path === '/api/im/item_detail/') {
+		RequireMethod(Request, ['GET']);
+		const Result = await Videos(Pool, Config.Origin, { id: Params.get('itemId'), viewer: User?.id });
+		Json(Response, Result.items.length ? { statusCode: 0, status_code: 0, itemInfo: { itemStruct: Result.items[0] } } : { statusCode: 10204, status_code: 10204, status_msg: 'Video unavailable' }); return true;
+	}
 	if (Path === '/api/user/detail/') {
 		RequireMethod(Request, ['GET']);
 		const Target = await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'));
@@ -130,7 +136,7 @@ export async function Compatibility(Context) {
 	if (Path === '/api/privacy/setting/restriction/v1/' || Path === '/api/privacy/setting/restriction/v1') {
 		RequireMethod(Request, ['GET']);
 		const Messages = User && Config.Features?.messages !== false;
-		const Choice = { show_type: 0, values: [{ value: 1, show_type: 0 }, { value: 2, show_type: 2 }, { value: 3, show_type: 0 }] };
+		const Choice = { show_type: 0, values: [{ value: 1, show_type: 0 }, { value: 2, show_type: 0 }, { value: 3, show_type: 0 }] };
 		const Account = { comment: { show_type: 2 }, private_account: { show_type: 2 }, ...(Messages ? { direct_message: { show_type: 0 }, ...Object.fromEntries(Object.keys(DmAudiences).map(Key => [Key, Choice])) } : {}) };
 		Json(Response, { status_code: 0, statusCode: 0, privacy_restriction: { account: Account }, privacy_settings: { private_account: 0, ...(Messages ? await DmSettings(Pool, User.id) : {}) } }); return true;
 	}
@@ -153,7 +159,7 @@ export async function Compatibility(Context) {
 	if (Path === '/api/privacy/user/settings/update/v1') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
-		if (!DmAudiences[Body.field] || ![1, 3].includes(Number(Body.value)) || Config.Features?.messages === false) { Json(Response, { status_code: 1, statusCode: 1, status_msg: 'This setting is not available on this instance.' }); return true; }
+		if (!DmAudiences[Body.field] || ![1, 2, 3].includes(Number(Body.value)) || Config.Features?.messages === false) { Json(Response, { status_code: 1, statusCode: 1, status_msg: 'This setting is not available on this instance.' }); return true; }
 		await SetDmSetting(Pool, User.id, Body.field, Body.value);
 		Json(Response, { status_code: 0, statusCode: 0, privacy_settings: await DmSettings(Pool, User.id) }); return true;
 	}
@@ -224,6 +230,17 @@ export async function Compatibility(Context) {
 		await RecordView(Pool, VideoId, User ? `u:${User.id}` : `ip:${createHmac('sha256', ViewSecret).update(Request.socket.remoteAddress ?? '').digest('hex')}`);
 		Response.writeHead(204).end(); return true;
 	}
+	if (Path === '/api/share/settings/') {
+		RequireMethod(Request, ['GET']);
+		const Platforms = [...(Config.Features?.messages !== false ? ['message'] : []), 'copy', 'embed', 'whatsapp', 'facebook', 'twitter', 'sms', 'reddit', 'pinterest'];
+		Json(Response, { status_code: 0, status_msg: '', share_platforms: Platforms.map(Platform => ({ platform_id: Platform })) }); return true;
+	}
+	if (Path === '/api/im/stranger/unlimit' || Path === '/api/im/stranger/unlimit/') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		const Accepted = await AcceptRequest(Pool, User.id, Body.conversation_id);
+		Json(Response, Accepted ? { status_code: 0, status_msg: '' } : { status_code: 1, status_msg: 'This message request no longer exists.' }); return true;
+	}
 	if (Path === '/node/report/reasons') {
 		RequireMethod(Request, ['GET']);
 		Json(Response, { statusCode: 0, status_code: 0, config: '{}', body: ReportReasons.map(([Code, , Text]) => ({ reason_type: Code, reason_code: Code, text: Text, next_reason: [], special_type: -1, audit_type: -1, option: JSON.stringify({ action: { action_type: 'route', action_params: { route_path: 'Detail_WithDesc', title_text: Text, subtitle_text: 'Add details (optional).' } } }) })) }); return true;
@@ -235,6 +252,15 @@ export async function Compatibility(Context) {
 		const Type = ReportTargets[Body.report_type];
 		const Reason = ReportReasons.find(([Code]) => String(Code) === String(Body.reason));
 		if (!Type || !Reason) throw new HttpError(400, 'InvalidReport');
+		if (Type === 'message') {
+			const Ids = String(Body.msg_list ?? '').split(',').filter(Value => /^\d{1,20}$/.test(Value)).slice(0, 20);
+			const Rows = (await Pool.query(`SELECT m.id, m.sender_id FROM messages m JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1
+				WHERE m.conversation_id = $2 AND m.id = ANY($3::bigint[]) AND m.sender_id <> $1`, [User.id, Id(Body.object_id || Body.target), Ids])).rows;
+			if (!Rows.length) throw new HttpError(404, 'ReportTargetNotFound');
+			for (const Row of Rows) await Pool.query(`INSERT INTO reports(reporter_id, target_type, target_id, owner_id, category, description) VALUES ($1, 'message', $2, $3, $4, $5)
+				ON CONFLICT (reporter_id, target_type, target_id) WHERE status = 'open' DO NOTHING`, [User.id, Row.id, Row.sender_id, Reason[1], String(Body.report_desc ?? '').trim().slice(0, 500)]);
+			Json(Response, { status_code: 0, statusCode: 0, status_msg: '', data: {} }); return true;
+		}
 		const Target = Id(Body.object_id || Body.target);
 		const Owner = (await Pool.query({ video: 'SELECT author_id AS id FROM videos WHERE id = $1', comment: 'SELECT author_id AS id FROM comments WHERE id = $1', user: 'SELECT id FROM users WHERE id = $1' }[Type], [Target])).rows[0]?.id;
 		if (!Owner) throw new HttpError(404, 'ReportTargetNotFound');

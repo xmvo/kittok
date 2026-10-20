@@ -13,8 +13,8 @@
 	const FeatureLabel = Key => Features.find(Entry => Entry[0] === Key)?.[1] ?? Key;
 	const Durations = [[1, '1 hour'], [24, '24 hours'], [48, '48 hours'], [72, '3 days'], [168, '7 days'], [720, '30 days'], [null, 'Until lifted']];
 	const Areas = { video: 'Videos', comment: 'Comments', message: 'Direct messages', profile: 'Profile', live: 'LIVE' };
-	const TargetFeature = { video: 'video', comment: 'comment', user: 'profile' };
-	const TargetNoun = { video: 'video', comment: 'comment', user: 'account' };
+	const TargetFeature = { video: 'video', comment: 'comment', user: 'profile', message: 'message' };
+	const TargetNoun = { video: 'video', comment: 'comment', user: 'account', message: 'message' };
 	const Templates = {
 		spam: ['Repeated promotional posting', 'Scam or fake giveaway', 'Engagement bait'], harassment: ['Insulting a private individual', 'Targeted bullying', 'Encouraging pile-ons'],
 		hate: ['Slurs against a protected group', 'Hateful ideology'], nudity: ['Sexually explicit content', 'Nudity'], violence: ['Graphic violence', 'Threats of violence'],
@@ -37,7 +37,7 @@
 		policies: 'M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3zM9 12l2 2 4-4', instance: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4', invites: 'M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4V7zM14 7v10',
 		audit: 'M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4M12 8v4l3 2', search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4', back: 'M19 12H5M11 6l-6 6 6 6',
 		theme: 'M12 3a9 9 0 1 0 0 18V3z', collapse: 'M4 4h16v16H4zM9 4v16', done: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0zM8 12l3 3 5-6', video: 'M5 4h14v16H5zM10 9l5 3-5 3V9z',
-		comment: 'M4 5h16v11H9l-5 4V5z', user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0', open: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6', keys: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10',
+		comment: 'M4 5h16v11H9l-5 4V5z', message: 'M21 3L10 14M21 3l-7 18-4-7-7-4 18-7z', user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0', open: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6', keys: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10',
 	};
 
 	let Counts = { tickets: 0, appeals: 0 };
@@ -309,7 +309,7 @@
 		const Path = location.pathname.replace(/\/$/, '');
 		const Params = new URLSearchParams(location.search);
 		Fill(Body, Spinner()); Body.scrollTop = 0;
-		const Match = Path.match(/^\/admin\/review\/(video|comment|user)\/(\d+)$/) ?? Path.match(/^\/admin\/accounts\/(\d+)$/);
+		const Match = Path.match(/^\/admin\/review\/(video|comment|user|message)\/(\d+)$/) ?? Path.match(/^\/admin\/accounts\/(\d+)$/);
 		try {
 			if (Path === '/admin' || Path === '/admin/queue') await QueuePage(Params);
 			else if (Path.startsWith('/admin/review/') && Match) await ReviewPage(Match[1], Match[2]);
@@ -350,14 +350,14 @@
 
 	async function QueuePage(Params) {
 		SetTitle(['Queue']);
-		const Type = ['video', 'comment', 'user'].includes(Params.get('type')) ? Params.get('type') : '';
+		const Type = ['video', 'comment', 'user', 'message'].includes(Params.get('type')) ? Params.get('type') : '';
 		const [Console, Data] = await Promise.all([RefreshCounts(), Api(`tickets${Type ? '?type=' + Type : ''}`)]);
 		const C = Console?.counts ?? {};
 		const Overturn = C.appeals_reviewed ? Math.round((C.appeals_restored / C.appeals_reviewed) * 100) : null;
 		let Selected = 0;
 		const Rows = Data.tickets.map((Ticket, Index) => El('tr', { class: Index === 0 ? 'Selected' : '', onclick: () => Navigate(`/admin/review/${Ticket.type}/${Ticket.id}`) },
 			El('td', { style: 'width:1%' }, El('div', { class: 'Row' }, El('span', { class: `Priority P${Math.floor(Ticket.priority / 10)}`, title: `Priority ${Math.floor(Ticket.priority / 10)}` }),
-				Ticket.thumb && Ticket.type === 'video' ? El('img', { class: 'Thumb', src: Ticket.thumb, alt: '', loading: 'lazy' }) : Ticket.type === 'user' ? El('img', { class: 'Avatar', src: Ticket.owner?.avatar, alt: '' }) : El('div', { class: 'Glyph' }, Icon(Ticket.type === 'comment' ? 'comment' : 'video')))),
+				Ticket.thumb && Ticket.type === 'video' ? El('img', { class: 'Thumb', src: Ticket.thumb, alt: '', loading: 'lazy' }) : Ticket.type === 'user' ? El('img', { class: 'Avatar', src: Ticket.owner?.avatar, alt: '' }) : El('div', { class: 'Glyph' }, Icon(Ticket.type === 'video' ? 'video' : Ticket.type === 'message' ? 'message' : 'comment')))),
 			El('td', {}, El('div', { class: 'Faint', style: 'font-size:11px;margin-bottom:2px' }, `${Cap(TargetNoun[Ticket.type])} · `, El('span', { class: 'Mono' }, Ticket.id)), El('div', { class: 'Clamp' }, Ticket.preview || El('span', { class: 'Faint' }, 'No text'))),
 			El('td', {}, El('div', { class: 'Row', style: 'flex-wrap:wrap;gap:4px' }, Object.entries(Ticket.reasons).sort((A, B) => B[1] - A[1]).slice(0, 3).map(([Reason, Count]) => Chip([PolicyLabel(Reason), Count > 1 ? El('b', {}, ` ${Count}`) : null], Reason === Ticket.top ? 'Brand' : '')))),
 			El('td', { class: 'Num' }, El('b', {}, Ticket.reports)),
@@ -372,7 +372,7 @@
 				El('div', { class: 'Panel Metric' }, El('div', { class: 'Value' }, C.decisions_today ?? 0), El('div', { class: 'Name' }, 'Decisions today'), El('div', { class: 'Sub' }, `${C.restrictions ?? 0} active restrictions`)),
 				El('div', { class: 'Panel Metric' }, El('div', { class: 'Value' }, C.banned ?? 0), El('div', { class: 'Name' }, 'Banned accounts'), El('div', { class: 'Sub' }, `${C.users ?? 0} accounts · ${C.new_users ?? 0} new this week`)),
 				El('div', { class: 'Panel Spark' }, El('div', { class: 'Row' }, El('span', { class: 'Name Muted', style: 'font-size:12px' }, 'Last 14 days'), El('span', { class: 'Grow' }), El('div', { class: 'Legend' }, El('span', {}, El('span', { class: 'Dot', style: 'color:var(--accent)' }), 'Reports'), El('span', {}, El('span', { class: 'Dot', style: 'color:var(--cyan)' }), 'Decisions'))), Console ? Sparkline(Console.daily) : null)),
-			El('div', { class: 'Toolbar' }, El('div', { class: 'Tabs', role: 'tablist' }, [['', 'All'], ['video', 'Videos'], ['comment', 'Comments'], ['user', 'Accounts']].map(([Key, Label]) => Link(`/admin${Key ? '?type=' + Key : ''}`, { class: `Tab${Type === Key ? ' Active' : ''}`, role: 'tab', 'aria-selected': Type === Key ? 'true' : 'false' }, Label))),
+			El('div', { class: 'Toolbar' }, El('div', { class: 'Tabs', role: 'tablist' }, [['', 'All'], ['video', 'Videos'], ['comment', 'Comments'], ['message', 'Messages'], ['user', 'Accounts']].map(([Key, Label]) => Link(`/admin${Key ? '?type=' + Key : ''}`, { class: `Tab${Type === Key ? ' Active' : ''}`, role: 'tab', 'aria-selected': Type === Key ? 'true' : 'false' }, Label))),
 				El('span', { class: 'Grow' }), Data.tickets.length ? Btn(['Start reviewing', El('kbd', { style: 'color:inherit;background:transparent;border-color:rgba(255,255,255,.4)' }, '↵')], () => Rows[Selected].click(), 'Primary') : null),
 			El('div', { class: 'Panel', style: 'overflow-x:auto' }, Data.tickets.length ? El('table', { class: 'Table' }, El('thead', {}, El('tr', {}, ['', 'Content', 'Reported for', 'Reports', 'Owner', 'Waiting'].map(Head => El('th', {}, Head)))), El('tbody', {}, Rows))
 				: El('div', { class: 'Empty' }, Icon('done', 34), El('strong', {}, 'Queue is clear'), El('span', {}, 'New reports land here, ordered by how harmful the reported policy is.')))));
@@ -398,6 +398,8 @@
 			El('div', { class: 'Context' }, C.cover && El('img', { src: C.cover, alt: '' }), El('div', { class: 'Grow' }, El('div', { class: 'Faint', style: 'font-size:11px' }, 'On video ', El('span', { class: 'Mono' }, C.video_id)), El('div', { class: 'Clamp' }, C.video_text || 'No caption'))),
 			C.parent_text && El('div', { class: 'Quote' }, El('span', { class: 'Faint' }, `Replying to @${C.parent_author}`), C.parent_text),
 			El('div', { class: 'Quote Focus' }, El('span', { class: 'Faint' }, `@${Owner?.username} · ${Ago(C.created_at)} ago · ${C.likes} likes${Removed ? ' · Removed' : ''}`), C.text));
+		else if (Type === 'message') Stage = El('div', { class: 'Panel PanelBody Thread' }, El('div', { class: 'Faint', style: 'font-size:11px' }, 'Direct message conversation'),
+			C.thread.map(Row => El('div', { class: `Quote${Row.id === C.id ? ' Focus' : ''}` }, El('span', { class: 'Faint' }, `@${Row.username ?? 'deleted'} · ${Ago(Row.created_at)} ago${Row.id === C.id && Removed ? ' · Removed' : ''}`), Row.text || El('span', { class: 'Faint' }, 'Attachment'))));
 		else Stage = El('div', { class: 'Panel Profile' }, El('img', { class: 'Avatar Large', src: Owner?.avatar, alt: '' }), El('div', {}, El('h2', {}, C.text), El('div', { class: 'Muted' }, `@${Owner?.username}`), El('p', { style: 'margin:8px 0 0;overflow-wrap:anywhere' }, C.bio || El('span', { class: 'Faint' }, 'No bio'))));
 		const Reasons = {}; for (const Report of Data.reports.filter(Row => Row.status === 'open')) Reasons[Report.category] = (Reasons[Report.category] ?? 0) + 1;
 		const MaxReason = Math.max(1, ...Object.values(Reasons));
@@ -529,7 +531,7 @@
 				El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Comments', El('span', { class: 'Faint' }, Data.comments.length)), Data.comments.length ? El('table', { class: 'Table' }, El('tbody', {}, Data.comments.map(Comment => CommentRow(Comment, Owner, Refresh)))) : El('div', { class: 'PanelBody Faint' }, 'No comments.'))),
 			reports: () => El('div', { class: 'Columns' }, [['Reports against this account', Data.reportsAgainst], ['Reports this account filed', Data.reportsFiled]].map(([Heading, Rows]) => El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, Heading, El('span', { class: 'Faint' }, Rows.length)),
 				Rows.length ? El('table', { class: 'Table' }, El('tbody', {}, Rows.map(Report => El('tr', { onclick: () => Report.target_type === 'user' ? Navigate(`/admin/review/user/${Report.target_id}`) : Navigate(`/admin/review/${Report.target_type}/${Report.target_id}`) },
-					El('td', {}, Chip(PolicyLabel(Report.category))), El('td', { class: 'Grow' }, El('div', { class: 'Faint', style: 'font-size:11px' }, Report.target_type), El('div', { class: 'Clip', style: 'max-width:260px' }, Report.description || Report.comment_body || Report.video_description || '')),
+					El('td', {}, Chip(PolicyLabel(Report.category))), El('td', { class: 'Grow' }, El('div', { class: 'Faint', style: 'font-size:11px' }, Report.target_type), El('div', { class: 'Clip', style: 'max-width:260px' }, Report.description || Report.comment_body || Report.message_text || Report.video_description || '')),
 					El('td', {}, Chip(Report.status, Report.status === 'open' ? 'Brand' : '')), El('td', { class: 'Faint Num' }, Ago(Report.created_at)))))) : El('div', { class: 'PanelBody Faint' }, 'None.')))),
 			security: () => El('div', { class: 'Columns' },
 				El('div', { class: 'Stack' },

@@ -7,15 +7,16 @@ import { AvatarUrl, UserStats } from '../store.mjs';
 import { Asset, ClientDir, LocalAsset, Root } from '../client/archive.mjs';
 import { BrandSlots, Features, SaveSetting, Settings } from '../settings.mjs';
 import { Page } from './account.mjs';
-import { Enforce, DecideReport, ReverseDecision, LiftRestriction, ReviewAppeal, Standing } from '../moderation.mjs';
+import { Enforce, DecideReport, ReverseDecision, LiftRestriction, MessageText, ReviewAppeal, Standing } from '../moderation.mjs';
 
 const Categories = ['spam', 'harassment', 'hate', 'nudity', 'violence', 'self_harm', 'misinformation', 'impersonation', 'copyright', 'other'];
 const Before = Value => Value ? Id(Value) : null;
 const ReportSql = `SELECT r.*, rep.username AS reporter, own.username AS owner, own.display_name AS owner_name, own.avatar_name, own.suspended_at AS owner_suspended, res.username AS resolver,
-	v.description AS video_description, v.cover_name, c.body AS comment_body, c.video_id AS comment_video_id,
+	v.description AS video_description, v.cover_name, c.body AS comment_body, c.video_id AS comment_video_id, mc.content AS message_content,
 	(SELECT count(*)::int FROM reports o WHERE o.target_type = r.target_type AND o.target_id = r.target_id AND o.status = 'open') AS open_on_target
 	FROM reports r LEFT JOIN users rep ON rep.id = r.reporter_id LEFT JOIN users own ON own.id = r.owner_id LEFT JOIN users res ON res.id = r.resolved_by
-	LEFT JOIN videos v ON r.target_type = 'video' AND v.id = r.target_id LEFT JOIN comments c ON r.target_type = 'comment' AND c.id = r.target_id`;
+	LEFT JOIN videos v ON r.target_type = 'video' AND v.id = r.target_id LEFT JOIN comments c ON r.target_type = 'comment' AND c.id = r.target_id
+	LEFT JOIN messages mc ON r.target_type = 'message' AND mc.id = r.target_id`;
 
 let Styles;
 function TikTokStyles() {
@@ -49,7 +50,8 @@ async function DeleteVideos(Pool, Config, Where, Values) {
 
 export async function Admin(Context) {
 	const { Request, Response, Url, Pool, Config, User, Unknown } = Context;
-	const ReportShape = Row => ({ ...Row, owner_avatar: AvatarUrl(Row, Config.Origin), cover: Row.cover_name ? `${Config.Origin}/media/${Row.cover_name}` : null, exists: Row.target_type === 'user' ? Boolean(Row.owner) : Row.target_type === 'video' ? Boolean(Row.cover_name) : Row.comment_body !== null });
+	const ReportShape = Row => ({ ...Row, owner_avatar: AvatarUrl(Row, Config.Origin), cover: Row.cover_name ? `${Config.Origin}/media/${Row.cover_name}` : null, message_text: Row.message_content === null ? null : MessageText(Row.message_content), message_content: undefined,
+		exists: Row.target_type === 'user' ? Boolean(Row.owner) : Row.target_type === 'video' ? Boolean(Row.cover_name) : Row.target_type === 'message' ? Row.message_content !== null : Row.comment_body !== null });
 	const Path = Url.pathname;
 
 	const BrandMatch = Path.match(/^\/brand\/([a-zA-Z]+)$/);
@@ -196,25 +198,25 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 		if (Route === 'tickets') {
 			const Rows = (await Pool.query(`SELECT r.target_type, r.target_id, count(*)::int AS reports, min(r.created_at) AS first_at, max(r.created_at) AS last_at, min(r.id) AS report_id,
 				array_agg(r.category ORDER BY r.id) AS categories, r.owner_id, own.username, own.display_name, own.avatar_name, own.suspended_at,
-				v.description, v.cover_name, c.body, cv.cover_name AS comment_cover,
+				v.description, v.cover_name, c.body, cv.cover_name AS comment_cover, msg.content AS message_content,
 				(SELECT count(*)::int FROM moderation_decisions d WHERE d.owner_id = r.owner_id AND d.account_action = 'strike' AND d.reversed_at IS NULL AND d.penalty_expires_at > now()) AS strikes
 				FROM reports r LEFT JOIN users own ON own.id = r.owner_id LEFT JOIN videos v ON r.target_type = 'video' AND v.id = r.target_id
-				LEFT JOIN comments c ON r.target_type = 'comment' AND c.id = r.target_id LEFT JOIN videos cv ON cv.id = c.video_id
+				LEFT JOIN comments c ON r.target_type = 'comment' AND c.id = r.target_id LEFT JOIN videos cv ON cv.id = c.video_id LEFT JOIN messages msg ON r.target_type = 'message' AND msg.id = r.target_id
 				WHERE r.status = 'open' AND ($1 = '' OR r.target_type = $1)
-				GROUP BY r.target_type, r.target_id, r.owner_id, own.id, v.id, c.id, cv.id`, [['video', 'comment', 'user'].includes(Params.get('type')) ? Params.get('type') : ''])).rows;
+				GROUP BY r.target_type, r.target_id, r.owner_id, own.id, v.id, c.id, cv.id, msg.id`, [['video', 'comment', 'user', 'message'].includes(Params.get('type')) ? Params.get('type') : ''])).rows;
 			const Severity = { self_harm: 5, violence: 5, hate: 4, nudity: 4, harassment: 3, impersonation: 3, misinformation: 2, copyright: 2, spam: 1, other: 1 };
 			const Tickets = Rows.map(Row => {
 				const Tally = {}; for (const Category of Row.categories) Tally[Category] = (Tally[Category] ?? 0) + 1;
 				const Top = Object.entries(Tally).sort((A, B) => B[1] - A[1] || Severity[B[0]] - Severity[A[0]])[0][0];
 				const Priority = Math.max(...Row.categories.map(Category => Severity[Category] ?? 1)) * 10 + Math.min(Row.reports, 9);
 				return { type: Row.target_type, id: Row.target_id, report: Row.report_id, reports: Row.reports, first_at: Row.first_at, last_at: Row.last_at, reasons: Tally, top: Top, priority: Priority,
-					preview: Row.target_type === 'video' ? Row.description : Row.target_type === 'comment' ? Row.body : Row.display_name,
+					preview: { video: Row.description, comment: Row.body, message: Row.message_content === null ? null : MessageText(Row.message_content) }[Row.target_type] ?? Row.display_name,
 					thumb: Row.cover_name || Row.comment_cover ? `${Config.Origin}/media/${Row.cover_name || Row.comment_cover}` : null,
 					owner: Row.owner_id ? { id: Row.owner_id, username: Row.username, display_name: Row.display_name, avatar: AvatarUrl(Row, Config.Origin), banned: Boolean(Row.suspended_at), strikes: Row.strikes } : null };
 			}).sort((A, B) => B.priority - A.priority || new Date(A.first_at) - new Date(B.first_at));
 			Json(Response, { tickets: Tickets }); return true;
 		}
-		const TicketMatch = Route.match(/^tickets\/(video|comment|user)\/(\d+)$/);
+		const TicketMatch = Route.match(/^tickets\/(video|comment|user|message)\/(\d+)$/);
 		if (TicketMatch) {
 			const [, Type, RawId] = TicketMatch, TargetId = Id(RawId);
 			const Content = (await Pool.query({
@@ -223,7 +225,13 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 				comment: `SELECT c.id, c.body AS text, c.created_at, c.video_id, c.parent_id, c.author_id AS owner, v.description AS video_text, v.cover_name, p.body AS parent_text, pu.username AS parent_author,
 					(SELECT count(*)::int FROM comment_likes l WHERE l.comment_id = c.id) AS likes FROM comments c JOIN videos v ON v.id = c.video_id LEFT JOIN comments p ON p.id = c.parent_id LEFT JOIN users pu ON pu.id = p.author_id WHERE c.id = $1`,
 				user: 'SELECT u.id, u.display_name AS text, u.bio, u.created_at, u.id AS owner FROM users u WHERE u.id = $1',
+				message: 'SELECT m.id, m.content AS text, m.created_at, m.conversation_id, m.index_in_conversation, m.sender_id AS owner FROM messages m WHERE m.id = $1',
 			}[Type], [TargetId])).rows[0] ?? null;
+			if (Content && Type === 'message') {
+				Content.text = MessageText(Content.text);
+				Content.thread = (await Pool.query(`SELECT m.id, m.sender_id, u.username, m.content, m.created_at FROM messages m LEFT JOIN users u ON u.id = m.sender_id
+					WHERE m.conversation_id = $1 AND m.index_in_conversation BETWEEN $2 - 8 AND $2 + 3 ORDER BY m.index_in_conversation`, [Content.conversation_id, Content.index_in_conversation])).rows.map(Row => ({ ...Row, content: undefined, text: MessageText(Row.content) }));
+			}
 			const Reports = (await Pool.query('SELECT r.id, r.category, r.description, r.status, r.created_at, r.resolution, u.username AS reporter FROM reports r LEFT JOIN users u ON u.id = r.reporter_id WHERE r.target_type = $1 AND r.target_id = $2 ORDER BY r.id DESC', [Type, TargetId])).rows;
 			const OwnerId = Content?.owner ?? (await Pool.query('SELECT owner_id FROM reports WHERE target_type = $1 AND target_id = $2 LIMIT 1', [Type, TargetId])).rows[0]?.owner_id;
 			const Owner = OwnerId ? (await Pool.query('SELECT id, username, display_name, avatar_name, role, created_at, suspended_at FROM users WHERE id = $1', [OwnerId])).rows[0] : null;

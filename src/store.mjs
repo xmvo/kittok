@@ -50,7 +50,7 @@ export async function DmSettings(Pool, UserId) {
 }
 
 export async function SetDmSetting(Pool, UserId, Field, Value) {
-	if (!DmAudiences[Field] || ![1, 3].includes(Number(Value))) throw new HttpError(400, 'InvalidMessageSetting');
+	if (!DmAudiences[Field] || ![1, 2, 3].includes(Number(Value))) throw new HttpError(400, 'InvalidMessageSetting');
 	await Pool.query(`UPDATE users SET ${DmAudiences[Field]} = $2 WHERE id = $1`, [UserId, Number(Value)]);
 }
 
@@ -67,7 +67,7 @@ export async function FollowList(Pool, Viewer, Target, Scene, Offset, Limit) {
 		suggested: 'users u WHERE u.id <> $2 AND NOT EXISTS (SELECT 1 FROM follows b WHERE b.follower_id = $2 AND b.following_id = u.id)',
 	}[Scene];
 	const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, ${RelationSql('$1::bigint', 'u.id')} AS relation, count(*) OVER ()::int AS total
-		FROM ${From} AND NOT ${BlockedBetween('$1::bigint', 'u.id')} ORDER BY ${Scene === 'suggested' ? 'u.created_at' : 'f.created_at'} DESC, u.id DESC OFFSET $3 LIMIT $4`, [Viewer ?? null, Target, Offset, Limit]);
+		FROM ${From} AND u.suspended_at IS NULL AND NOT ${BlockedBetween('$1::bigint', 'u.id')} ORDER BY ${Scene === 'suggested' ? 'u.created_at' : 'f.created_at'} DESC, u.id DESC OFFSET $3 LIMIT $4`, [Viewer ?? null, Target, Offset, Limit]);
 	return { users: Result.rows, total: Result.rows[0]?.total ?? 0 };
 }
 

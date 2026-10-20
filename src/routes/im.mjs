@@ -4,18 +4,20 @@ import { BlockedBetween } from '../store.mjs';
 import { Codec } from '../im/protobuf.mjs';
 import { Schema } from '../im/schema.mjs';
 import { Push } from '../im/frontier.mjs';
-import { ActiveRestriction, RestrictionText } from '../moderation.mjs';
+import { ActiveRestriction, RemovedSql, RestrictionText } from '../moderation.mjs';
 
 export const Proto = Codec(Schema);
 
 const Cmd = { SendMessage: 100, MessagesByUser: 200, MessagesByUserInitV2: 203, MessagesByUserCombo: 204, MessagesInConversation: 301, MessagesInRange: 304, MarkConversationReadV3: 2002, NewMessageNotify: 500, MarkReadNotify: 501,
 	MarkConversationDelete: 603, MarkConversationRead: 604, ParticipantsList: 605, ConversationInfoV2: 608, CreateConversationV2: 609, ConversationInfoListV2: 610,
-	MgetParticipants: 654, InputStatus: 411, InputStatusNotify: 510, ReadIndexV3: 2000, MinIndexV3: 2001, UserConversationList: 2006, StrangerConversations: 1000,
-	StrangerUnreadCount: 1007, UnreadCount: 2030, BatchReadIndex: 2038 };
+	MgetParticipants: 654, InputStatus: 411, InputStatusNotify: 510, ReadIndexV3: 2000, MinIndexV3: 2001, UserConversationList: 2006, UnreadCount: 2030, BatchReadIndex: 2038,
+	StrangerConversations: 1001, StrangerMessages: 1002, DeleteStrangerMessage: 1003, DeleteStrangerConversation: 1004, DeleteAllStrangerConversations: 1005,
+	MarkStrangerConversationRead: 1006, MarkAllStrangerConversationsRead: 1007, StrangerUnreadCount: 1008 };
 const Status = { Ok: 0, InvalidRequest: 4, InvalidCommand: 5, UserForbidden: 11, ResourceExhausted: 429, ConversationNotExist: 1001 };
 const SendStatus = { Succeeded: 0, NotInConversation: 1, NotAllowed: 2, CheckFailed: 3, Blocked: 5 };
 const BodyField = Object.fromEntries(Object.entries(Schema.ResponseBody).map(([Field, [Id]]) => [Id, Field]));
 const RequestField = Object.fromEntries(Object.entries(Schema.RequestBody).map(([Field, [Id]]) => [Id, Field]));
+const FieldOf = Command => Command > 1000 && Command <= 1008 ? Command - 1 : Command;
 const ConversationKey = (A, B) => `0:1:${[A, B].sort((X, Y) => (BigInt(X) < BigInt(Y) ? -1 : 1)).join(':')}`;
 
 class ImError extends Error {
@@ -32,14 +34,15 @@ function MessageShape(Row) {
 }
 
 const MessageColumns = 'm.*, c.conversation_key, c.conversation_type';
+const Visible = `NOT ${RemovedSql('message', 'm.id')}`;
 
-async function Conversations(Pool, Viewer, Where, Values) {
-	const Result = await Pool.query(`SELECT c.*, me.read_index, me.min_index, me.muted,
+async function Conversations(Pool, Viewer, Where, Values, Requests = false) {
+	const Result = await Pool.query(`SELECT c.*, me.read_index, me.min_index, me.muted, me.request,
 		(SELECT coalesce(max(m.index_in_conversation), 0) FROM messages m WHERE m.conversation_id = c.id) AS last_index,
 		(SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id AND m.index_in_conversation > greatest(me.read_index, me.min_index) AND m.sender_id <> $1) AS unread,
-		(SELECT json_agg(json_build_object('user_id', p.user_id::text, 'joined_at', p.joined_at) ORDER BY p.joined_at) FROM conversation_members p WHERE p.conversation_id = c.id) AS members
+		(SELECT json_agg(json_build_object('user_id', p.user_id::text, 'joined_at', p.joined_at, 'request', p.request) ORDER BY p.joined_at) FROM conversation_members p WHERE p.conversation_id = c.id) AS members
 		FROM conversations c JOIN conversation_members me ON me.conversation_id = c.id AND me.user_id = $1
-		WHERE ${Where} ORDER BY (SELECT max(m.id) FROM messages m WHERE m.conversation_id = c.id) DESC NULLS LAST, c.id DESC`, [Viewer, ...Values]);
+		WHERE ${Requests === null ? '' : `me.request = ${Requests} AND `}${Where} ORDER BY (SELECT max(m.id) FROM messages m WHERE m.conversation_id = c.id) DESC NULLS LAST, c.id DESC`, [Viewer, ...Values]);
 	return Result.rows;
 }
 
@@ -57,27 +60,27 @@ function ConversationShape(Row, Viewer) {
 
 async function Conversation(Pool, Viewer, Body) {
 	const [Row] = Body.conversation_short_id && Body.conversation_short_id !== '0'
-		? await Conversations(Pool, Viewer, 'c.id = $2', [Body.conversation_short_id])
-		: await Conversations(Pool, Viewer, 'c.conversation_key = $2', [String(Body.conversation_id ?? '')]);
+		? await Conversations(Pool, Viewer, 'c.id = $2', [Body.conversation_short_id], null)
+		: await Conversations(Pool, Viewer, 'c.conversation_key = $2', [String(Body.conversation_id ?? '')], null);
 	if (!Row) throw new ImError(Status.ConversationNotExist, 'ConversationNotExist');
 	return Row;
 }
 
 async function UserCursor(Pool, Viewer, Before = null) {
 	const Result = await Pool.query(`SELECT coalesce(max(m.id), 0)::text AS cursor FROM messages m JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1
-		WHERE m.index_in_conversation > me.min_index AND ($2::bigint IS NULL OR m.id < $2)`, [Viewer, Before]);
+		WHERE m.index_in_conversation > me.min_index AND NOT me.request AND ($2::bigint IS NULL OR m.id < $2)`, [Viewer, Before]);
 	return Result.rows[0].cursor;
 }
 
 async function UserMessages(Pool, Viewer, After, Limit) {
 	const Result = await Pool.query(`SELECT ${MessageColumns} FROM messages m JOIN conversations c ON c.id = m.conversation_id
 		JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1
-		WHERE m.id > $2 AND m.index_in_conversation > me.min_index ORDER BY m.id LIMIT $3`, [Viewer, After, Limit + 1]);
+		WHERE m.id > $2 AND m.index_in_conversation > me.min_index AND NOT me.request AND ${Visible} ORDER BY m.id LIMIT $3`, [Viewer, After, Limit + 1]);
 	return { Rows: Result.rows.slice(0, Limit), HasMore: Result.rows.length > Limit };
 }
 
 function Envelope(Cmd_, Body) {
-	return { cmd: Cmd_, sequence_id: '0', status_code: Status.Ok, error_desc: '', inbox_type: 0, log_id: 'kittok', body: Body ? { [BodyField[Cmd_]]: Body } : {} };
+	return { cmd: Cmd_, sequence_id: '0', status_code: Status.Ok, error_desc: '', inbox_type: 0, log_id: 'kittok', body: Body ? { [BodyField[FieldOf(Cmd_)]]: Body } : {} };
 }
 
 function PushTo(UserIds, Response) {
@@ -85,12 +88,12 @@ function PushTo(UserIds, Response) {
 	for (const UserId of UserIds) Push(UserId, Bytes);
 }
 
-async function MayMessage(Pool, Sender, Recipient) {
+async function Audience(Pool, Sender, Recipient) {
 	const Result = await Pool.query(`SELECT CASE
 		WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2) AND EXISTS (SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) THEN dm_friends
 		WHEN EXISTS (SELECT 1 FROM follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)) THEN dm_potential
-		ELSE dm_others END = 1 AS allowed FROM users WHERE id = $2`, [Sender, Recipient]);
-	return Result.rows[0]?.allowed === true;
+		ELSE dm_others END AS audience FROM users WHERE id = $2`, [Sender, Recipient]);
+	return Result.rows[0]?.audience ?? 3;
 }
 
 async function CreateDirect(Pool, Viewer, Participants) {
@@ -99,14 +102,16 @@ async function CreateDirect(Pool, Viewer, Participants) {
 	const Other = Others[0];
 	if (!(await Pool.query('SELECT 1 FROM users WHERE id = $1 AND suspended_at IS NULL', [Other])).rowCount) throw new ImError(Status.InvalidRequest, 'UserNotFound');
 	if ((await Pool.query(`SELECT ${BlockedBetween('$1::bigint', '$2::bigint')} AS blocked`, [Viewer, Other])).rows[0].blocked) throw new ImError(Status.UserForbidden, 'BlockedRelationship');
-	if (!(await MayMessage(Pool, Viewer, Other))) throw new ImError(Status.UserForbidden, 'MessagesNotAllowed');
+	const Delivery = await Audience(Pool, Viewer, Other);
+	if (Delivery === 3) throw new ImError(Status.UserForbidden, 'MessagesNotAllowed');
 	const Key = ConversationKey(Viewer, Other);
 	await Transaction(Pool, async Client => {
 		const Created = await Client.query('INSERT INTO conversations(conversation_key, conversation_type, creator_id) VALUES ($1, 1, $2) ON CONFLICT (conversation_key) DO NOTHING RETURNING id', [Key, Viewer]);
 		const Id = Created.rows[0]?.id ?? (await Client.query('SELECT id FROM conversations WHERE conversation_key = $1', [Key])).rows[0].id;
-		await Client.query('INSERT INTO conversation_members(conversation_id, user_id) VALUES ($1, $2), ($1, $3) ON CONFLICT DO NOTHING', [Id, Viewer, Other]);
+		await Client.query('INSERT INTO conversation_members(conversation_id, user_id, request) VALUES ($1, $2, false), ($1, $3, $4) ON CONFLICT DO NOTHING', [Id, Viewer, Other, Delivery === 2]);
+		await Client.query('UPDATE conversation_members SET request = false WHERE conversation_id = $1 AND user_id = $2', [Id, Viewer]);
 	});
-	return (await Conversations(Pool, Viewer, 'c.conversation_key = $2', [Key]))[0];
+	return (await Conversations(Pool, Viewer, 'c.conversation_key = $2', [Key], null))[0];
 }
 
 async function SendMessage(Context, Body) {
@@ -115,7 +120,7 @@ async function SendMessage(Context, Body) {
 	const Others = Room.members.map(Member => Member.user_id).filter(Id => Id !== User.id);
 	const Fail = Code => ({ status: Code, client_message_id: Body.client_message_id ?? '', server_message_id: '0', check_code: '0', check_message: '' });
 	if (Room.conversation_type === 1 && (await Pool.query(`SELECT ${BlockedBetween('$1::bigint', '$2::bigint')} AS blocked`, [User.id, Others[0]])).rows[0].blocked) return Fail(SendStatus.Blocked);
-	if (Room.conversation_type === 1 && !(await MayMessage(Pool, User.id, Others[0]))) return Fail(SendStatus.NotAllowed);
+	if (Room.conversation_type === 1 && await Audience(Pool, User.id, Others[0]) === 3) return Fail(SendStatus.NotAllowed);
 	const Restricted = await ActiveRestriction(Pool, User.id, 'message');
 	if (Restricted) return { ...Fail(SendStatus.CheckFailed), check_code: '7195', check_message: JSON.stringify({ status_code: 7195, status_msg: { msg_content: { tips: `${RestrictionText(Restricted)} {{1}}`, template: [{ name: 'Feedback', key: '1' }] } } }) };
 	const Content = String(Body.content ?? '');
@@ -130,11 +135,12 @@ async function SendMessage(Context, Body) {
 		if (Existing.rowCount) return { ...Existing.rows[0], Repeated: true };
 		const Inserted = await Client.query(`INSERT INTO messages(conversation_id, sender_id, client_message_id, message_type, content, ext, index_in_conversation)
 			SELECT $1, $2, $3, $4, $5, $6, coalesce(max(index_in_conversation), 0) + 1 FROM messages WHERE conversation_id = $1 RETURNING *`, [Room.id, User.id, ClientId, Type, Content, Ext]);
+		await Client.query('UPDATE conversation_members SET request = false WHERE conversation_id = $1 AND user_id = $2', [Room.id, User.id]);
 		return { ...Inserted.rows[0], conversation_key: Room.conversation_key, conversation_type: Room.conversation_type };
 	});
 	if (!Row.Repeated) {
 		const Message = MessageShape(Row);
-		for (const Member of Room.members) {
+		for (const Member of Room.members.filter(Member => !Member.request || Member.user_id === User.id)) {
 			const Previous = await UserCursor(Pool, Member.user_id, Row.id);
 			const Unread = (await Pool.query(`SELECT count(*)::int AS count FROM messages m JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $2
 				WHERE m.conversation_id = $1 AND m.sender_id <> $2 AND m.index_in_conversation > greatest(me.read_index, me.min_index)`, [Room.id, Member.user_id])).rows[0].count;
@@ -155,7 +161,7 @@ const Handlers = {
 		const Rooms = await Conversations(Pool, User.id, 'true', []);
 		const Recent = await Pool.query(`SELECT * FROM (SELECT ${MessageColumns}, row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.index_in_conversation DESC) AS rank
 			FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1
-			WHERE m.index_in_conversation > me.min_index) recent WHERE rank <= 20 ORDER BY id`, [User.id]);
+			WHERE m.index_in_conversation > me.min_index AND NOT me.request AND ${Visible}) recent WHERE rank <= 20 ORDER BY id`, [User.id]);
 		const Cursor = await UserCursor(Pool, User.id);
 		return { conversations: Rooms.map(Row => ConversationShape(Row, User.id)), messages: Recent.rows.map(MessageShape), per_user_cursor: Cursor, next_cursor: Cursor, has_more: false, cmd_start_index: '0', next_conversation_version: '0' };
 	},
@@ -200,7 +206,7 @@ const Handlers = {
 		const Newer = [2, 4].includes(Number(Body.direction));
 		const Anchor = Body.anchor_index && Body.anchor_index !== '0' ? Body.anchor_index : null;
 		const Result = await Pool.query(`SELECT ${MessageColumns} FROM messages m JOIN conversations c ON c.id = m.conversation_id
-			WHERE m.conversation_id = $1 AND m.index_in_conversation > $2 AND ($3::bigint IS NULL OR m.index_in_conversation ${Newer ? '>' : '<'} $3)
+			WHERE m.conversation_id = $1 AND m.index_in_conversation > $2 AND ${Visible} AND ($3::bigint IS NULL OR m.index_in_conversation ${Newer ? '>' : '<'} $3)
 			ORDER BY m.index_in_conversation ${Newer ? 'ASC' : 'DESC'} LIMIT $4`, [Room.id, Room.min_index, Anchor, Limit + 1]);
 		const Rows = Result.rows.slice(0, Limit);
 		return { messages: Rows.map(MessageShape), has_more: Result.rows.length > Limit, next_cursor: Rows.at(-1)?.index_in_conversation ?? '0' };
@@ -218,7 +224,7 @@ const Handlers = {
 		const Limit = Math.min(Math.max(Number(Body.limit) || 20, 1), 100);
 		const Range = Body.message_range ?? {};
 		const Result = await Pool.query(`SELECT ${MessageColumns} FROM messages m JOIN conversations c ON c.id = m.conversation_id
-			WHERE m.conversation_id = $1 AND m.index_in_conversation > $2 AND m.index_in_conversation >= $3 AND ($4::bigint = 0 OR m.index_in_conversation <= $4)
+			WHERE m.conversation_id = $1 AND m.index_in_conversation > $2 AND ${Visible} AND m.index_in_conversation >= $3 AND ($4::bigint = 0 OR m.index_in_conversation <= $4)
 			ORDER BY m.index_in_conversation LIMIT $5`, [Room.id, Room.min_index, Range.min_conv_index ?? '0', Range.max_conv_index ?? '0', Limit + 1]);
 		const Rows = Result.rows.slice(0, Limit);
 		return { messages_pb: Rows.map(Row => Proto.Encode('MessageBody', MessageShape(Row))), has_more: Result.rows.length > Limit, next_cursor: Rows.at(-1)?.index_in_conversation ?? '0' };
@@ -261,9 +267,65 @@ const Handlers = {
 			sender: User.id, conversation_id: Room.conversation_key, conversation_short_id: Room.id, conversation_type: Room.conversation_type, input_status: Number(Body.status ?? 0), create_time: String(Date.now()) }));
 		return {};
 	},
-	[Cmd.StrangerConversations]: () => ({ next_cursor: '0', has_more: false, total_unread: 0, conversation_list: [] }),
-	[Cmd.StrangerUnreadCount]: () => ({ user_unread_count: '0' }),
+	async [Cmd.StrangerConversations]({ Pool, User }, Body) {
+		const Rows = (await Requests(Pool, User.id));
+		const Offset = Math.max(Number(Body.cursor) || 0, 0), Limit = Math.min(Math.max(Number(Body.count) || 10, 1), 50);
+		const Page = Rows.slice(Offset, Offset + Limit);
+		const Last = Page.length ? (await Pool.query(`SELECT DISTINCT ON (m.conversation_id) ${MessageColumns} FROM messages m JOIN conversations c ON c.id = m.conversation_id
+			WHERE m.conversation_id = ANY($1::bigint[]) AND ${Visible} ORDER BY m.conversation_id, m.index_in_conversation DESC`, [Page.map(Row => Row.id)])).rows : [];
+		return { next_cursor: String(Offset + Page.length), has_more: Offset + Limit < Rows.length, total_unread: Rows.reduce((Sum, Row) => Sum + Row.unread, 0),
+			conversation_list: Page.map(Row => {
+				const Shape = ConversationShape(Row, User.id);
+				const Message = Last.find(Entry => Entry.conversation_id === Row.id);
+				return { conversation_short_id: Row.id, conversation_id: Row.conversation_key, unread: Row.unread, badge_count: Row.unread, participants: Shape.first_page_participants.participants, ...(Message ? { last_message: MessageShape(Message) } : {}) };
+			}) };
+	},
+	async [Cmd.StrangerMessages]({ Pool, User }, Body) {
+		const Room = await RequestRoom(Pool, User.id, Body);
+		const Result = await Pool.query(`SELECT ${MessageColumns} FROM messages m JOIN conversations c ON c.id = m.conversation_id
+			WHERE m.conversation_id = $1 AND m.index_in_conversation > $2 AND ${Visible} ORDER BY m.index_in_conversation DESC LIMIT 100`, [Room.id, Room.min_index]);
+		if (Body.reset_unread_count) await Pool.query('UPDATE conversation_members SET read_index = $3 WHERE conversation_id = $1 AND user_id = $2', [Room.id, User.id, Room.last_index]);
+		return { messages: Result.rows.reverse().map(MessageShape) };
+	},
+	[Cmd.DeleteStrangerMessage]: () => null,
+	async [Cmd.DeleteStrangerConversation]({ Pool, User }, Body) {
+		const Room = await RequestRoom(Pool, User.id, Body);
+		await Pool.query('UPDATE conversation_members SET min_index = $3, read_index = $3 WHERE conversation_id = $1 AND user_id = $2', [Room.id, User.id, Room.last_index]);
+		return null;
+	},
+	async [Cmd.DeleteAllStrangerConversations]({ Pool, User }) {
+		await Pool.query(`UPDATE conversation_members me SET min_index = l.last, read_index = l.last FROM (SELECT conversation_id, max(index_in_conversation) AS last FROM messages GROUP BY conversation_id) l
+			WHERE me.user_id = $1 AND me.request AND l.conversation_id = me.conversation_id`, [User.id]);
+		return null;
+	},
+	async [Cmd.MarkStrangerConversationRead]({ Pool, User }, Body) {
+		const Room = await RequestRoom(Pool, User.id, Body);
+		await Pool.query('UPDATE conversation_members SET read_index = $3 WHERE conversation_id = $1 AND user_id = $2', [Room.id, User.id, Room.last_index]);
+		return null;
+	},
+	async [Cmd.MarkAllStrangerConversationsRead]({ Pool, User }) {
+		await Pool.query(`UPDATE conversation_members me SET read_index = l.last FROM (SELECT conversation_id, max(index_in_conversation) AS last FROM messages GROUP BY conversation_id) l
+			WHERE me.user_id = $1 AND me.request AND l.conversation_id = me.conversation_id`, [User.id]);
+		return null;
+	},
+	async [Cmd.StrangerUnreadCount]({ Pool, User }) {
+		return { user_unread_count: String((await Requests(Pool, User.id)).filter(Row => Row.unread).length) };
+	},
 };
+
+async function Requests(Pool, Viewer) {
+	return (await Conversations(Pool, Viewer, 'true', [], true)).filter(Row => BigInt(Row.last_index) > BigInt(Row.min_index));
+}
+
+async function RequestRoom(Pool, Viewer, Body) {
+	const [Row] = await Conversations(Pool, Viewer, 'c.id = $2', [Body.conversation_short_id ?? '0'], true);
+	if (!Row) throw new ImError(Status.ConversationNotExist, 'ConversationNotExist');
+	return Row;
+}
+
+export async function AcceptRequest(Pool, Viewer, ConversationKey_) {
+	return (await Pool.query('UPDATE conversation_members me SET request = false FROM conversations c WHERE c.id = me.conversation_id AND c.conversation_key = $2 AND me.user_id = $1 AND me.request', [Viewer, String(ConversationKey_ ?? '')])).rowCount > 0;
+}
 
 export async function HandleRequest(Context, Bytes) {
 	const Request = Proto.Decode('Request', Bytes);
@@ -276,9 +338,9 @@ export async function HandleRequest(Context, Bytes) {
 			if (Context.Unknown.size < 500) Context.Unknown.set(`IM ${Request.cmd}`, (Context.Unknown.get(`IM ${Request.cmd}`) ?? 0) + 1);
 			throw new ImError(Status.InvalidCommand, 'InvalidCommand');
 		}
-		const Input = Request.body?.[RequestField[Request.cmd]] ?? Object.values(Request.body ?? {})[0] ?? {};
+		const Input = Request.body?.[RequestField[FieldOf(Request.cmd)]] ?? Object.values(Request.body ?? {})[0] ?? {};
 		const Body = (Request.inbox_type ?? 0) !== 0 && EmptyInbox[Request.cmd] ? EmptyInbox[Request.cmd](Input) : await Handler(Context, Input);
-		if (Body) Response.body = { [BodyField[Request.cmd]]: Body };
+		if (Body) Response.body = { [BodyField[FieldOf(Request.cmd)]]: Body };
 	} catch (Error) {
 		if (Error instanceof ImError) { Response.status_code = Error.Code; Response.error_desc = Error.message; }
 		else if (Error instanceof HttpError && Error.status === 429) { Response.status_code = Status.ResourceExhausted; Response.error_desc = Error.message; }
