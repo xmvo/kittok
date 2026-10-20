@@ -10,3 +10,5 @@ node_modules/
 dist/
 *.log
 .git/
+scripts/tcs-preview.mjs
+scripts/tcs-preview/
