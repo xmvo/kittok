@@ -7,6 +7,33 @@
 		try { ShopPromo = JSON.parse(document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__').textContent).__DEFAULT_SCOPE__['webapp.i18n-translation'].Webapp.TTSweb_notif_inAppAnnounce_header; } catch {}
 		return ShopPromo || 'TikTok Shop is now available on web';
 	}
+	const AdminIcon = '<svg fill="currentColor" viewBox="0 0 48 48" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M24 3 7 9.5V22c0 11 7.2 20.3 17 23 9.8-2.7 17-12 17-23V9.5L24 3Zm0 4.3 13 5v9.7c0 8.9-5.6 16.6-13 19.1-7.4-2.5-13-10.2-13-19.1v-9.7l13-5Zm7.3 9.3a1 1 0 0 1 1.4 0l1.4 1.4a1 1 0 0 1 0 1.4L22.4 31.1a1 1 0 0 1-1.4 0l-6.1-6.1a1 1 0 0 1 0-1.4l1.4-1.4a1 1 0 0 1 1.4 0l5 5 8.6-10.6Z"/></svg>';
+	let UploadSlot;
+	const UploadWatch = new MutationObserver(() => SyncAdmin());
+	function SyncAdmin() {
+		const Upload = document.querySelector('a[data-e2e="nav-upload"]');
+		const Existing = document.querySelector('[data-e2e="nav-kittok-admin"]')?.closest('[data-kittok-admin]');
+		if (!Upload) { Existing?.remove(); return; }
+		const Slot = Upload.parentElement.parentElement;
+		if (Slot !== UploadSlot) { UploadSlot = Slot; UploadWatch.disconnect(); UploadWatch.observe(Slot, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] }); }
+		let Signature = 0;
+		for (const Char of Slot.outerHTML.replace(/ aria-describedby="[^"]*"/g, '')) Signature = (Signature * 31 + Char.charCodeAt(0)) | 0;
+		Signature = String(Signature);
+		if (Existing?.dataset.kittokAdmin === Signature && Existing.previousElementSibling === Slot) return;
+		Existing?.remove();
+		const Item = Slot.cloneNode(true);
+		Item.dataset.kittokAdmin = Signature;
+		const Link = Item.querySelector('a');
+		Link.href = '/admin'; Link.setAttribute('data-e2e', 'nav-kittok-admin');
+		Item.querySelector('button')?.setAttribute('aria-label', 'Admin');
+		const Label = Item.querySelector('.TUXButton-label'); if (Label) Label.textContent = 'Admin';
+		const Icon = Item.querySelector('svg');
+		if (Icon) Icon.outerHTML = AdminIcon;
+		Slot.after(Item);
+	}
+	const LogoSize = new ResizeObserver(Entries => {
+		for (const Entry of Entries) Entry.target.toggleAttribute('data-kittok-compact', Entry.contentRect.width > 0 && Entry.contentRect.width < 80);
+	});
 	function Brand() {
 		if (document.title !== Instance.name) document.title = Instance.name;
 		const LoginTitle = document.getElementById('login-modal-title');
@@ -20,18 +47,8 @@
 				Channel.title = 'This sign-in method is not configured for this instance.';
 			}
 		}
-		const Upload = document.querySelector('a[data-e2e="nav-upload"]');
-		if (Instance.account?.role === 'admin' && Upload && !document.querySelector('[data-e2e="nav-kittok-admin"]')) {
-			const Slot = Upload.parentElement.parentElement;
-			const Item = Slot.cloneNode(true);
-			const Link = Item.querySelector('a');
-			Link.href = '/admin'; Link.setAttribute('data-e2e', 'nav-kittok-admin');
-			Item.querySelector('button')?.setAttribute('aria-label', 'Admin');
-			const Label = Item.querySelector('.TUXButton-label'); if (Label) Label.textContent = 'Admin';
-			const Icon = Item.querySelector('svg');
-			if (Icon) Icon.outerHTML = '<svg fill="currentColor" viewBox="0 0 48 48" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M24 3 7 9.5V22c0 11 7.2 20.3 17 23 9.8-2.7 17-12 17-23V9.5L24 3Zm0 4.3 13 5v9.7c0 8.9-5.6 16.6-13 19.1-7.4-2.5-13-10.2-13-19.1v-9.7l13-5Zm7.3 9.3a1 1 0 0 1 1.4 0l1.4 1.4a1 1 0 0 1 0 1.4L22.4 31.1a1 1 0 0 1-1.4 0l-6.1-6.1a1 1 0 0 1 0-1.4l1.4-1.4a1 1 0 0 1 1.4 0l5 5 8.6-10.6Z"/></svg>';
-			Slot.after(Item);
-		}
+		if (Instance.account?.role === 'admin') SyncAdmin();
+		for (const Logo of document.querySelectorAll('a[data-e2e="tiktok-logo"]:not([data-kittok-sized])')) { Logo.setAttribute('data-kittok-sized', ''); LogoSize.observe(Logo); }
 		for (const Item of document.querySelectorAll('[data-e2e="notice-list-item"]')) {
 			if (Item.querySelector('[data-e2e="notice-main"]')?.textContent.includes(ShopPromoText())) Item.remove();
 		}

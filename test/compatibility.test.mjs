@@ -112,7 +112,7 @@ test('browser bridge redirects API fetches locally and preserves request bodies 
 	const Calls = [];
 	const Window = { fetch: async (...Args) => { Calls.push(Args); return new Response('{}'); }, addEventListener() {} };
 	const Document = { getElementById: () => ({ textContent: JSON.stringify({ name: 'Kittok', csrfToken: 'test-csrf' }) }), documentElement: { style: { setProperty() {} } }, addEventListener() {} };
-	runInNewContext(await readFile(join(Root, 'src/client/bridge.js'), 'utf8'), { window: Window, document: Document, location: { origin: Origin }, Request, Headers, URL, XMLHttpRequest: class { open() {} }, MutationObserver: class { observe() {} } });
+	runInNewContext(await readFile(join(Root, 'src/client/bridge.js'), 'utf8'), { window: Window, document: Document, location: { origin: Origin }, Request, Headers, URL, XMLHttpRequest: class { open() {} }, MutationObserver: class { observe() {} }, ResizeObserver: class { observe() {} } });
 	await Window.fetch('https://www.tiktok.com/api/recommend/item_list/', { method: 'POST', body: 'count=20' });
 	assert.equal(Calls[0][0], Origin + '/api/recommend/item_list/');
 	assert.equal(Calls[0][1].headers.get('x-csrf-token'), 'test-csrf');
