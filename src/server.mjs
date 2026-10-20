@@ -15,6 +15,8 @@ import { Compatibility } from './routes/compatibility.mjs';
 import { Account } from './routes/account.mjs';
 import { Passport } from './routes/passport.mjs';
 import { Admin } from './routes/admin.mjs';
+import { Im, HandleRequest, Proto } from './routes/im.mjs';
+import { Upgrade } from './im/frontier.mjs';
 import { LoadSettings } from './settings.mjs';
 
 const Config = LoadConfig();
@@ -103,14 +105,14 @@ const Server = createServer(async (Request, Response) => {
 			if (Path === '/_debug/unknown') return Json(Response, Object.fromEntries(Unknown));
 			if (Path === '/_debug/blocked') return Json(Response, Object.fromEntries(Blocked));
 		}
-		if (await Admin(Context) || await Account(Context) || await Api(Context) || await Passport(Context) || await Compatibility(Context)) return;
-		if (/^\/(?:api|passport|node-webapp|tiktok|aweme|node)\//.test(Path)) {
+		if (await Admin(Context) || await Account(Context) || await Api(Context) || await Passport(Context) || await Im(Context) || await Compatibility(Context)) return;
+		if (/^\/(?:api|passport|node-webapp|tiktok|aweme|node|v[1-3])\//.test(Path)) {
 			const Key = `${Request.method} ${Path}`;
 			if (Unknown.size < 500) Unknown.set(Key, (Unknown.get(Key) ?? 0) + 1);
 			return Json(Response, { statusCode: 501, status_code: 501, error: 'NotImplemented', path: Path }, 501);
 		}
 		RequireMethod(Request, ['GET', 'HEAD']);
-		if (!/^\/(?:$|login(?:\/[a-z-]+)*\/?$|signup(?:\/[a-z-]+)*\/?$|explore\/?$|following\/?$|search(?:\/user|\/video)?\/?$|@[^/]+(?:\/video\/\d+)?\/?$|music\/[^/]+\/?$)/.test(Path)) throw new HttpError(404, 'NotImplemented');
+		if (!/^\/(?:$|login(?:\/[a-z-]+)*\/?$|signup(?:\/[a-z-]+)*\/?$|explore\/?$|following\/?$|messages\/?$|search(?:\/user|\/video)?\/?$|@[^/]+(?:\/video\/\d+)?\/?$|music\/[^/]+\/?$)/.test(Path)) throw new HttpError(404, 'NotImplemented');
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
 		const Page = /^\/(login|signup)(\/|$)/.test(Path) ? await CaptureLoginPage() : Raw;
 		Response.end(Request.method === 'HEAD' ? undefined : Shell(Page, Config.Origin, { Config, User }));
@@ -127,6 +129,22 @@ const Server = createServer(async (Request, Response) => {
 			else Response.end();
 		}
 	}
+});
+Server.on('upgrade', async (Request, Socket) => {
+	try {
+		const Local = Config.IsLocal ? [`localhost:${Config.Port}`, `127.0.0.1:${Config.Port}`] : [];
+		const Origins = [Config.Origin, ...Local.map(Host => `http://${Host}`)];
+		if (![new URL(Config.Origin).host, ...Local].includes(Request.headers.host) || !Origins.includes(Request.headers.origin) || new URL(Request.url, Config.Origin).pathname !== '/ws/v2') {
+			Socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n'); return;
+		}
+		const User = await Viewer(Pool, Request);
+		Upgrade(Request, Socket, { User, OnBinary: async Bytes => {
+			const Frame = Proto.Decode('Frame', Bytes);
+			if (Frame.payload_type !== 'pb' || !Frame.payload) return null;
+			const Payload = await HandleRequest({ Pool, Config, User, Limiter, Unknown }, Frame.payload);
+			return Proto.Encode('Frame', { seqid: Frame.seqid, logid: String(Date.now()), service: Frame.service, method: Frame.method, payload_type: 'pb', payload: Payload });
+		} });
+	} catch { Socket.destroy(); }
 });
 Server.requestTimeout = 240000;
 Server.headersTimeout = 15000;

@@ -117,6 +117,18 @@ export async function Compatibility(Context) {
 			followings: List.users.map(Row => ApiUser(Row, Config.Origin)),
 		}); return true;
 	}
+	if (Path === '/tiktok/v1/im/user/profile/') {
+		RequireMethod(Request, ['GET']);
+		if (!User) throw new HttpError(401, 'NotLoggedIn');
+		let Ids;
+		try { Ids = JSON.parse(Params.get('user_ids') ?? '[]').slice(0, 100).map(Id); } catch { throw new HttpError(400, 'InvalidUserIds'); }
+		const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.avatar_name, ${RelationSql('$2::bigint', 'u.id')} AS relation FROM users u WHERE u.id = ANY($1::bigint[])`, [Ids, User.id]);
+		Json(Response, { status_code: 0, users: Result.rows.map(Row => {
+			const Avatar = { url_list: [AvatarUrl(Row, Config.Origin)] };
+			return { im_user_profile: { user_id: Row.id, unique_id: Row.username, nick_name: Row.display_name, avatars: { avatar_medium: Avatar, avatar_small: Avatar },
+				follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, block_info: { block: Row.relation === 4 } } };
+		}) }); return true;
+	}
 	if (Path === '/_kittok/view') {
 		RequireMethod(Request, ['POST']);
 		Limiter.Hit(`view:${Request.socket.remoteAddress}`, 120);

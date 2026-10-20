@@ -56,6 +56,8 @@ export function RewriteAssets(Text, Origin) {
 			.replaceAll(`//${Host}`, `/_client/${Host}`);
 	}
 	Text = Text.replaceAll(LoginManifestUrl, `/_client/www.tiktok.com${LoginManifestPath}`);
+	Text = Text.replace(/\(!!(\w)\.isStrangerConversation\|\|!!\(null==\((\w)=\1\.instance\)\?void 0:\2\.lastMessage\)\)/g, '!0');
+	Text = Text.replace(/(dm_riskyGroupChat_groupClosed_body[^)]*\)\}\):\(0,\w+\.Y\)\(\w+,\{isFlexibleUI:\w+,hasUnread:\w+>0,children:)(\w)\}/g, '$1$2||"No messages yet"}');
 	return Origin ? Text.replaceAll('https://www.tiktok.com', Origin).replaceAll('//www.tiktok.com', Origin) : Text;
 }
 

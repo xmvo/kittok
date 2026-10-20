@@ -22,7 +22,7 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 			uid: User.id, secUid: User.id, uniqueId: User.username, nickName: User.display_name,
 			signature: User.bio ?? '', avatarUri: [AvatarUrl(User, Origin)],
 			ftcUser: false, isPrivateAccount: false, region: App.region, storeRegion: App.region,
-			hasSearchPermission: true, hasIMPermission: false, hasLivePermission: false,
+			hasSearchPermission: true, hasIMPermission: true, hasLivePermission: false,
 			hasSearchLivePermission: false, hasExtendedViewingPermission: false,
 			roomId: '', suggestAccountBind: false, showPrivateBanner: false, showScheduleTips: false,
 			redDot: [], proAccountInfo: { status: 0, analyticsOn: false, businessSuiteEntrance: false, downloadLink: {} },
@@ -45,7 +45,7 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	const Domains = ReadJsonScript(Raw, 'api-domains');
 	for (const Key of ['rootApi', 'mTApi', 'imApi', 'webcastApi', 'webcastRootApi', 'locationApi', 'starling', 'tea', 'libraWebSDK', 'secSDK']) Domains[Key] = Origin;
 	Domains.captcha = Origin;
-	Domains.imFrontier = Origin.replace('http', 'ws') + '/_unsupported/ws';
+	Domains.imFrontier = Origin.replace('http', 'ws') + '/ws/v2';
 	if (Biz) Biz.domains = Domains;
 	if (Legacy?.LoginContextModule) {
 		Legacy.LoginContextModule.ttpConfig = { open: false, syncSeverList: [] };

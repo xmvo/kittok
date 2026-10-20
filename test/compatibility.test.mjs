@@ -13,6 +13,8 @@ import { CreateUser, Hash, Token, PasswordMatches, Login } from '../src/auth.mjs
 import { ImportVideo } from '../src/media.mjs';
 import { runInNewContext } from 'node:vm';
 import { DecodePassportValue } from '../src/routes/passport.mjs';
+import { Proto } from '../src/routes/im.mjs';
+import { request as HttpRequest } from 'node:http';
 
 const Origin = 'http://127.0.0.1:13210';
 const Password = 'test-only-password-123456';
@@ -717,6 +719,95 @@ test('original client block requests persist, sever follows, and hide each side 
 	assert.equal(await RelationTo(Owner, AsGrumpy), 5);
 });
 
+test('the IM protobuf codec reads and writes the same bytes as the original client encoder', () => {
+	const Init = '08cb0110071800324eda0c4b0a1f0a017818feffffffffffffffff0138014a060a016b1201765080d095ffbc3112240a01781005180132100a0c08818090bbbad6adf00d18001000380240019a03042803300018632800';
+	const Decoded = Proto.Decode('Response', Buffer.from(Init, 'hex'));
+	assert.equal(Proto.Encode('Response', Decoded).toString('hex'), Init);
+	const Body = Decoded.body.messages_per_user_init_v2_body;
+	assert.equal(Body.messages[0].server_message_id, '-2'); assert.deepEqual(Body.messages[0].ext, { k: 'v' });
+	assert.equal(Body.conversations[0].first_page_participants.participants[0].user_id, '1000000000000000001');
+	const Request = Proto.Decode('Request', Buffer.from('086410f2dfb89ea7e7021a05312e322e3328033000428001a2067d0a2b303a313a313030303030303030303030303030303030313a31303030303030303030303030303030303033100118fb8090cfb09985d96622117b2274657874223a2268c3a96c6c6f227d2a1a0a13733a636c69656e745f6d6573736167655f696412036162633007420361626348838090bbbad6adf00d480550015a037765627a060a0161120162900102', 'hex'));
+	assert.equal(Request.sequence_id, '12345678901234');
+	assert.deepEqual(Request.body.send_message_body.mentioned_users, ['1000000000000000003', '5']);
+	assert.equal(Request.body.send_message_body.content, '{"text":"héllo"}');
+	assert.deepEqual(Proto.Decode('Frame', Buffer.from('08091080d095ffbc31180520012a060a016b1201763a0270624203010203', 'hex')).headers, [{ key: 'k', value: 'v' }]);
+});
+
+test('original client direct messages persist through the IM protocol over HTTP and arrive live over the frontier socket', async () => {
+	const Friendly = await Login(Pool, 'friend', Password);
+	const AsFriend = { cookie: `kittok_session=${Friendly.Token}` };
+	const Im = async (Cmd, Field, Body, Headers = Auth(), Inbox = 0) => {
+		const Sent = await fetch(`${Origin}/v1/kittok`, { method: 'POST', headers: { ...Headers, 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: Cmd, sequence_id: '9', inbox_type: Inbox, auth_type: 1, body: { [Field]: Body } }) });
+		assert.equal(Sent.status, 200);
+		const Response = Proto.Decode('Response', Buffer.from(await Sent.arrayBuffer()));
+		assert.equal(Response.sequence_id, '9');
+		return Response;
+	};
+	assert.equal((await fetch(`${Origin}/v1/kittok`, { method: 'POST', headers: { 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: 203 }) })).status, 401);
+	assert.equal((await Im(203, 'messages_per_user_init_v2_body', {})).body.messages_per_user_init_v2_body.conversations, undefined);
+	const Created = (await Im(609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Friend.id, Owner.id] })).body.create_conversation_v2_body.conversation;
+	assert.equal(Created.conversation_id, `0:1:${Owner.id}:${Friend.id}`);
+	assert.deepEqual(Created.first_page_participants.participants.map(Participant => Participant.user_id).sort(), [Owner.id, Friend.id].sort());
+	assert.equal((await Im(609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Friend.id] })).body.create_conversation_v2_body.conversation.conversation_short_id, Created.conversation_short_id);
+	const Socket = new WebSocket(Origin.replace('http', 'ws') + '/ws/v2', { protocols: ['binary', 'base64', 'pbbp2'], headers: { ...AsFriend, origin: Origin } });
+	Socket.binaryType = 'arraybuffer';
+	const Received = [];
+	Socket.onmessage = Event => Received.push(Event.data);
+	await new Promise((Resolve, Reject) => { Socket.onopen = Resolve; Socket.onerror = Reject; });
+	assert.equal(Socket.protocol, 'pbbp2');
+	Socket.send('hi');
+	const Send = (Text, ClientId) => Im(100, 'send_message_body', { conversation_id: Created.conversation_id, conversation_short_id: Created.conversation_short_id, conversation_type: 1, message_type: 7, content: JSON.stringify({ aweType: 0, text: Text }), client_message_id: ClientId, ext: { 's:client_message_id': ClientId } });
+	const Sent = (await Send('Hello friend', 'client-1')).body.send_message_body;
+	assert.equal(Sent.status, 0); assert.equal(Sent.client_message_id, 'client-1');
+	assert.equal((await Send('Hello friend', 'client-1')).body.send_message_body.server_message_id, Sent.server_message_id);
+	await new Promise(Resolve => setTimeout(Resolve, 200));
+	assert.ok(Received.includes('hi'));
+	const Pushes = Received.filter(Data => typeof Data !== 'string').map(Data => Proto.Decode('Response', Proto.Decode('Frame', new Uint8Array(Data)).payload));
+	assert.equal(Pushes.length, 1); assert.equal(Pushes[0].cmd, 500);
+	const Notify = Pushes[0].body.has_new_message_notify;
+	assert.equal(Notify.message.content, '{"aweType":0,"text":"Hello friend"}'); assert.equal(Notify.message.sender, Owner.id);
+	assert.equal(Notify.next_cursor, Sent.server_message_id); assert.equal(Notify.previous_cursor, '0'); assert.equal(Notify.badge_count, 1);
+	const Framed = new Promise(Resolve => { Socket.onmessage = Event => typeof Event.data !== 'string' && Resolve(Proto.Decode('Frame', new Uint8Array(Event.data))); });
+	Socket.send(Proto.Encode('Frame', { seqid: '42', service: 5, method: 1, payload_type: 'pb', payload: Proto.Encode('Request', { cmd: 203, sequence_id: '42', inbox_type: 0 }) }));
+	const Reply = await Framed;
+	assert.equal(Reply.seqid, '42');
+	const FriendInit = Proto.Decode('Response', Reply.payload).body.messages_per_user_init_v2_body;
+	assert.equal(FriendInit.per_user_cursor, Sent.server_message_id);
+	assert.equal(FriendInit.conversations[0].badge_count, 1);
+	assert.deepEqual(FriendInit.messages.map(Message => [Message.content, Message.ext['s:client_message_id'], Message.index_in_conversation]), [['{"aweType":0,"text":"Hello friend"}', 'client-1', '1']]);
+	Socket.close();
+	assert.equal((await Im(203, 'messages_per_user_init_v2_body', {}, AsFriend, 3)).body.messages_per_user_init_v2_body.conversations, undefined);
+	await Send('Second note', 'client-2');
+	const Combo = (await Im(204, 'messages_per_user_combo_body', { inboxes: [{ inbox_type: 0, cursor: Sent.server_message_id, limit: 50 }, { inbox_type: 3, cursor: '0', limit: 50 }] }, AsFriend)).body.messages_per_user_combo_body.inboxes;
+	assert.deepEqual(Combo[0].messages.map(Message => JSON.parse(Message.content).text), ['Second note']); assert.equal(Combo[1].messages, undefined);
+	const History = (await Im(301, 'messages_in_conversation_body', { conversation_short_id: Created.conversation_short_id, direction: 1, limit: 1 }, AsFriend)).body.messages_in_conversation_body;
+	assert.deepEqual(History.messages.map(Message => JSON.parse(Message.content).text), ['Second note']); assert.equal(History.has_more, true);
+	const Range = (await Im(304, 'messages_in_conversation_with_range', { conversation_short_id: Created.conversation_short_id, message_range: { min_conv_index: '1', max_conv_index: '2' }, limit: 10 }, AsFriend)).body.messages_in_conversation_with_range;
+	assert.deepEqual(Range.messages_pb.map(Bytes => Proto.Decode('MessageBody', Bytes).index_in_conversation), ['1', '2']);
+	assert.equal((await Im(2002, 'mark_conversation_read_body', { conversation_short_id: Created.conversation_short_id, conversation_type: 1, read_message_index: '99' }, AsFriend)).status_code, 0);
+	assert.equal((await Pool.query('SELECT read_index FROM conversation_members WHERE conversation_id = $1 AND user_id = $2', [Created.conversation_short_id, Friend.id])).rows[0].read_index, '2');
+	const Indexes = (await Im(2000, 'participants_read_index_body', { conversation_short_id: Created.conversation_short_id })).body.participants_read_index_body.indexes;
+	assert.equal(Indexes.find(Entry => Entry.user_id === Friend.id).index, '2');
+	const Stranger = await CreateUser(Pool, { username: 'stranger', displayName: 'Stranger', password: Password }, 'closed', true);
+	const Outsider = (await Pool.query("INSERT INTO conversations(conversation_key, conversation_type) VALUES ($1, 1) RETURNING id", [`0:1:${Friend.id}:${Stranger.id}`])).rows[0].id;
+	assert.equal((await Im(301, 'messages_in_conversation_body', { conversation_short_id: Outsider })).status_code, 1001);
+	const Grumpy = (await Pool.query("SELECT id FROM users WHERE username = 'grumpy'")).rows[0].id;
+	assert.equal((await Im(609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Grumpy] })).status_code, 11);
+	assert.equal((await Im(609, 'create_conversation_v2_body', { conversation_type: 2, participants: [Friend.id, Grumpy] })).status_code, 4);
+	assert.equal((await Im(9999, 'vcd_clean_body', {})).status_code, 5);
+	const Upgrade = Origin => new Promise(Resolve => {
+		const Sent = HttpRequest('http://127.0.0.1:13210/ws/v2', { headers: { ...AsFriend, connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13', 'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==', origin: Origin } });
+		Sent.on('upgrade', (Response, Socket) => { Socket.destroy(); Resolve(Response.statusCode); });
+		Sent.on('error', () => Resolve('Rejected'));
+		Sent.on('response', Response => Resolve(Response.statusCode));
+		Sent.end();
+	});
+	assert.equal(await Upgrade('http://127.0.0.1:13210'), 101);
+	assert.equal(await Upgrade('http://evil.example'), 403);
+	const Profiles = await (await Call(`/tiktok/v1/im/user/profile/?aid=1988&user_ids=${encodeURIComponent(JSON.stringify([Friend.id]))}`, 'GET', undefined, Auth())).json();
+	assert.deepEqual([Profiles.status_code, Profiles.users[0].im_user_profile.unique_id, Profiles.users[0].im_user_profile.follow_status], [0, 'friend', 2]);
+});
+
 test('users, sessions, videos, and social data survive a server restart', async () => {
 	await Stop(); await Start();
 	const Current = await (await Call('/api/v1/session', 'GET', undefined, { cookie: Cookie })).json(); assert.equal(Current.user.uniqueId, 'owner');
@@ -728,6 +819,8 @@ test('users, sessions, videos, and social data survive a server restart', async 
 	assert.deepEqual((await (await Call(`/api/user/collect/item_list/?secUid=${Owner.id}`, 'GET', undefined, Auth())).json()).itemList.map(Item => Item.id), [VideoId]);
 	assert.equal((await (await Call('/api/user/detail/?uniqueId=friend', 'GET', undefined, Auth())).json()).userInfo.user.relation, 2);
 	assert.equal((await (await Call('/api/user/detail/?uniqueId=grumpy', 'GET', undefined, Auth())).json()).userInfo.user.relation, 4);
+	const Inbox = await fetch(`${Origin}/v2/message/get_by_user_init`, { method: 'POST', headers: { ...Auth(), 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: 203, sequence_id: '1', inbox_type: 0 }) });
+	assert.deepEqual(Proto.Decode('Response', Buffer.from(await Inbox.arrayBuffer())).body.messages_per_user_init_v2_body.messages.map(Message => JSON.parse(Message.content).text), ['Hello friend', 'Second note']);
 	assert.ok((await (await Call(`/api/comment/list/?aweme_id=${VideoId}`)).json()).comments.some(Comment => Comment.text === 'Published natively'));
 	const Thread = (await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=50`, 'GET', undefined, Auth())).json()).comments.find(Comment => Comment.text === 'Thread root');
 	assert.equal(Thread.reply_comment_total, 5);

@@ -23,7 +23,8 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Likes | PostgreSQL `likes`, read back as `digged`/`stats.diggCount` | Native like/unlike verified, including after reload |
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
 | User and video search | Usernames and display names; video captions, newest first | Native Top, Users, and Videos tabs verified. Photos and LIVE return empty results |
-| Video search, notifications, DMs, LIVE, shop, coins | Not implemented | Visible original controls do not imply working features |
+| Direct messages | PostgreSQL `conversations`, `conversation_members` (read index, cleared-history index), and `messages`, served over the client's own IM protocol: protobuf over HTTP and the frontier WebSocket | Native inbox verified: starting a chat from a profile, sending text, the conversation list with profiles and previews, empty conversations, live delivery with unread badges, read state, and reload. One-to-one text only; group chats, media, reactions, and the message-request inbox are not implemented |
+| LIVE, shop, coins | Not implemented | Visible original controls do not imply working features |
 | Reports | Local report reasons, authenticated submissions, moderation queue, resolve/dismiss actions | Native reason selection, optional description, Submit, and success feedback verified. Admin report cards, review dialog, menus, and compact user-page cards verified in dark and light themes |
 | Admin panel | `/admin`: overview, users with security details and violations, videos, comment lookup by ID, invites, settings (sign-up, name, features, limits, announcement, rules, brand images), and an audit log | Verified in the browser: every page and action, feature switches and the announcement in the client, and brand uploads. Report, video, and account actions use keyboard-accessible three-dot menus; report previews and review dialogs are contained in their cards |
 
@@ -79,6 +80,27 @@ The client's security SDK re-opens XHR requests and replays their headers, so `X
 Threads are one level deep. A reply to a reply is attached to the root comment, and its `reply_to_reply_id` target is not stored.
 
 Next work: verify the remaining native social interactions, integrate profile editing and remaining profile/search interactions, then add moderation and operational features before inviting an untrusted public community.
+
+## Direct message protocol
+
+The DM inbox loads only when the signed-in user has `hasIMPermission`. Its SDK sends protobuf `Request` messages and reads `Response` messages (`application/x-protobuf`), either as an HTTP POST to the `imApi` origin (`/v1/message/send`, `/v2/message/get_by_user_init`, …) or inside a protobuf `Frame` (`service` 5, `payload_type: "pb"`) on the `imFrontier` WebSocket at `/ws/v2`. Kittok handles both on the same origin; the path does not matter, only `cmd`. Field numbers in `src/im/schema.mjs` are generated from the cached client's encoders and only cover the commands Kittok handles. The codec in `src/im/protobuf.mjs` was checked byte-for-byte against the client encoder. 64-bit values are decimal strings.
+
+The socket must accept one of the offered subprotocols (`binary`, `base64`, `pbbp2`); Kittok picks `pbbp2`. The client sends the text `hi` every 15 seconds and reconnects after 30 seconds without any data, so Kittok echoes it. Responses reuse the request's `seqid` and `sequence_id`; pushes use 0. Authentication is the session cookie (`auth_type` 1, session auth), and the upgrade requires this instance's Origin.
+
+| Command | Request body | Kittok behavior |
+| --- | --- | --- |
+| 203 init | `messages_per_user_init_v2_body` | All the user's conversations and up to 20 recent messages each; `per_user_cursor` is the newest visible message ID. Other inbox types (the client also asks for 3) are empty |
+| 200, 204 pull | `messages_per_user_body`, `messages_per_user_combo_body` (per inbox `cursor`) | Messages with an ID above the cursor, oldest first, with `next_cursor` and `has_more` |
+| 609 create | `create_conversation_v2_body` (`participants`) | Finds or creates the one-to-one conversation `0:1:<lower id>:<higher id>`; the SDK reads the inbox from the first segment. 11 if either user blocked the other; 4 for group chats |
+| 100 send | `send_message_body` (`conversation_short_id`, `message_type`, JSON `content`, `client_message_id`) | Stores the message with the next `index_in_conversation` and pushes 500 `has_new_message_notify` (with `previous_cursor`, `next_cursor`, and the recipient's `badge_count`) to every member's sockets. Repeating a `client_message_id` returns the original. `status` 5 when blocked. Text is type 7 with `{"aweType":0,"text":…}` |
+| 301, 304 history | `messages_in_conversation_body` (direction, anchor), `messages_in_conversation_with_range` | Older or newer pages by index; the range command returns `messages_pb`, each an encoded `MessageBody` |
+| 604, 2002 read | `mark_conversation_read_body` (`read_message_index`) | Raises the reader's read index (capped at the last message) and pushes 501 to members; 2000 returns every member's read index |
+| 603 delete | `delete_conversation_body` | Hides the conversation's history for that user only |
+| 411 typing | `send_input_status_body` | Pushes 510 to the other members |
+
+Unknown commands return status 5 and are counted in `/_debug/unknown`. Messages carry `s:client_message_id` in `ext` because the client's store keys messages by it. `create_time` is in milliseconds. Participant profiles come from GET `/tiktok/v1/im/user/profile/?user_ids=["id",…]`, which returns `users[{im_user_profile: {user_id, unique_id, nick_name, avatars, follow_status, follower_status, block_info}}]`.
+
+The client's conversation list drops conversations without a last message and leaves their preview blank. Kittok rewrites those two expressions when serving the bundle so empty conversations appear with "No messages yet".
 
 ## Report dialog contract
 
