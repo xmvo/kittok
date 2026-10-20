@@ -37,22 +37,27 @@ Admins open `/admin` (also linked from the sidebar and `/account`). It is a stan
 | --- | --- | --- |
 | GET | `/_kittok/admin/overview` | Instance counts, newest accounts, and the most frequent unimplemented client calls |
 | GET | `/_kittok/admin/users?q=&before=ID` | Users, newest first, 50 per page. `q` matches username, display name, user ID, or an IP address seen in the activity log |
-| GET | `/_kittok/admin/users/ID` | Profile, stats, sign-up details, countries and languages seen, activity log, active sessions, accounts sharing an IP, videos, comments, and violations |
-| POST | `/_kittok/admin/users/ID/suspend` / `unsuspend` | Suspending signs the user out everywhere and blocks login |
+| GET | `/_kittok/admin/users/ID` | Profile, stats, sign-up details, countries and languages seen, activity log, active sessions, accounts sharing an IP, videos, comments, violations (moderation decisions), and `standing` (state, active strikes per feature and policy, thresholds, restrictions) |
+| POST | `/_kittok/admin/users/ID/suspend` / `unsuspend` | Suspend records a permanent ban decision (JSON `{category?, reason?}`), signs the user out everywhere, and blocks login; unsuspend reverses every active ban |
 | POST | `/_kittok/admin/users/ID/role` | JSON `{role}`: `admin` or `member` |
 | POST | `/_kittok/admin/users/ID/sessions/revoke` | JSON `{session}`: a session ID from the user page, or `all` |
-| POST | `/_kittok/admin/users/ID/violations` | JSON `{category, reason, video_id?, comment_id?}`; the video or comment must be the user's |
-| POST | `/_kittok/admin/violations/ID/revoke` | Marks a violation revoked; it stays in the history |
+| POST | `/_kittok/admin/users/ID/violations` | JSON `{category, reason, video_id?, comment_id?}`: a strike against the user, their video, or their comment |
+| POST | `/_kittok/admin/enforce` | JSON `{target_type: video\|comment\|user, target_id, category, reason, content_action?: none\|remove\|fyf_ineligible, account_action?: none\|strike\|ban, severe?, restrictions?: [{feature, hours}]}`. Features: `upload`, `comment`, `message`, `live`, `follow`, `profile`; hours 1, 24, 48, 72, 168, 720, or `null` until lifted. Returns `{decision, autoBan}` |
+| POST | `/_kittok/admin/reports/ID/decide` | JSON `{verdict: violation\|no_violation, ...enforce fields}`; closes every open report on the target and links the decision |
+| POST | `/_kittok/admin/decisions/ID/reverse` (`violations/ID/revoke`) | JSON `{reason}`; reverses the decision, lifts its restrictions, and lifts a ban if no other ban is active. History is kept |
+| POST | `/_kittok/admin/restrictions/ID/lift` | Ends one feature restriction early |
+| GET | `/_kittok/admin/appeals?status=pending\|restored\|upheld&before=ID` | Appeals with the decision they contest, 50 per page |
+| POST | `/_kittok/admin/appeals/ID/review` | JSON `{outcome: restored\|upheld, reason}`; restored reverses the decision |
 | POST | `/_kittok/admin/users/ID/delete` | JSON `{confirm}` must equal the username; deletes the account, its videos and their files, and its avatar |
 | GET | `/_kittok/admin/videos?before=ID` | Videos with views, likes, and comment counts, 30 per page |
 | POST | `/_kittok/admin/videos/ID/delete` | Deletes the video and its files |
 | GET | `/_kittok/admin/comments?before=ID` | Comments, newest first, 50 per page |
-| GET | `/_kittok/admin/comments/ID` | One comment with its author, video, parent, replies, and violations |
+| GET | `/_kittok/admin/comments/ID` | One comment with its author, video, parent, replies, and the decisions taken on it |
 | POST | `/_kittok/admin/comments/ID/delete` | Deletes the comment and its replies |
 | GET / POST | `/_kittok/admin/invites` | List open invites, or create one with JSON `{uses, days}` (1–100 uses, 1–90 days); the code is returned once |
 | POST | `/_kittok/admin/invites/HASH/delete` | Revokes an invite |
 | GET | `/_kittok/admin/settings` | Sign-up mode, instance name, features, upload limits, announcement, rules, and brand images |
-| POST | `/_kittok/admin/settings/KEY` | JSON `{value}` for `registration`, `name`, `features`, `limits`, `announcement`, or `rules`; applied immediately without a restart |
+| POST | `/_kittok/admin/settings/KEY` | JSON `{value}` for `registration`, `name`, `features`, `limits`, `announcement`, `rules`, or `moderation` (`{strikeDays, feature, total, policy: {category: n}}`); applied immediately without a restart |
 | POST | `/_kittok/admin/brand/SLOT` | Multipart `file` (PNG, JPEG, or WebP, up to 2 MB) for `wordmarkDark`, `wordmarkLight`, `icon`, or `favicon`; re-encoded to PNG |
 | POST | `/_kittok/admin/brand/SLOT/reset` | Restores the shipped image |
 | GET | `/_kittok/admin/audit?before=ID` | Admin actions, newest first, 50 per page |

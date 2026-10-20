@@ -7,6 +7,7 @@ import { AvatarUrl, UserStats } from '../store.mjs';
 import { Asset, ClientDir, LocalAsset, Root } from '../client/archive.mjs';
 import { BrandSlots, Features, SaveSetting, Settings } from '../settings.mjs';
 import { Page } from './account.mjs';
+import { Enforce, DecideReport, ReverseDecision, LiftRestriction, ReviewAppeal, Standing } from '../moderation.mjs';
 
 const Categories = ['spam', 'harassment', 'hate', 'nudity', 'violence', 'self_harm', 'misinformation', 'impersonation', 'copyright', 'other'];
 const Before = Value => Value ? Id(Value) : null;
@@ -90,7 +91,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			const Stats = (await Pool.query(`SELECT (SELECT count(*)::int FROM users) AS users, (SELECT count(*)::int FROM users WHERE created_at > now() - interval '7 days') AS new_users,
 				(SELECT count(*)::int FROM users WHERE suspended_at IS NOT NULL) AS suspended, (SELECT count(*)::int FROM videos) AS videos, (SELECT coalesce(sum(view_count), 0)::int FROM videos) AS views,
 				(SELECT count(*)::int FROM comments) AS comments, (SELECT count(*)::int FROM likes) AS likes, (SELECT count(*)::int FROM sessions WHERE expires_at > now()) AS sessions,
-				(SELECT count(*)::int FROM violations WHERE revoked_at IS NULL AND created_at > now() - interval '30 days') AS violations,
+				(SELECT count(*)::int FROM moderation_decisions WHERE reversed_at IS NULL AND account_action <> 'none' AND created_at > now() - interval '30 days') AS violations,
 				(SELECT count(*)::int FROM invites WHERE expires_at > now() AND uses < max_uses) AS invites, (SELECT count(*)::int FROM reports WHERE status = 'open') AS reports`)).rows[0];
 			const Signups = (await Pool.query('SELECT u.id, u.username, u.display_name, u.avatar_name, u.created_at, e.country FROM users u LEFT JOIN LATERAL (SELECT country FROM user_events WHERE user_id = u.id AND kind = \'signup\' ORDER BY id LIMIT 1) e ON true ORDER BY u.id DESC LIMIT 6')).rows;
 			const Missing = [...(Unknown ?? new Map())].sort((A, B) => B[1] - A[1]).slice(0, 8).map(([Call, Count]) => ({ call: Call, count: Count }));
@@ -102,7 +103,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			const IsIp = /^[0-9a-fA-F:.]{3,45}$/.test(Query) && /[.:]/.test(Query);
 			const Rows = (await Pool.query(`SELECT u.id, u.username, u.display_name, u.role, u.created_at, u.suspended_at, u.avatar_name,
 				(SELECT count(*)::int FROM videos v WHERE v.author_id = u.id) AS videos, (SELECT count(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
-				(SELECT count(*)::int FROM violations x WHERE x.user_id = u.id AND x.revoked_at IS NULL) AS violations
+				(SELECT count(*)::int FROM moderation_decisions x WHERE x.owner_id = u.id AND x.reversed_at IS NULL AND x.account_action IN ('strike', 'ban')) AS violations
 				FROM users u WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' ESCAPE '\\' OR u.display_name ILIKE '%' || $1 || '%' ESCAPE '\\' OR u.id::text = $1
 					OR ($3 AND EXISTS (SELECT 1 FROM user_events e WHERE e.user_id = u.id AND host(e.ip) = $4)))
 				AND ($2::bigint IS NULL OR u.id < $2) ORDER BY u.id DESC LIMIT 50`, [Like, Before(Params.get('before')), IsIp, Query])).rows;
@@ -118,7 +119,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 				Pool.query('SELECT token_hash, host(ip) AS ip, country, user_agent, created_at, last_seen_at, expires_at FROM sessions WHERE user_id = $1 AND expires_at > now() ORDER BY last_seen_at DESC', [Target]),
 				Pool.query(`SELECT v.id, v.description, v.cover_name, v.created_at, v.view_count::int AS views, (SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes, (SELECT count(*)::int FROM comments c WHERE c.video_id = v.id) AS comments FROM videos v WHERE v.author_id = $1 ORDER BY v.id DESC LIMIT 60`, [Target]),
 				Pool.query(`SELECT c.id, c.body, c.created_at, c.video_id, c.parent_id, a.username AS video_author FROM comments c JOIN videos v ON v.id = c.video_id JOIN users a ON a.id = v.author_id WHERE c.author_id = $1 ORDER BY c.id DESC LIMIT 50`, [Target]),
-				Pool.query('SELECT x.*, u.username AS admin FROM violations x LEFT JOIN users u ON u.id = x.admin_id WHERE x.user_id = $1 ORDER BY x.id DESC', [Target]),
+				Pool.query(`SELECT d.*, d.owner_id AS user_id, d.reversed_at AS revoked_at, CASE WHEN d.target_type = 'video' THEN d.target_id END AS video_id, CASE WHEN d.target_type = 'comment' THEN d.target_id END AS comment_id, u.username AS admin FROM moderation_decisions d LEFT JOIN users u ON u.id = d.moderator_id WHERE d.owner_id = $1 ORDER BY d.id DESC`, [Target]),
 				Pool.query(`SELECT u.id, u.username, u.display_name, u.avatar_name, u.suspended_at, array_agg(DISTINCT host(o.ip)) AS ips FROM user_events mine JOIN user_events o ON o.ip = mine.ip AND o.user_id <> mine.user_id JOIN users u ON u.id = o.user_id
 					WHERE mine.user_id = $1 AND mine.ip IS NOT NULL GROUP BY u.id ORDER BY u.id DESC LIMIT 20`, [Target]),
 				Pool.query(`SELECT array_remove(array_agg(DISTINCT country), NULL) AS countries, array_remove(array_agg(DISTINCT language), NULL) AS languages, count(DISTINCT ip)::int AS ips FROM user_events WHERE user_id = $1`, [Target]),
@@ -131,7 +132,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 				signup: Signup, seen: Seen.rows[0], events: Events.rows,
 				sessions: Sessions.rows.map(Row => ({ ...Row, id: Row.token_hash.slice(0, 16), token_hash: undefined })),
 				videos: Videos.rows.map(Row => ({ ...Row, cover: `${Config.Origin}/media/${Row.cover_name}` })),
-				comments: Comments.rows, violations: Violations.rows,
+				comments: Comments.rows, violations: Violations.rows, standing: await Standing(Pool, Target, Config.Moderation),
 				related: Related.rows.map(Row => ({ ...Row, avatar: AvatarUrl(Row, Config.Origin) })),
 				reportsAgainst: Against.rows.map(ReportShape), reportsFiled: Filed.rows.map(ReportShape),
 			}); return true;
@@ -162,7 +163,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			const [Parent, Replies, Violations] = await Promise.all([
 				Comment.parent_id ? Pool.query(`${CommentSql} WHERE c.id = $1`, [Comment.parent_id]) : { rows: [] },
 				Pool.query(`${CommentSql} WHERE c.parent_id = $1 ORDER BY c.id LIMIT 50`, [Comment.id]),
-				Pool.query('SELECT x.*, u.username AS admin FROM violations x LEFT JOIN users u ON u.id = x.admin_id WHERE x.comment_id = $1 ORDER BY x.id DESC', [Comment.id]),
+				Pool.query(`SELECT d.*, d.owner_id AS user_id, d.reversed_at AS revoked_at, CASE WHEN d.target_type = 'video' THEN d.target_id END AS video_id, CASE WHEN d.target_type = 'comment' THEN d.target_id END AS comment_id, u.username AS admin FROM moderation_decisions d LEFT JOIN users u ON u.id = d.moderator_id WHERE d.target_type = 'comment' AND d.target_id = $1 ORDER BY d.id DESC`, [Comment.id]),
 			]);
 			Json(Response, { comment: CommentShape(Comment), parent: Parent.rows[0] ? CommentShape(Parent.rows[0]) : null, replies: Replies.rows.map(CommentShape), violations: Violations.rows }); return true;
 		}
@@ -176,6 +177,13 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			Json(Response, { actions: Rows, hasMore: Rows.length === 50 }); return true;
 		}
 		if (Route === 'settings') { Json(Response, Settings(Config)); return true; }
+		if (Route === 'appeals') {
+			const Status = ['pending', 'restored', 'upheld'].includes(Params.get('status')) ? Params.get('status') : 'pending';
+			const Rows = (await Pool.query(`SELECT a.*, u.username, u.display_name, u.avatar_name, d.target_type, d.target_id, d.category, d.reason AS decision_reason, d.content_action, d.account_action, d.snapshot, d.created_at AS decided_at,
+				r.username AS reviewer FROM moderation_appeals a JOIN users u ON u.id = a.user_id JOIN moderation_decisions d ON d.id = a.decision_id LEFT JOIN users r ON r.id = a.reviewer_id
+				WHERE a.status = $1 AND ($2::bigint IS NULL OR a.id < $2) ORDER BY a.id DESC LIMIT 50`, [Status, Before(Params.get('before'))])).rows;
+			Json(Response, { appeals: Rows.map(Row => ({ ...Row, avatar: AvatarUrl(Row, Config.Origin) })), hasMore: Rows.length === 50 }); return true;
+		}
 		throw new HttpError(404, 'NotFound');
 	}
 
@@ -214,9 +222,10 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 		if (!Found) throw new HttpError(404, 'UserNotFound');
 		let Detail = '';
 		if (Action === 'suspend') {
-			await Pool.query('UPDATE users SET suspended_at = now() WHERE id = $1', [Target]);
-			await Pool.query('DELETE FROM sessions WHERE user_id = $1', [Target]);
+			await Enforce(Pool, User, { target_type: 'user', target_id: Target, category: Categories.includes(Body.category) ? Body.category : 'other', reason: String(Body.reason ?? '').trim() || 'Suspended by an administrator', account_action: 'ban', severe: true }, Config.Moderation);
 		} else if (Action === 'unsuspend') {
+			const Bans = (await Pool.query("SELECT id FROM moderation_decisions WHERE owner_id = $1 AND account_action = 'ban' AND reversed_at IS NULL", [Target])).rows;
+			for (const Ban of Bans) await ReverseDecision(Pool, User, Ban.id, String(Body.reason ?? '').trim() || 'Unsuspended by an administrator');
 			await Pool.query('UPDATE users SET suspended_at = NULL WHERE id = $1', [Target]);
 		} else if (Action === 'role') {
 			if (!['admin', 'member'].includes(Body.role)) throw new HttpError(400, 'InvalidRole');
@@ -234,7 +243,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			const VideoId = Body.video_id ? Id(Body.video_id) : null, CommentId = Body.comment_id ? Id(Body.comment_id) : null;
 			if (VideoId && !(await Pool.query('SELECT 1 FROM videos WHERE id = $1 AND author_id = $2', [VideoId, Target])).rowCount) throw new HttpError(400, 'VideoNotTheirs');
 			if (CommentId && !(await Pool.query('SELECT 1 FROM comments WHERE id = $1 AND author_id = $2', [CommentId, Target])).rowCount) throw new HttpError(400, 'CommentNotTheirs');
-			await Pool.query('INSERT INTO violations(user_id, admin_id, category, reason, video_id, comment_id) VALUES ($1, $2, $3, $4, $5, $6)', [Target, User.id, Category, Reason, VideoId, CommentId]);
+			await Enforce(Pool, User, { target_type: VideoId ? 'video' : CommentId ? 'comment' : 'user', target_id: VideoId ?? CommentId ?? Target, category: Category, reason: Reason, account_action: 'strike' }, Config.Moderation);
 			Detail = `${Category}: ${Reason}`;
 		} else {
 			if (Body.confirm !== Found.username) throw new HttpError(400, 'TypeTheUsernameToConfirm');
@@ -254,13 +263,18 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 		await Audit(Pool, User, `report.${ReportMatch[2]}`, `${Report.target_type} ${Report.target_id}`, `${Closed.rowCount} report${Closed.rowCount === 1 ? '' : 's'}${Body.resolution ? ': ' + Body.resolution : ''}`);
 		Json(Response, { closed: Closed.rowCount }); return true;
 	}
-	const ViolationMatch = Route.match(/^violations\/(\d+)\/revoke$/);
+	const ViolationMatch = Route.match(/^(?:violations|decisions)\/(\d+)\/(?:revoke|reverse)$/);
 	if (ViolationMatch) {
-		const Revoked = (await Pool.query('UPDATE violations x SET revoked_at = now() FROM users u WHERE x.id = $1 AND x.revoked_at IS NULL AND u.id = x.user_id RETURNING x.category, u.username', [Id(ViolationMatch[1])])).rows[0];
-		if (!Revoked) throw new HttpError(404, 'ViolationNotFound');
-		await Audit(Pool, User, 'violation.revoke', `@${Revoked.username}`, Revoked.category);
+		await ReverseDecision(Pool, User, ViolationMatch[1], String(Body.reason ?? '').trim() || 'Revoked by an administrator');
 		Json(Response, { ok: true }); return true;
 	}
+	if (Route === 'enforce') { Json(Response, await Enforce(Pool, User, Body, Config.Moderation)); return true; }
+	const DecideMatch = Route.match(/^reports\/(\d+)\/decide$/);
+	if (DecideMatch) { Json(Response, await DecideReport(Pool, User, DecideMatch[1], Body, Config.Moderation)); return true; }
+	const LiftMatch = Route.match(/^restrictions\/(\d+)\/lift$/);
+	if (LiftMatch) { Json(Response, await LiftRestriction(Pool, User, LiftMatch[1])); return true; }
+	const AppealMatch = Route.match(/^appeals\/(\d+)\/review$/);
+	if (AppealMatch) { Json(Response, await ReviewAppeal(Pool, User, AppealMatch[1], Body.outcome, Body.reason)); return true; }
 	const VideoMatch = Route.match(/^videos\/(\d+)\/delete$/);
 	if (VideoMatch) {
 		if (!await DeleteVideos(Pool, Config, 'id = $1', [Id(VideoMatch[1])])) throw new HttpError(404, 'VideoNotFound');

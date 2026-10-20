@@ -564,7 +564,7 @@ test('admin panel is admin-only and its actions suspend, change roles, manage in
 	assert.equal((await Admin(`users/${Doomed}/delete`, { confirm: 'invited_kitten' })).status, 200);
 	assert.equal((await Pool.query('SELECT * FROM videos WHERE id=$1', [DoomedVideo])).rowCount, 0);
 	assert.equal((await fetch(`${Origin}/media/${Files.file_name}`)).status, 404); assert.equal((await fetch(`${Origin}/media/${Files.cover_name}`)).status, 404);
-	const Actions = (await (await Admin('audit')).json()).actions.map(Row => Row.action);
+	const Actions = (await (await Admin('audit')).json()).actions.map(Row => Row.action).filter(Action => !Action.startsWith('moderation.'));
 	assert.deepEqual(Actions.slice(0, 9), ['user.delete', 'comment.delete', 'invite.revoke', 'invite.create', 'invite.create', 'user.role', 'user.role', 'user.unsuspend', 'user.suspend']);
 });
 
@@ -626,7 +626,7 @@ test('admin user pages show tracked security details, violations, comment lookup
 	await Admin('settings/name', { value: 'Kittok' }); await Admin('settings/announcement', { value: { text: '' } }); await Admin('settings/rules', { value: '' });
 	assert.equal((await Admin(`comments/${Comment}/delete`, {})).status, 200);
 	const Audit = (await (await Admin('audit')).json()).actions.map(Row => Row.action);
-	assert.ok(Audit.includes('user.violations') && Audit.includes('violation.revoke') && Audit.includes('user.sessions.revoke') && Audit.includes('brand.upload'));
+	assert.ok(Audit.includes('user.violations') && Audit.includes('moderation.reverse') && Audit.includes('moderation.decision') && Audit.includes('user.sessions.revoke') && Audit.includes('brand.upload'));
 });
 
 test('original client reports reach the admin queue, deduplicate, and close together', async () => {
@@ -865,6 +865,136 @@ test('direct messages honor recipient privacy, end with the session, and follow 
 	assert.equal(await new Promise(Resolve => { Refused.onopen = () => Resolve('Open'); Refused.onerror = () => Resolve('Refused'); }), 'Refused');
 	assert.equal((await Switch(true)).status, 200);
 	assert.equal((await Im(203, 'messages_per_user_init_v2_body', {})).status_code, 0);
+});
+
+test('moderation gives warnings, per-feature strikes, timed feature restrictions, and threshold bans in the shapes the client shows', async () => {
+	const Offender = await CreateUser(Pool, { username: 'offender', displayName: 'Offender', password: Password }, 'closed', true);
+	const Signed = await Login(Pool, 'offender', Password);
+	const As = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	const Admin = (Route, Body) => Call(`/_kittok/admin/${Route}`, Body ? 'POST' : 'GET', Body, Auth());
+	const Enforce = async Body => { const Sent = await Admin('enforce', Body); assert.equal(Sent.status, 200); return Sent.json(); };
+	const Comment = async Text => (await Call(`/api/comment/publish/?aweme_id=${VideoId}&text=${encodeURIComponent(Text)}&reply_id=0`, 'POST', undefined, As)).json();
+	const Listed = async () => (await (await Call(`/api/comment/list/?aweme_id=${VideoId}&count=50`)).json()).comments.map(Entry => Entry.cid);
+	const OwnVideo = await ImportVideo(Pool, Config, Offender.id, join(Directory, 'input.mp4'), 'Rule breaking');
+
+	const First = (await Comment('first insult')).comment.cid;
+	assert.equal((await Admin('enforce', { target_type: 'user', target_id: Owner.id, category: 'spam', reason: 'x', account_action: 'strike' })).status, 400);
+	assert.equal((await Admin('enforce', { target_type: 'comment', target_id: First, category: 'spam', reason: 'x', restrictions: [{ feature: 'teleport', hours: 24 }] })).status, 400);
+	assert.equal((await Admin('enforce', { target_type: 'comment', target_id: First, category: 'spam', reason: 'x', restrictions: [{ feature: 'comment', hours: 5 }] })).status, 400);
+	const Warned = await Enforce({ target_type: 'comment', target_id: First, category: 'harassment', reason: 'Insulting another user', content_action: 'remove', account_action: 'strike' });
+	assert.equal(Warned.decision.account_action, 'warning'); assert.equal(Warned.decision.feature, 'comment'); assert.equal(Warned.decision.penalty_expires_at, null);
+	assert.ok(!(await Listed()).includes(First));
+	const Second = (await Comment('second insult')).comment.cid;
+	const Struck = await Enforce({ target_type: 'comment', target_id: Second, category: 'harassment', reason: 'Insulting another user again', content_action: 'remove', account_action: 'strike', restrictions: [{ feature: 'comment', hours: 24 }] });
+	assert.equal(Struck.decision.account_action, 'strike');
+	assert.ok(Math.abs(new Date(Struck.decision.penalty_expires_at) - Date.now() - 90 * 86400000) < 60000);
+	const Blocked = await Comment('third');
+	assert.equal(Blocked.status_code, 22); assert.match(Blocked.status_msg, /^Due to Community Guideline violations, you're restricted from commenting until .+ UTC\.$/);
+	assert.equal((await Call(`/api/v1/videos/${VideoId}/comments`, 'POST', { text: 'native' }, As)).status, 403);
+
+	await Enforce({ target_type: 'user', target_id: Offender.id, category: 'spam', reason: 'Spamming across features',
+		restrictions: [{ feature: 'message', hours: 48 }, { feature: 'follow', hours: 72 }, { feature: 'upload', hours: 168 }, { feature: 'profile', hours: null }, { feature: 'live', hours: 24 }] });
+	const Followed = await (await Call(`/api/commit/follow/user/?type=1&user_id=${Friend.id}`, 'POST', undefined, As)).json();
+	assert.equal(Followed.status_code, 2096); assert.match(Followed.status_msg, /restricted from following accounts until/);
+	assert.equal((await Pool.query('SELECT 1 FROM follows WHERE follower_id = $1', [Offender.id])).rowCount, 0);
+	assert.equal((await Call('/api/v1/users/friend/follow', 'PUT', undefined, As)).status, 403);
+	assert.equal((await Call('/api/v1/videos?description=x', 'POST', undefined, { ...As, 'content-type': 'video/mp4' })).status, 403);
+	const Profile = await (await Call('/api/update/profile/?nickname=Renamed', 'POST', undefined, As)).json();
+	assert.equal(Profile.status_code, 23); assert.match(Profile.status_msg, /restricted from editing your profile\.$/);
+	assert.equal((await (await Call('/passport/web/login_name/update/?login_name=offender_two', 'POST', undefined, As)).json()).data.error_code, 23);
+	const Im = async (Cmd, Field, Body) => Proto.Decode('Response', Buffer.from(await (await fetch(`${Origin}/v1/kittok`, { method: 'POST', headers: { ...As, 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: Cmd, sequence_id: '1', inbox_type: 0, body: { [Field]: Body } }) })).arrayBuffer()));
+	const Chat = (await Im(609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Friend.id] })).body.create_conversation_v2_body.conversation;
+	const Refused = (await Im(100, 'send_message_body', { conversation_short_id: Chat.conversation_short_id, conversation_type: 1, message_type: 7, content: '{"aweType":0,"text":"buy now"}', client_message_id: 'spam-1' })).body.send_message_body;
+	assert.equal(Refused.status, 3); assert.equal(Refused.check_code, '7195');
+	const Check = JSON.parse(Refused.check_message);
+	assert.equal(Check.status_code, 7195); assert.match(Check.status_msg.msg_content.tips, /restricted from sending messages until .+ \{\{1\}\}$/); assert.deepEqual(Check.status_msg.msg_content.template, [{ name: 'Feedback', key: '1' }]);
+	assert.equal((await Pool.query('SELECT 1 FROM messages WHERE sender_id = $1', [Offender.id])).rowCount, 0);
+
+	const Status = (await (await Admin(`users/${Offender.id}`)).json()).standing;
+	assert.equal(Status.state, 'restricted'); assert.equal(Status.strikes.total, 1); assert.equal(Status.strikes.feature.comment, 1); assert.equal(Status.strikes.policy.harassment, 1);
+	assert.deepEqual(Status.restrictions.map(Row => Row.feature).sort(), ['comment', 'follow', 'live', 'message', 'profile', 'upload']);
+	const Counted = await (await Call('/api/inbox/notice_count/', 'GET', undefined, As)).json();
+	assert.equal(Counted.notice_count.find(Entry => Entry.group === 661).count, 3);
+	const Notices = (await (await Call(`/api/notice/multi/?group_list=${encodeURIComponent(JSON.stringify([{ group: 47, count: 20, max_time: 0, min_time: 0, is_mark_read: 1 }]))}`, 'GET', undefined, As)).json()).notice_lists[0].notice_list;
+	assert.deepEqual(Notices.map(Notice => Notice.type), [47, 47, 47]); assert.equal(Notices[0].template_notice.notice.title.title, 'Account updates');
+	assert.match(Notices[2].template_notice.notice.content, /^Your comment was removed for violating our Community Guidelines on harassment and bullying\. This is a warning\./);
+	assert.match(Notices[1].template_notice.notice.content, /You received a strike on your account\. Strikes expire after 90 days\. You're restricted from commenting until/);
+	assert.match(Notices[0].template_notice.notice.content, /You're restricted from editing your profile\./);
+	assert.equal((await (await Call('/api/inbox/notice_count/', 'GET', undefined, As)).json()).notice_count.find(Entry => Entry.group === 661).count, 0);
+	const Page = await (await Call('/account', 'GET', undefined, { cookie: As.cookie })).text();
+	assert.ok(Page.includes('Account status') && Page.includes('Restricted') && Page.includes('Commenting') && Page.includes('Comments: 1 of 5 strikes') && Page.includes('harassment: 1 of 4 strikes'));
+
+	const CommentLimit = Status.restrictions.find(Row => Row.feature === 'comment');
+	assert.equal((await Admin(`restrictions/${CommentLimit.id}/lift`, {})).status, 200);
+	assert.equal((await Comment('allowed again')).status_code, 0);
+	assert.equal((await fetch(`${Origin}/account/appeal`, { method: 'POST', redirect: 'manual', headers: { cookie: As.cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: Signed.Csrf, decision: Struck.decision.id, reason: 'It was a joke between friends' }) })).status, 303);
+	assert.equal((await fetch(`${Origin}/account/appeal`, { method: 'POST', redirect: 'manual', headers: { cookie: As.cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: Signed.Csrf, decision: Struck.decision.id, reason: 'Again' }) })).headers.get('location'), '/account?error=AlreadyAppealed');
+	const Pending = (await (await Admin('appeals')).json()).appeals;
+	assert.deepEqual(Pending.map(Row => [Row.username, Row.decision_id, Row.category]), [['offender', Struck.decision.id, 'harassment']]);
+	assert.equal((await Admin(`appeals/${Pending[0].id}/review`, { outcome: 'restored', reason: 'Context shows it was banter' })).status, 200);
+	assert.equal((await (await Admin(`users/${Offender.id}`)).json()).standing.strikes.total, 0);
+	assert.match((await (await Call(`/api/notice/multi/?group_list=${encodeURIComponent(JSON.stringify([{ group: 661, count: 1, max_time: 0, min_time: 0 }]))}`, 'GET', undefined, As)).json()).notice_lists[0].notice_list[0].template_notice.notice.content, /^We reviewed your appeal and reversed our decision on your comment/);
+
+	await Enforce({ target_type: 'video', target_id: OwnVideo, category: 'misinformation', reason: 'Unverified health claims', content_action: 'fyf_ineligible' });
+	const InFeed = async Path => (await (await Call(Path)).json()).itemList.some(Item => Item.id === OwnVideo);
+	assert.equal(await InFeed('/api/recommend/item_list/?count=50'), false);
+	assert.equal(await InFeed(`/api/post/item_list/?secUid=${Offender.id}&count=30`), true);
+	await Enforce({ target_type: 'video', target_id: OwnVideo, category: 'misinformation', reason: 'Dangerous health claims', content_action: 'remove', account_action: 'strike' });
+	assert.equal(await InFeed(`/api/post/item_list/?secUid=${Offender.id}&count=30`), false);
+
+	const Thresholds = (await (await Admin('settings')).json()).moderation;
+	assert.deepEqual(Thresholds.policy.hate, 3);
+	assert.equal((await Admin('settings/moderation', { value: { ...Thresholds, feature: 0 } })).status, 400);
+	assert.equal((await Admin('settings/moderation', { value: { ...Thresholds, feature: 2 } })).status, 200);
+	const Third = (await Comment('rule break three')).comment.cid, Fourth = (await Comment('rule break four')).comment.cid;
+	assert.equal((await Enforce({ target_type: 'comment', target_id: Third, category: 'spam', reason: 'Comment spam', content_action: 'remove', account_action: 'strike' })).autoBan, null);
+	const Banned = await Enforce({ target_type: 'comment', target_id: Fourth, category: 'spam', reason: 'Comment spam', content_action: 'remove', account_action: 'strike' });
+	assert.equal(Banned.autoBan.account_action, 'ban'); assert.equal(Banned.autoBan.reason, 'Your account reached the strike limit for comments.');
+	assert.ok((await Pool.query('SELECT suspended_at FROM users WHERE id = $1', [Offender.id])).rows[0].suspended_at);
+	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, { cookie: As.cookie })).json()).user, null);
+	assert.equal((await (await Call(`/api/commit/follow/user/?type=1&user_id=${Offender.id}`, 'POST', undefined, Auth())).json()).status_code, 24);
+	assert.ok(!(await Listed()).includes(Second) && !(await Listed()).some(Cid => Cid === Third));
+	const Denied = await (await fetch(Origin + '/passport/web/user/login/', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ account: 'offender', password: Password, mix_mode: '0' }) })).json();
+	assert.equal(Denied.data.error_code, 1091); assert.equal(Denied.data.user_id_str, Offender.id);
+	const Ticket = Denied.data.verify_ticket;
+	assert.equal((await (await Call(`/tns-api/appeal/status/?object_type=6&object_id=${Offender.id}&verify_ticket=${Ticket.slice(0, -1)}0`)).json()).status_code, 1);
+	const Dialog = await (await Call(`/tns-api/appeal/status/?object_type=6&object_id=${Offender.id}&verify_ticket=${encodeURIComponent(Ticket)}`)).json();
+	assert.deepEqual(await (await Call(`/aweme/v2/appeal/status/?object_type=6&object_id=${Offender.id}&verify_ticket=${encodeURIComponent(Ticket)}`)).json(), Dialog);
+	assert.equal(Dialog.status_code, 0); assert.equal(Dialog.appeal_type, 2018); assert.equal(Dialog.pop_title, 'Your account was permanently banned');
+	assert.match(Dialog.pop_content, /^Your account was permanently banned\. Your account reached the strike limit for comments\. If you think we made a mistake, you can appeal\.$/);
+	const AppealButton = Dialog.button_list.find(Button => Button.btn_type === 4);
+	const Linked = new URL(AppealButton.btn_url);
+	assert.deepEqual([Linked.searchParams.get('object_id'), Linked.searchParams.get('appeal_type'), Linked.searchParams.get('punish_key')], [Offender.id, '2018', Banned.autoBan.id]);
+	const Commit = Body => fetch(Origin + '/tns-api/appeal/post-commit/', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(Body) }).then(Response => Response.json());
+	const Form = { object_id: Offender.id, appeal_type: 2018, reason: 'My comments were not spam', mail_address: 'offender@example.test', verify_ticket: Ticket, punish_key: Banned.autoBan.id };
+	assert.equal((await Commit({ ...Form, mail_address: 'nope' })).status_code, 1);
+	assert.equal((await Commit({ ...Form, object_id: Friend.id })).status_code, 1);
+	const Material = await (await fetch(Origin + '/aweme/v1/material/upload/', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ns: 'review_account_appeal', uid: Offender.id, data: JSON.stringify({ email: 'offender@example.test' }) }) })).json();
+	assert.equal(Material.status_code, 0);
+	assert.equal((await Commit({ ...Form, mail_address: undefined, extra: JSON.stringify({ mail_address_v2: Material.data.mid }) })).status_code, 0);
+	assert.equal((await Commit(Form)).status_msg, 'AlreadyAppealed');
+	assert.deepEqual((await Pool.query('SELECT status, contact_email FROM moderation_appeals WHERE decision_id = $1', [Banned.autoBan.id])).rows[0], { status: 'pending', contact_email: 'offender@example.test' });
+	assert.ok(!(await (await Call(`/tns-api/appeal/status/?object_type=6&object_id=${Offender.id}&verify_ticket=${encodeURIComponent(Ticket)}`)).json()).button_list.some(Button => Button.btn_type === 4));
+	assert.equal((await Admin('settings/moderation', { value: Thresholds })).status, 200);
+	assert.equal((await Admin(`users/${Offender.id}/unsuspend`, {})).status, 200);
+	assert.equal((await Pool.query('SELECT suspended_at FROM users WHERE id = $1', [Offender.id])).rows[0].suspended_at, null);
+
+	const Reported = (await Comment('report me')).status_code;
+	assert.equal(Reported, 401);
+	const Again = await Login(Pool, 'offender', Password);
+	const Target = (await (await Call(`/api/comment/publish/?aweme_id=${VideoId}&text=report%20me&reply_id=0`, 'POST', undefined, { cookie: `kittok_session=${Again.Token}`, 'x-csrf-token': Again.Csrf })).json()).comment.cid;
+	const Friendly = await Login(Pool, 'friend', Password);
+	assert.equal((await Call(`/aweme/v2/aweme/feedback/?${new URLSearchParams({ app_name: 'tiktok_web', aid: 1988, object_id: Target, report_type: 'comment', reason: 102 })}`, 'GET', undefined, { cookie: `kittok_session=${Friendly.Token}`, 'x-csrf-token': Friendly.Csrf })).status, 200);
+	const Report = (await Pool.query("SELECT id FROM reports WHERE target_type = 'comment' AND target_id = $1", [Target])).rows[0].id;
+	const Decided = await (await Admin(`reports/${Report}/decide`, { verdict: 'violation', category: 'harassment', reason: 'Targeted harassment', content_action: 'remove', account_action: 'strike', restrictions: [{ feature: 'comment', hours: 1 }] })).json();
+	assert.equal(Decided.closed, 1); assert.equal(Decided.decision.target_id, Target);
+	assert.deepEqual((await Pool.query('SELECT status, decision_id FROM reports WHERE id = $1', [Report])).rows[0], { status: 'resolved', decision_id: Decided.decision.id });
+	assert.equal((await Admin(`reports/${Report}/decide`, { verdict: 'no_violation', reason: 'x' })).status, 409);
+	const Unread = (await (await Call('/api/inbox/notice_count/', 'GET', undefined, Auth())).json()).notice_count.find(Entry => Entry.group === 2).count;
+	assert.equal(Unread, 2);
+	const Marked = await Call(`/api/notice/multi/?group_list=${encodeURIComponent(JSON.stringify([{ group: 500, count: 20, max_time: 0, min_time: 0, is_mark_read: 1 }]))}`, 'GET', undefined, Auth());
+	assert.equal(Marked.status, 200, await Marked.text());
+	assert.equal((await (await Call('/api/inbox/notice_count/', 'GET', undefined, Auth())).json()).notice_count.find(Entry => Entry.group === 500).count, 0);
 });
 
 test('users, sessions, videos, and social data survive a server restart', async () => {

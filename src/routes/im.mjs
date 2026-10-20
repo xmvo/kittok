@@ -4,6 +4,7 @@ import { BlockedBetween } from '../store.mjs';
 import { Codec } from '../im/protobuf.mjs';
 import { Schema } from '../im/schema.mjs';
 import { Push } from '../im/frontier.mjs';
+import { ActiveRestriction, RestrictionText } from '../moderation.mjs';
 
 export const Proto = Codec(Schema);
 
@@ -12,7 +13,7 @@ const Cmd = { SendMessage: 100, MessagesByUser: 200, MessagesByUserInitV2: 203, 
 	MgetParticipants: 654, InputStatus: 411, InputStatusNotify: 510, ReadIndexV3: 2000, MinIndexV3: 2001, UserConversationList: 2006, StrangerConversations: 1000,
 	StrangerUnreadCount: 1007, UnreadCount: 2030, BatchReadIndex: 2038 };
 const Status = { Ok: 0, InvalidRequest: 4, InvalidCommand: 5, UserForbidden: 11, ResourceExhausted: 429, ConversationNotExist: 1001 };
-const SendStatus = { Succeeded: 0, NotInConversation: 1, NotAllowed: 2, Blocked: 5 };
+const SendStatus = { Succeeded: 0, NotInConversation: 1, NotAllowed: 2, CheckFailed: 3, Blocked: 5 };
 const BodyField = Object.fromEntries(Object.entries(Schema.ResponseBody).map(([Field, [Id]]) => [Id, Field]));
 const RequestField = Object.fromEntries(Object.entries(Schema.RequestBody).map(([Field, [Id]]) => [Id, Field]));
 const ConversationKey = (A, B) => `0:1:${[A, B].sort((X, Y) => (BigInt(X) < BigInt(Y) ? -1 : 1)).join(':')}`;
@@ -115,6 +116,8 @@ async function SendMessage(Context, Body) {
 	const Fail = Code => ({ status: Code, client_message_id: Body.client_message_id ?? '', server_message_id: '0', check_code: '0', check_message: '' });
 	if (Room.conversation_type === 1 && (await Pool.query(`SELECT ${BlockedBetween('$1::bigint', '$2::bigint')} AS blocked`, [User.id, Others[0]])).rows[0].blocked) return Fail(SendStatus.Blocked);
 	if (Room.conversation_type === 1 && !(await MayMessage(Pool, User.id, Others[0]))) return Fail(SendStatus.NotAllowed);
+	const Restricted = await ActiveRestriction(Pool, User.id, 'message');
+	if (Restricted) return { ...Fail(SendStatus.CheckFailed), check_code: '7195', check_message: JSON.stringify({ status_code: 7195, status_msg: { msg_content: { tips: `${RestrictionText(Restricted)} {{1}}`, template: [{ name: 'Feedback', key: '1' }] } } }) };
 	const Content = String(Body.content ?? '');
 	const ClientId = String(Body.client_message_id ?? '');
 	const Type = Number(Body.message_type ?? 0);

@@ -1,5 +1,6 @@
 import { HttpError, Id } from './http.mjs';
 import { Transaction } from './db.mjs';
+import { RemovedSql, ForYouIneligibleSql } from './moderation.mjs';
 
 export const AvatarUrl = (User, Origin) => User.avatar_name ? `${Origin}/media/${User.avatar_name}` : `${Origin}/public/avatar.svg`;
 
@@ -75,6 +76,8 @@ const ActivitySql = `
 	UNION ALL SELECT 'comment_like', cl.created_at, cl.user_id, c.video_id, c.id FROM comment_likes cl JOIN comments c ON c.id = cl.comment_id WHERE c.author_id = $1 AND cl.user_id <> $1
 	UNION ALL SELECT 'comment', c.created_at, c.author_id, c.video_id, c.id FROM comments c JOIN videos v ON v.id = c.video_id LEFT JOIN comments p ON p.id = c.parent_id WHERE c.author_id <> $1 AND (v.author_id = $1 OR p.author_id = $1)
 	UNION ALL SELECT 'follow', f.created_at, f.follower_id, NULL, NULL FROM follows f WHERE f.following_id = $1`;
+const VisibleActivity = `(a.comment_id IS NULL OR NOT ${RemovedSql('comment', 'a.comment_id')}) AND (a.video_id IS NULL OR NOT ${RemovedSql('video', 'a.video_id')})
+	AND NOT EXISTS (SELECT 1 FROM users banned WHERE banned.id = a.actor AND banned.suspended_at IS NOT NULL)`;
 
 export async function Activity(Pool, UserId, Kinds, { Before = null, After = null }, Limit) {
 	const Result = await Pool.query(`SELECT a.kind, a.at, extract(epoch FROM a.at)::float8 AS epoch, a.at <= me.notices_read_at AS read,
@@ -82,13 +85,13 @@ export async function Activity(Pool, UserId, Kinds, { Before = null, After = nul
 		a.video_id, v.author_id AS video_author, v.cover_name, v.description, a.comment_id, c.body, c.parent_id, p.author_id AS parent_author
 		FROM (${ActivitySql}) a JOIN users me ON me.id = $1 JOIN users u ON u.id = a.actor
 		LEFT JOIN videos v ON v.id = a.video_id LEFT JOIN comments c ON c.id = a.comment_id LEFT JOIN comments p ON p.id = c.parent_id
-		WHERE a.kind = ANY($2) AND NOT ${BlockedBetween('$1', 'a.actor')} AND ($3::float8 IS NULL OR a.at < to_timestamp($3)) AND ($5::float8 IS NULL OR a.at > to_timestamp($5))
+		WHERE a.kind = ANY($2) AND NOT ${BlockedBetween('$1', 'a.actor')} AND ${VisibleActivity} AND ($3::float8 IS NULL OR a.at < to_timestamp($3)) AND ($5::float8 IS NULL OR a.at > to_timestamp($5))
 		ORDER BY a.at DESC LIMIT $4`, [UserId, Kinds, Before, Limit, After]);
 	return Result.rows;
 }
 
 export async function UnreadActivity(Pool, UserId) {
-	const Result = await Pool.query(`SELECT a.kind, count(*)::int AS count FROM (${ActivitySql}) a JOIN users me ON me.id = $1 WHERE a.at > me.notices_read_at AND NOT ${BlockedBetween('$1', 'a.actor')} GROUP BY a.kind`, [UserId]);
+	const Result = await Pool.query(`SELECT a.kind, count(*)::int AS count FROM (${ActivitySql}) a JOIN users me ON me.id = $1 WHERE a.at > me.notices_read_at AND NOT ${BlockedBetween('$1', 'a.actor')} AND ${VisibleActivity} GROUP BY a.kind`, [UserId]);
 	return Object.fromEntries(Result.rows.map(Row => [Row.kind, Row.count]));
 }
 
@@ -120,7 +123,7 @@ export async function UserStats(Pool, UserId) {
 	return { ...Result.rows[0], heart: Result.rows[0].heartCount };
 }
 
-export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, id, viewer, query, limit = 20 } = {}) {
+export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, id, viewer, query, forYou, limit = 20 } = {}) {
 	const Values = [viewer ?? null];
 	const Conditions = [];
 	function Where(Sql, Value) { Values.push(Value); Conditions.push(Sql.replace('?', `$${Values.length}`)); }
@@ -132,10 +135,12 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 	if (id) Where('v.id = ?', Id(id));
 	if (query) Where("v.description ILIKE ? ESCAPE '\\'", `%${String(query).slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`);
 	Conditions.push(`NOT ${BlockedBetween('$1', 'v.author_id')}`);
+	Conditions.push(`NOT ${RemovedSql('video', 'v.id')}`, 'u.suspended_at IS NULL');
+	if (forYou) Conditions.push(`NOT ${ForYouIneligibleSql('v.id')}`);
 	Values.push(Math.min(Math.max(Number(limit) || 20, 1), 50) + 1);
 	const Result = await Pool.query(`SELECT v.*, u.username, u.display_name, u.bio, u.avatar_name,
 		(SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes,
-		(SELECT count(*)::int FROM comments c WHERE c.video_id = v.id) AS comments,
+		(SELECT count(*)::int FROM comments c WHERE c.video_id = v.id AND NOT ${RemovedSql('comment', 'c.id')}) AS comments,
 		(SELECT count(*)::int FROM favorites f WHERE f.video_id = v.id) AS favorites,
 		EXISTS (SELECT 1 FROM likes l WHERE l.video_id = v.id AND l.user_id = $1) AS liked,
 		EXISTS (SELECT 1 FROM favorites f WHERE f.video_id = v.id AND f.user_id = $1) AS saved,

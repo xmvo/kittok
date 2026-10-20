@@ -2,6 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { RequireCsrf, RecordEvent, ClientInfo } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveMedia } from '../media.mjs';
+import { ActiveRestriction, RestrictionText, RemovedSql, ModerationNotices, UnreadModerationNotices, MarkModerationNoticesRead, ReadBanTicket, ActiveBan, BanText, Appeal } from '../moderation.mjs';
 import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
@@ -51,7 +52,7 @@ async function CommentPage(Pool, Origin, Viewer, { video, parent, cursor, count 
 		EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.user_id = $1::bigint) AS liked,
 		(SELECT count(*)::int FROM comments r WHERE r.parent_id = c.id) AS replies
 		FROM comments c JOIN users u ON u.id = c.author_id
-		WHERE ${parent ? 'c.parent_id = $2' : 'c.video_id = $2 AND c.parent_id IS NULL'} AND ($3::bigint IS NULL OR c.id ${parent ? '>' : '<'} $3) AND NOT ${BlockedBetween('$1::bigint', 'c.author_id')}
+		WHERE ${parent ? 'c.parent_id = $2' : 'c.video_id = $2 AND c.parent_id IS NULL'} AND ($3::bigint IS NULL OR c.id ${parent ? '>' : '<'} $3) AND NOT ${BlockedBetween('$1::bigint', 'c.author_id')} AND NOT ${RemovedSql('comment', 'c.id')} AND u.suspended_at IS NULL
 		ORDER BY c.id ${parent ? 'ASC' : 'DESC'} LIMIT $4`, [Viewer ?? null, parent ?? video, After, Limit + 1]);
 	const Rows = Result.rows.slice(0, Limit);
 	return { status_code: 0, comments: Rows.map(Row => CommentShape(Row, Origin)), cursor: Rows.at(-1)?.id ?? cursor ?? '0', has_more: Result.rows.length > Limit ? 1 : 0 };
@@ -74,7 +75,7 @@ export async function Compatibility(Context) {
 	}
 	if (['/api/preload/item_list/', '/api/recommend/item_list/', '/api/following/item_list/', '/api/post/item_list/', '/api/favorite/item_list/', '/api/collection/item_list/', '/api/user/collect/item_list/'].includes(Path)) {
 		RequireMethod(Request, ['GET', 'POST']);
-		const Filter = { viewer: User?.id, before: Params.get('cursor') === '0' ? undefined : Params.get('cursor'), limit: Params.get('count') };
+		const Filter = { viewer: User?.id, forYou: ['/api/preload/item_list/', '/api/recommend/item_list/'].includes(Path), before: Params.get('cursor') === '0' ? undefined : Params.get('cursor'), limit: Params.get('count') };
 		if (Path.includes('/following/')) { if (!User) throw new HttpError(401, 'NotLoggedIn'); Filter.following = User.id; }
 		if (Path.includes('/post/')) Filter.author = (await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'))).id;
 		if (Path.includes('/collection/')) { if (!User) throw new HttpError(401, 'NotLoggedIn'); Filter.savedBy = User.id; }
@@ -160,6 +161,50 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		Json(Response, { status_code: 1, statusCode: 1, status_msg: 'Private accounts are not available on this instance.' }); return true;
 	}
+	if (Path === '/tns-api/appeal/status/' || Path === '/aweme/v2/appeal/status/') {
+		RequireMethod(Request, ['GET']);
+		const Owner = ReadBanTicket(Params.get('verify_ticket'));
+		const Ban = Owner && Owner === Params.get('object_id') ? await ActiveBan(Pool, Owner) : null;
+		if (!Ban) { Json(Response, { status_code: 1, status_msg: 'TicketExpired', pop_title: 'Sign in again', pop_content: 'This page expired. Sign in again to see your account status.', button_list: [{ btn_type: 0, btn_content: 'OK', btn_style: 0 }] }); return true; }
+		const Pending = Ban.appeal_status === 'pending', Upheld = Ban.appeal_status === 'upheld';
+		const AppealUrl = new URL('/appeal', Config.Origin);
+		AppealUrl.search = new URLSearchParams({ object_id: Owner, appeal_type: '2018', punish_key: Ban.id }).toString();
+		Json(Response, { status_code: 0, appeal_type: 2018, pop_title: 'Your account was permanently banned',
+			pop_content: `${BanText(Ban)} ${Pending ? 'Your appeal is being reviewed.' : Upheld ? 'We reviewed your appeal and upheld this decision.' : 'If you think we made a mistake, you can appeal.'}`,
+			button_list: [...(Pending || Upheld ? [] : [{ btn_type: 4, btn_content: 'Appeal', btn_url: AppealUrl.href, btn_style: 1 }]), { btn_type: 0, btn_content: 'OK', btn_style: 0 }] }); return true;
+	}
+	if (Path === '/aweme/v1/material/upload/') {
+		RequireMethod(Request, ['POST']);
+		Limiter.Hit(`material:${Request.socket.remoteAddress}`, 10);
+		const Body = await ReadBody(Request);
+		let Email = '';
+		try { Email = String(JSON.parse(Body.data ?? '{}').email ?? ''); } catch {}
+		if (Body.ns !== 'review_account_appeal' || !/^[^\s@]{1,64}@[^\s@]{1,189}$/.test(Email)) { Json(Response, { status_code: 1, status_msg: 'InvalidMaterial' }); return true; }
+		Json(Response, { status_code: 0, data: { mid: Buffer.from(Email).toString('base64url') } }); return true;
+	}
+	if (Path === '/tns-api/appeal/post-commit/' || Path === '/tns-api/appeal/post-commit') {
+		RequireMethod(Request, ['POST']);
+		const Body = await ReadBody(Request);
+		const Owner = ReadBanTicket(Body.verify_ticket);
+		if (!Owner || Owner !== String(Body.object_id)) { Json(Response, { status_code: 1, status_msg: 'TicketExpired' }); return true; }
+		const Ban = await ActiveBan(Pool, Owner);
+		if (!Ban || String(Body.punish_key) !== Ban.id) { Json(Response, { status_code: 1, status_msg: 'NothingToAppeal' }); return true; }
+		let Stored = '';
+		try { Stored = Buffer.from(String(JSON.parse(Body.extra ?? '{}').mail_address_v2 ?? ''), 'base64url').toString(); } catch {}
+		try { await Appeal(Pool, { id: Owner }, Ban.id, String(Body.reason ?? ''), String(Body.mail_address || Stored).trim()); }
+		catch (Error) { if (!Error.status) throw Error; Json(Response, { status_code: 1, status_msg: Error.message }); return true; }
+		Json(Response, { status_code: 0, status_msg: '' }); return true;
+	}
+	if (Path === '/aweme/v1/im/msg/feedback/') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		const Restricted = await ActiveRestriction(Pool, User.id, 'message');
+		const Decision = Restricted && (await Pool.query('SELECT decision_id FROM moderation_restrictions WHERE id = $1', [Restricted.id])).rows[0].decision_id;
+		if (!Decision) { Json(Response, { status_code: 1, status_msg: 'NothingToAppeal' }); return true; }
+		try { await Appeal(Pool, User, Decision, `Feedback on a blocked message: ${String(Body.content ?? '').slice(0, 900)}`); }
+		catch (Error) { if (Error.status !== 409) throw Error; }
+		Json(Response, { status_code: 0, status_msg: '' }); return true;
+	}
 	if (Path === '/tiktok/v1/im/user/profile/') {
 		RequireMethod(Request, ['GET']);
 		if (!User) throw new HttpError(401, 'NotLoggedIn');
@@ -202,7 +247,8 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']);
 		const Unread = User ? await UnreadActivity(Pool, User.id) : {};
 		const Count = Kinds => Kinds.reduce((Sum, Kind) => Sum + (Unread[Kind] ?? 0), 0);
-		Json(Response, { status_code: 0, notice_count: [500, 3, 505, 2, 6, 7, 661].map(Group => ({ group: Group, count: Count(NoticeKinds[Group] ?? []) })) }); return true;
+		const System = User ? await UnreadModerationNotices(Pool, User.id) : 0;
+		Json(Response, { status_code: 0, notice_count: [500, 3, 505, 2, 6, 7, 661].map(Group => ({ group: Group, count: Group === 661 ? System : Count(NoticeKinds[Group] ?? []) })) }); return true;
 	}
 	if (Path === '/api/notice/multi/' || Path === '/api/inbox/notice_list/') {
 		RequireMethod(Request, ['GET']);
@@ -211,8 +257,16 @@ export async function Compatibility(Context) {
 		const Group = Number(Entry?.group);
 		const Max = Number(Entry?.max_time) || 0, Min = Number(Entry?.min_time) || 0;
 		const Window = Max > 0 ? { Before: Min || Max } : Min > 0 ? { After: Min } : {};
-		if (User && Number(Entry?.is_mark_read) === 1) await MarkActivityRead(Pool, User.id);
 		const Limit = PageSize(Entry?.count, 20);
+		if (Group === 661 || Group === 47) {
+			const Rows = User ? await ModerationNotices(Pool, User.id, Window, Limit + 1) : [];
+			if (User && Number(Entry?.is_mark_read) === 1) await MarkModerationNoticesRead(Pool, User.id);
+			const Page = Rows.slice(0, Limit);
+			const Epoch = Row => Row.at.getTime() / 1000;
+			Json(Response, { status_code: 0, notice_lists: [{ group: Group, has_more: Rows.length > Limit ? 1 : 0, max_time: Page[0] ? Epoch(Page[0]) : 0, min_time: Page.at(-1) ? Epoch(Page.at(-1)) : 0,
+				notice_list: Page.map(Row => ({ nid: Row.id, nid_str: Row.id, type: 47, create_time: Math.floor(Epoch(Row)), has_read: Row.read, user_id: User.id, template_notice: { notice: { title: { title: 'Account updates' }, content: Row.text } } })) }] }); return true;
+		}
+		if (User && Number(Entry?.is_mark_read) === 1) await MarkActivityRead(Pool, User.id);
 		const Rows = User && NoticeKinds[Group] ? await Activity(Pool, User.id, NoticeKinds[Group], Window, Limit + 1) : [];
 		const Page = Rows.slice(0, Limit);
 		Json(Response, { status_code: 0, notice_lists: [{ group: Group, has_more: Rows.length > Limit ? 1 : 0, max_time: Page[0]?.epoch ?? 0, min_time: Page.at(-1)?.epoch ?? 0, notice_list: Page.map(Row => NoticeShape(Row, User.id, Config.Origin)) }] }); return true;
@@ -220,6 +274,8 @@ export async function Compatibility(Context) {
 	if (Path === '/api/upload/image/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		Limiter.Hit(`avatar:${User.id}`, 20, 3600000);
+		const Restricted = await ActiveRestriction(Pool, User.id, 'profile');
+		if (Restricted) { Json(Response, { status_code: 23, status_msg: RestrictionText(Restricted) }); return true; }
 		const Form = await new globalThis.Response(await ReadRaw(Request, 5 * 1024 * 1024), { headers: { 'content-type': Request.headers['content-type'] ?? '' } }).formData().catch(() => null);
 		const File = Form?.get('file');
 		if (!(File instanceof Blob)) throw new HttpError(400, 'InvalidUpload');
@@ -230,6 +286,8 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['POST']);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
 		RequireCsrf(Request, User, Request.headers['x-csrf-token'] ?? Body.tt_csrf_token);
+		const Restricted = await ActiveRestriction(Pool, User.id, 'profile');
+		if (Restricted) { Json(Response, { status_code: 23, status_msg: RestrictionText(Restricted) }); return true; }
 		const Nickname = Body.nickname === undefined ? null : String(Body.nickname).trim();
 		const Bio = Body.signature === undefined ? null : String(Body.signature).trim();
 		const Avatar = Body.avatar_uri === undefined ? null : String(Body.avatar_uri);
@@ -296,7 +354,7 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']);
 		const VideoId = Id(Params.get('aweme_id') || Params.get('item_id'));
 		const Page = await CommentPage(Pool, Config.Origin, User?.id, { video: VideoId, cursor: Params.get('cursor'), count: Params.get('count') });
-		const Total = await Pool.query('SELECT count(*)::int AS count FROM comments WHERE video_id = $1', [VideoId]);
+		const Total = await Pool.query(`SELECT count(*)::int AS count FROM comments c WHERE c.video_id = $1 AND NOT ${RemovedSql('comment', 'c.id')}`, [VideoId]);
 		Json(Response, { ...Page, total: Total.rows[0].count }); return true;
 	}
 	if (Path === '/api/comment/list/reply/') {
@@ -322,6 +380,8 @@ export async function Compatibility(Context) {
 		Limiter.Hit(`comment:${User.id}`, 30);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
 		const VideoId = Id(Body.aweme_id);
+		const Restricted = await ActiveRestriction(Pool, User.id, 'comment');
+		if (Restricted) { Json(Response, { status_code: 22, statusCode: 22, status_msg: RestrictionText(Restricted) }); return true; }
 		const Added = await AddComment(Pool, VideoId, User.id, Body.text, Body.reply_id && Body.reply_id !== '0' ? Id(Body.reply_id) : null);
 		Json(Response, { status_code: 0, status_msg: '', comment: CommentShape({ ...Added, video_id: VideoId, author_id: User.id, username: User.username, display_name: User.display_name }, Config.Origin) }); return true;
 	}
@@ -340,7 +400,13 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
 		const Target = Id(Body.user_id || Body.sec_user_id);
-		await SetRelation(Pool, 'follows', ['follower_id', 'following_id'], [User.id, Target], String(Body.type ?? Body.action_type ?? '1') === '1');
+		const Following = String(Body.type ?? Body.action_type ?? '1') === '1';
+		if (Following) {
+			if ((await Pool.query('SELECT 1 FROM users WHERE id = $1 AND suspended_at IS NOT NULL', [Target])).rowCount) { Json(Response, { status_code: 24, statusCode: 24, follow_status: 0 }); return true; }
+			const Restricted = await ActiveRestriction(Pool, User.id, 'follow');
+			if (Restricted) { Json(Response, { status_code: 2096, statusCode: 2096, status_msg: RestrictionText(Restricted), follow_status: FollowStatus(await Relation(Pool, User.id, Target)) }); return true; }
+		}
+		await SetRelation(Pool, 'follows', ['follower_id', 'following_id'], [User.id, Target], Following);
 		Json(Response, { status_code: 0, statusCode: 0, follow_status: FollowStatus(await Relation(Pool, User.id, Target)) }); return true;
 	}
 	if (Path === '/api/user/block/') {

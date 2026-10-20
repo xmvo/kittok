@@ -1,6 +1,7 @@
 import { Login, RequireCsrf, SessionCookie, ClientInfo, RecordEvent } from '../auth.mjs';
 import { HttpError, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { AvatarUrl } from '../store.mjs';
+import { ActiveRestriction, RestrictionText, BanTicket } from '../moderation.mjs';
 
 export function DecodePassportValue(Value, Mixed) {
 	if (typeof Value !== 'string' || Value.length > 2048) throw new HttpError(400, 'InvalidLogin');
@@ -39,6 +40,7 @@ export async function Passport(Context) {
 			Json(Response, { message: 'success', data: PassportUser(Session.User, Config) });
 		} catch (Error) {
 			if (!Error.status) throw Error;
+			if (Error.UserId) { Json(Response, { message: 'error', data: { error_code: 1091, description: 'This account was permanently banned.', user_id_str: Error.UserId, verify_ticket: BanTicket(Error.UserId) } }); return true; }
 			const Description = { 429: 'Too many attempts. Try again later.', 403: 'This account is suspended.' }[Error.status] ?? 'Username or password is incorrect.';
 			Json(Response, { message: 'error', data: { error_code: Error.status === 429 ? 7 : 1001, description: Description } });
 		}
@@ -51,6 +53,8 @@ export async function Passport(Context) {
 	if (Path === '/passport/web/login_name/update/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		Limiter.Hit(`username:${User.id}`, 5, 3600000);
+		const Restricted = await ActiveRestriction(Pool, User.id, 'profile');
+		if (Restricted) { Json(Response, { message: 'error', data: { error_code: 23, description: RestrictionText(Restricted) } }); return true; }
 		const Name = String((await ReadBody(Request)).login_name ?? Url.searchParams.get('login_name') ?? '').trim().toLowerCase();
 		if (!/^[a-z0-9_]{3,24}$/.test(Name)) { Json(Response, { message: 'error', data: { error_code: 1027, description: 'Use 3 to 24 lowercase letters, numbers, or underscores.' } }); return true; }
 		try {

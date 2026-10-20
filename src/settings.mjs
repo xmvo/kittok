@@ -1,4 +1,5 @@
 import { HttpError } from './http.mjs';
+import { DefaultThresholds, PolicyCategories } from './moderation.mjs';
 
 export const Features = { shop: 'Shop', explore: 'Explore', following: 'Following feed', shortDrama: 'Short dramas', live: 'LIVE', search: 'Search', upload: 'Uploads', comments: 'Comments', messages: 'Direct messages' };
 export const BrandSlots = { wordmarkDark: '/public/logo.svg', wordmarkLight: '/public/logo-light.svg', icon: '/public/avatar.svg', favicon: '/public/avatar.svg' };
@@ -33,6 +34,13 @@ function Validate(Key, Value) {
 		if (Rules.length > 10000) throw new HttpError(400, 'RulesTooLong');
 		return Rules;
 	}
+	if (Key === 'moderation') {
+		const Whole = (Number_, Low, High) => Number.isInteger(Number_) && Number_ >= Low && Number_ <= High;
+		const Policy = Object.fromEntries(PolicyCategories.map(Name => [Name, Number(Value?.policy?.[Name] ?? DefaultThresholds.policy[Name])]));
+		const Result = { strikeDays: Number(Value?.strikeDays), feature: Number(Value?.feature), total: Number(Value?.total), policy: Policy };
+		if (!Whole(Result.strikeDays, 7, 365) || !Whole(Result.feature, 2, 50) || !Whole(Result.total, 2, 100) || !Object.values(Policy).every(Count => Whole(Count, 1, 50))) throw new HttpError(400, 'InvalidModerationSettings');
+		return Result;
+	}
 	if (Key === 'brand') return Value;
 	throw new HttpError(404, 'UnknownSetting');
 }
@@ -45,6 +53,7 @@ function Apply(Config, Key, Value) {
 	if (Key === 'announcement') Config.Announcement = Value;
 	if (Key === 'rules') Config.Rules = Value;
 	if (Key === 'brand') Config.Brand = Value;
+	if (Key === 'moderation') Config.Moderation = Value;
 }
 
 export async function LoadSettings(Pool, Config) {
@@ -52,6 +61,7 @@ export async function LoadSettings(Pool, Config) {
 	Config.Announcement = { text: '', link: '', version: 0 };
 	Config.Rules = '';
 	Config.Brand = {};
+	Config.Moderation = DefaultThresholds;
 	for (const Row of (await Pool.query('SELECT key, value FROM settings')).rows) Apply(Config, Row.key, Row.value);
 }
 
@@ -67,7 +77,7 @@ export function Settings(Config) {
 	return {
 		registration: Config.Registration, name: Config.Name, features: Config.Features,
 		limits: { videoMB: Math.round(Config.MaxVideoBytes / 1024 / 1024), videoSeconds: Config.MaxVideoSeconds },
-		announcement: Config.Announcement, rules: Config.Rules,
+		announcement: Config.Announcement, rules: Config.Rules, moderation: Config.Moderation,
 		brand: Object.fromEntries(Object.keys(BrandSlots).map(Slot => [Slot, { url: `/brand/${Slot}`, custom: Boolean(Config.Brand?.[Slot]) }])),
 	};
 }

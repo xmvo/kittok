@@ -3,6 +3,7 @@ import { HttpError, Id, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { CreateUser, Login, RequireCsrf, SessionCookie, ClientInfo } from '../auth.mjs';
 import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment, SetBlock } from '../store.mjs';
 import { ImportVideo, ReceiveVideo } from '../media.mjs';
+import { AssertAllowed, RemovedSql } from '../moderation.mjs';
 
 export async function Api(Context) {
 	const { Request, Response, Url, Pool, Config, User, Limiter } = Context;
@@ -40,6 +41,7 @@ export async function Api(Context) {
 		}
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		if (Config.Features?.upload === false) throw new HttpError(403, 'UploadsDisabled');
+		await AssertAllowed(Pool, User, 'upload');
 		Limiter.Hit(`upload:${User.id}`, 5, 3600000);
 		if (!Request.headers['content-type']?.startsWith('video/')) throw new HttpError(415, 'ExpectedVideoBody');
 		if (Number(Request.headers['content-length']) > Config.MaxVideoBytes) throw new HttpError(413, 'VideoTooLarge');
@@ -58,11 +60,13 @@ export async function Api(Context) {
 		const VideoId = Id(Match[1]);
 		if (Match[2] === 'comments') {
 			if (Request.method === 'GET') {
-				const Result = await Pool.query('SELECT c.id, c.body, c.created_at, u.id AS user_id, u.username, u.display_name FROM comments c JOIN users u ON u.id = c.author_id WHERE c.video_id = $1 ORDER BY c.id DESC LIMIT 50', [VideoId]);
+				const Result = await Pool.query(`SELECT c.id, c.body, c.created_at, u.id AS user_id, u.username, u.display_name FROM comments c JOIN users u ON u.id = c.author_id
+					WHERE c.video_id = $1 AND NOT ${RemovedSql('comment', 'c.id')} AND u.suspended_at IS NULL ORDER BY c.id DESC LIMIT 50`, [VideoId]);
 				Json(Response, { comments: Result.rows }); return true;
 			}
 			RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 			if (Config.Features?.comments === false) throw new HttpError(403, 'CommentsDisabled');
+			await AssertAllowed(Pool, User, 'comment');
 			Limiter.Hit(`comment:${User.id}`, 30);
 			const { id, body, created_at } = await AddComment(Pool, VideoId, User.id, (await ReadBody(Request)).text);
 			Json(Response, { id, body, created_at }, 201); return true;
@@ -75,6 +79,10 @@ export async function Api(Context) {
 	if (Follow) {
 		RequireMethod(Request, ['PUT', 'DELETE']); RequireCsrf(Request, User);
 		const Target = await FindUser(Pool, Follow[1]);
+		if (Follow[2] === 'follow' && Request.method === 'PUT') {
+			if ((await Pool.query('SELECT 1 FROM users WHERE id = $1 AND suspended_at IS NOT NULL', [Target.id])).rowCount) throw new HttpError(404, 'UserNotFound');
+			await AssertAllowed(Pool, User, 'follow');
+		}
 		if (Follow[2] === 'block') await SetBlock(Pool, User.id, Target.id, Request.method === 'PUT');
 		else await SetRelation(Pool, 'follows', ['follower_id', 'following_id'], [User.id, Target.id], Request.method === 'PUT');
 		Json(Response, { ok: true }); return true;

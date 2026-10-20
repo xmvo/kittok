@@ -1,9 +1,29 @@
 import { Escape, HttpError, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { CreateUser, Login, RequireCsrf, SessionCookie, ClientInfo } from '../auth.mjs';
 import { DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
+import { Standing, Appeal, RestrictableFeatures, ViolationFeatures, Until } from '../moderation.mjs';
 
 export function Page(Config, Title, Content) {
 	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${Escape(Title)} · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="/public/account.css"><body><main><a class="brand" href="/"><img src="/brand/icon" alt="">${Escape(Config.Name)}</a>${Content}</main></body></html>`;
+}
+
+const States = { good: ['Good standing', 'Your account has no active restrictions.'], at_risk: ['At risk', 'Your account is close to a strike limit. Another violation could get it permanently banned.'],
+	restricted: ['Restricted', 'Some features are restricted until the time shown.'], banned: ['Banned', 'Your account is permanently banned.'] };
+const Actions = { warning: 'Warning', strike: 'Strike', ban: 'Ban', none: '' };
+
+async function AccountStatus(Pool, Config, User) {
+	const Status = await Standing(Pool, User.id, Config.Moderation);
+	const [Title, Summary] = States[Status.state];
+	const Limits = [...Object.entries(Status.strikes.feature).map(([Feature, Count]) => [ViolationFeatures[Feature], Count, Status.thresholds.feature]),
+		...Object.entries(Status.strikes.policy).map(([Policy, Count]) => [Policy.replace('_', ' '), Count, Status.thresholds.policy[Policy] ?? Status.thresholds.feature])];
+	const Restrictions = Status.restrictions.map(Row => `<li><strong>${Escape(RestrictableFeatures[Row.feature])}</strong> ${Row.expires_at ? `until ${Escape(Until(Row))}` : 'until lifted'}</li>`).join('');
+	const History = Status.decisions.map(Row => {
+		const Label = [Row.content_action === 'remove' ? `${Row.target_type === 'video' ? 'Video' : 'Comment'} removed` : Row.content_action === 'fyf_ineligible' ? 'Not eligible for For You' : '', Actions[Row.account_action]].filter(Boolean).join(' · ') || 'Feature restriction';
+		const Appealable = !Row.reversed_at && !Row.appeal_status;
+		const State = Row.reversed_at ? 'Reversed' : Row.appeal_status === 'pending' ? 'Appeal in review' : Row.appeal_status === 'upheld' ? 'Appeal upheld' : '';
+		return `<li><strong>${Escape(Label)}</strong> · ${Escape(Row.category.replace('_', ' '))}<br><span>${Escape(Row.reason)}</span><br><small>${new Date(Row.created_at).toISOString().slice(0, 10)}${State ? ` · ${State}` : ''}</small>${Appealable ? `<details><summary>Appeal</summary><form action="/account/appeal" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><input type="hidden" name="decision" value="${Escape(Row.id)}"><label>Why should we review this?<textarea name="reason" required maxlength="1000" rows="3"></textarea></label><button class="secondary">Submit appeal</button></form></details>` : ''}</li>`;
+	}).join('');
+	return `<h2>Account status</h2><p class="standing ${Status.state}"><strong>${Title}</strong> ${Escape(Summary)}</p>${Restrictions ? `<ul class="status">${Restrictions}</ul>` : ''}${Limits.length ? `<ul class="status">${Limits.map(([Name, Count, Max]) => `<li>${Escape(Name)}: ${Count} of ${Max} strikes</li>`).join('')}</ul>` : ''}${History ? `<details><summary>Violations (${Status.decisions.length})</summary><ul class="status">${History}</ul></details>` : ''}`;
 }
 
 async function MessageForm(Pool, Config, User) {
@@ -20,6 +40,13 @@ export async function Account(Context) {
 		RequireMethod(Request, ['GET']);
 		Response.setHeader('content-type', 'text/html; charset=utf-8');
 		Response.end(Page(Config, 'About', `<h1>${Escape(Config.Name)}</h1><p>${Escape(Config.Description)}</p><p>Powered by Kittok 0.1.0. This is an independent instance.</p><p><a href="${Escape(Config.SourceUrl === '/about' ? '/source' : Config.SourceUrl)}">Instance source</a> · <a href="/account">Your account</a></p>`)); return true;
+	}
+	if (Url.pathname === '/account/appeal') {
+		RequireMethod(Request, ['POST']);
+		const Body = await ReadBody(Request);
+		RequireCsrf(Request, User, Body.csrf);
+		await Appeal(Pool, User, Body.decision, Body.reason);
+		Response.writeHead(303, { location: '/account' }); Response.end(); return true;
 	}
 	if (Url.pathname === '/account/messages') {
 		RequireMethod(Request, ['POST']);
@@ -53,7 +80,7 @@ export async function Account(Context) {
 	const Notice = Url.searchParams.get('error');
 	let Content = Notice ? `<p class="error" role="alert">${Escape(Notice)}</p>` : '';
 	if (User) {
-		Content += `<h1>Hey, ${Escape(User.display_name)}.</h1><p>@${Escape(User.username)} · ${Escape(User.role)}</p><a class="button" href="/">Watch videos</a>${User.role === 'admin' ? '<a class="button secondary" href="/admin">Admin panel</a>' : ''}${Config.Features?.upload === false ? '' : '<h2>Upload a video</h2>'}<form id="upload"${Config.Features?.upload === false ? ' hidden' : ''}><label>Video<input required name="video" type="file" accept="video/*"></label><label>Caption<textarea name="description" maxlength="2200" rows="3"></textarea></label><button>Upload</button><p id="status" role="status"></p></form>${await MessageForm(Pool, Config, User)}<form action="/account/logout" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><button class="secondary">Log out</button></form><script id="upload-config" type="application/json">${JSON.stringify({ csrf: User.csrf_token }).replaceAll('<', '\\u003c')}</script><script src="/public/upload.js"></script>`;
+		Content += `<h1>Hey, ${Escape(User.display_name)}.</h1><p>@${Escape(User.username)} · ${Escape(User.role)}</p><a class="button" href="/">Watch videos</a>${User.role === 'admin' ? '<a class="button secondary" href="/admin">Admin panel</a>' : ''}${Config.Features?.upload === false ? '' : '<h2>Upload a video</h2>'}<form id="upload"${Config.Features?.upload === false ? ' hidden' : ''}><label>Video<input required name="video" type="file" accept="video/*"></label><label>Caption<textarea name="description" maxlength="2200" rows="3"></textarea></label><button>Upload</button><p id="status" role="status"></p></form>${await AccountStatus(Pool, Config, User)}${await MessageForm(Pool, Config, User)}<form action="/account/logout" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><button class="secondary">Log out</button></form><script id="upload-config" type="application/json">${JSON.stringify({ csrf: User.csrf_token }).replaceAll('<', '\\u003c')}</script><script src="/public/upload.js"></script>`;
 	} else {
 		Content += `<h1>Welcome to ${Escape(Config.Name)}.</h1><p>This account belongs to this instance.</p><form action="/account/login" method="post"><label>Username<input name="username" autocomplete="username" required minlength="3" maxlength="24"></label><label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label><button>Log in</button></form>`;
 		if (Config.Registration !== 'closed') Content += `<details><summary>Create an account</summary><form action="/account/register" method="post"><label>Username<input name="username" required pattern="[a-z0-9_]{3,24}" autocomplete="username"></label><label>Display name<input name="displayName" required maxlength="50"></label><label>Password<input name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label>${Config.Registration === 'invite' ? '<label>Invite code<input name="invite" required></label>' : ''}${Config.Rules ? '<p>By signing up you agree to the <a href="/rules">rules</a>.</p>' : ''}<button>Sign up</button></form></details>`;

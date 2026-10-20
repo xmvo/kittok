@@ -72,7 +72,7 @@ export async function Login(Pool, Username, Password, Info = {}) {
 	if (!User || !Valid) throw new HttpError(401, 'InvalidLogin');
 	if (User.suspended_at) {
 		await RecordEvent(Pool, User.id, 'login_failed', Info, 'Account suspended');
-		throw new HttpError(403, 'AccountSuspended');
+		throw Object.assign(new HttpError(403, 'AccountSuspended'), { UserId: User.id });
 	}
 	const SessionToken = Token();
 	const Csrf = Token();
