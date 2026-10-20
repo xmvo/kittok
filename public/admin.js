@@ -19,10 +19,11 @@
 		invites: 'M6 12a2 2 0 0 1 2-2h32a2 2 0 0 1 2 2v7a5 5 0 0 0 0 10v7a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-7a5 5 0 0 0 0-10v-7Zm4 2v3.3a9 9 0 0 1 0 13.4V34h28v-3.3a9 9 0 0 1 0-13.4V14H10Zm8 4h4v3h-4v-3Zm0 5h4v3h-4v-3Zm0 5h4v3h-4v-3Z',
 		settings: 'M8 12h16v-3h4v10h-4v-3H8v-4Zm24 0h8v4h-8v-4ZM8 26h6v-3h4v10h-4v-3H8v-4Zm14 0h18v4H22v-4Z',
 		audit: 'M24 6a18 18 0 1 1-17.1 23.6l3.8-1.2A14 14 0 1 0 12 15.5V20H6V8h4v4.3A18 18 0 0 1 24 6Zm-2 8h4v9.2l7 4.1-2 3.4-9-5.3V14Z',
+		reports: 'M10 4h4v2.5h22.6l-4.4 9.5 4.4 9.5H14V44h-4V4Zm4 6.5v11h16.4l-2.6-5.5 2.6-5.5H14Z',
 		back: 'M20.6 9.4 23.4 12.2 13.6 22H42v4H13.6l9.8 9.8-2.8 2.8L6 24 20.6 9.4Z',
 		theme: 'M24 6a18 18 0 1 0 0 36 18 18 0 0 0 0-36Zm0 4v28a14 14 0 0 1 0-28Z',
 	};
-	const Nav = [['/admin', 'Overview', 'overview'], ['/admin/users', 'Users', 'users'], ['/admin/videos', 'Videos', 'videos'], ['/admin/comments', 'Comments', 'comments'], ['/admin/invites', 'Invites', 'invites'], ['/admin/settings', 'Settings', 'settings'], ['/admin/audit', 'Audit log', 'audit']];
+	const Nav = [['/admin', 'Overview', 'overview'], ['/admin/reports', 'Reports', 'reports'], ['/admin/users', 'Users', 'users'], ['/admin/videos', 'Videos', 'videos'], ['/admin/comments', 'Comments', 'comments'], ['/admin/invites', 'Invites', 'invites'], ['/admin/settings', 'Settings', 'settings'], ['/admin/audit', 'Audit log', 'audit']];
 
 	function El(Tag, Props = {}, ...Children) {
 		const Created = document.createElement(Tag);
@@ -46,6 +47,51 @@
 	function Button(Label, OnClick, { Kind = 'secondary', Size = 'small', Type = 'button' } = {}) {
 		return El('button', { type: Type, class: `TUXButton TUXButton--capsule TUXButton--${Size} TUXButton--${Kind}`, onclick: OnClick }, El('div', { class: 'TUXButton-content' }, El('div', { class: 'TUXButton-label' }, Label)));
 	}
+	let MenuId = 0;
+	function CloseMenus(Focus = false) {
+		for (const Menu of document.querySelectorAll('.action-menu[data-open]')) {
+			Menu.removeAttribute('data-open');
+			Menu.querySelector('.action-menu-panel').hidden = true;
+			const Trigger = Menu.querySelector('.action-menu-trigger');
+			Trigger.setAttribute('aria-expanded', 'false');
+			if (Focus) Trigger.focus();
+		}
+	}
+	function ActionMenu(Label, ...Items) {
+		const Entries = Items.flat().filter(Boolean);
+		if (!Entries.length) return null;
+		const Id = `action-menu-${++MenuId}`;
+		const Panel = El('div', { class: 'action-menu-panel', role: 'menu', id: Id, hidden: true, 'aria-label': Label });
+		const Trigger = El('button', { type: 'button', class: 'action-menu-trigger', 'aria-label': Label, 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-controls': Id },
+			Svg('M12 20a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm12 0a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm12 0a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z', 22));
+		const Menu = El('div', { class: 'action-menu' }, Trigger, Panel);
+		function Open(Last = false) {
+			CloseMenus(); Menu.setAttribute('data-open', ''); Panel.hidden = false; Trigger.setAttribute('aria-expanded', 'true');
+			Menu.removeAttribute('data-up');
+			if (Panel.getBoundingClientRect().bottom > innerHeight - 12 && Trigger.getBoundingClientRect().top > Panel.offsetHeight + 12) Menu.setAttribute('data-up', '');
+			Entries.at(Last ? -1 : 0).focus();
+		}
+		Trigger.addEventListener('click', () => Menu.hasAttribute('data-open') ? CloseMenus(true) : Open());
+		Trigger.addEventListener('keydown', Event => { if (['ArrowDown', 'ArrowUp'].includes(Event.key)) { Event.preventDefault(); Open(Event.key === 'ArrowUp'); } });
+		for (const Item of Entries) {
+			Item.className = 'action-menu-item' + (/^(Remove|Delete|Suspend)/.test(Item.textContent) ? ' destructive' : '');
+			Item.setAttribute('role', 'menuitem'); Item.tabIndex = -1;
+			Item.addEventListener('click', () => { CloseMenus(); Trigger.focus(); }, true);
+			Panel.append(Item);
+		}
+		Panel.addEventListener('keydown', Event => {
+			const Index = Entries.indexOf(document.activeElement);
+			if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(Event.key)) {
+				Event.preventDefault(); Entries[Event.key === 'Home' ? 0 : Event.key === 'End' ? Entries.length - 1 : (Index + (Event.key === 'ArrowUp' ? -1 : 1) + Entries.length) % Entries.length].focus();
+			}
+		});
+		return Menu;
+	}
+	document.addEventListener('pointerdown', Event => { if (!Event.target.closest('.action-menu')) CloseMenus(); });
+	document.addEventListener('keydown', Event => {
+		if (Event.key === 'Escape' && document.querySelector('.action-menu[data-open]')) { Event.preventDefault(); CloseMenus(true); }
+		if (Event.key === 'Tab') CloseMenus();
+	});
 	const Link = (Href, ...Children) => El('a', { href: Href, 'data-link': '' }, ...Children);
 	const Muted = Text => El('span', { class: 'muted' }, Text);
 	const Count = (Value, Word) => `${Number(Value).toLocaleString()} ${Word}${Number(Value) === 1 ? '' : 's'}`;
@@ -71,8 +117,16 @@
 	}
 	function Dialog({ Title, Message, Confirm = 'Confirm', Danger = true, Body = null, Read = null }) {
 		return new Promise(Resolve => {
-			function Close(Value) { Overlay.remove(); document.removeEventListener('keydown', Key); Resolve(Value); }
-			function Key(Event) { if (Event.key === 'Escape') Close(null); }
+			const Previous = document.activeElement;
+			function Close(Value) { Overlay.remove(); document.removeEventListener('keydown', Key); Previous?.isConnected && Previous.focus(); Resolve(Value); }
+			function Key(Event) {
+				if (Event.key === 'Escape') Close(null);
+				if (Event.key === 'Tab') {
+					const Items = [...Overlay.querySelectorAll('button,input,textarea,select,a[href]')].filter(Item => !Item.disabled);
+					if (Event.shiftKey && document.activeElement === Items[0]) { Event.preventDefault(); Items.at(-1).focus(); }
+					else if (!Event.shiftKey && document.activeElement === Items.at(-1)) { Event.preventDefault(); Items[0].focus(); }
+				}
+			}
 			const Overlay = El('div', { class: 'overlay', onclick: Event => Event.target === Overlay && Close(null) },
 				El('form', { class: 'dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'dialog-title', onsubmit: Event => { Event.preventDefault(); Close(Read ? Read() : true); } },
 					El('h2', { id: 'dialog-title' }, Title), Message ? El('p', {}, Message) : null, Body,
@@ -101,14 +155,14 @@
 	const Facts = Rows => El('dl', { class: 'facts' }, Rows.filter(Boolean).map(([Label, Value]) => El('div', {}, El('dt', {}, Label), El('dd', {}, Value))));
 	const Tag = (Text, Negative) => El('span', { class: `tag${Negative ? ' negative' : ''}` }, Text);
 
-	function ViolationForm(UserId, { Video = '', Comment = '' } = {}) {
-		const Category = El('select', { class: 'input', 'aria-label': 'Category' }, El('option', { value: '' }, 'Choose a category'), Boot.categories.map(Key => El('option', { value: Key }, CategoryLabels[Key])));
-		const Reason = El('textarea', { class: 'input', rows: 3, maxlength: 1000, placeholder: 'What happened? Users don’t see this.' });
+	function ViolationForm(UserId, { Video = '', Comment = '', Preset = '', Reason: Prefill = '', After } = {}) {
+		const Category = El('select', { class: 'input', 'aria-label': 'Category' }, El('option', { value: '' }, 'Choose a category'), Boot.categories.map(Key => El('option', { value: Key, selected: Key === Preset }, CategoryLabels[Key])));
+		const Reason = El('textarea', { class: 'input', rows: 3, maxlength: 1000, placeholder: 'What happened? Users don’t see this.' }); Reason.value = Prefill;
 		const VideoId = Input({ placeholder: 'Video ID (optional)', value: Video, inputmode: 'numeric' });
 		const CommentId = Input({ placeholder: 'Comment ID (optional)', value: Comment, inputmode: 'numeric' });
 		return Dialog({ Title: 'Add a violation', Confirm: 'Add violation', Body: El('div', { class: 'stack' }, Field('Category', Category), Field('Reason', Reason), El('div', { class: 'row' }, VideoId, CommentId)),
 			Read: () => ({ category: Category.value, reason: Reason.value, video_id: VideoId.value.trim() || undefined, comment_id: CommentId.value.trim() || undefined }) })
-			.then(Value => Value && Act(`users/${UserId}/violations`, Value, 'Violation added'));
+			.then(Value => Value && Act(`users/${UserId}/violations`, Value, 'Violation added', After ?? Render));
 	}
 	function ViolationList(Rows) {
 		if (!Rows.length) return Empty('No violations.');
@@ -132,21 +186,71 @@
 			El('a', { class: 'cover', href: `/@${Video.username ?? ''}/video/${Video.id}`, target: '_blank', rel: 'noopener', 'aria-label': Video.description || 'Untitled video' }, El('img', { src: Video.cover, alt: '', loading: 'lazy' }), El('span', {}, `▶ ${Number(Video.views).toLocaleString()}`)),
 			El('p', { class: 'caption' }, Video.description || 'Untitled'),
 			Muted(`${Video.username ? '@' + Video.username + ' · ' : ''}${Count(Video.likes, 'like')} · ${Count(Video.comments, 'comment')} · ${Ago(Video.created_at)}`),
-			El('div', { class: 'actions' },
-				Video.author_id ? Button('Violation', () => ViolationForm(Video.author_id, { Video: Video.id })) : null,
-				Button('Remove', async () => { if (await Dialog({ Title: 'Remove this video?', Message: 'The video, its files, likes, and comments are deleted permanently.', Confirm: 'Remove' })) Act(`videos/${Video.id}/delete`, null, 'Video removed'); }, { Kind: 'primary' })))));
+			ActionMenu(`Actions for video ${Video.id}`,
+				Video.author_id ? Button('Add violation', () => ViolationForm(Video.author_id, { Video: Video.id })) : null,
+				Button('Remove video', async () => { if (await Dialog({ Title: 'Remove this video?', Message: 'The video, its files, likes, and comments are deleted permanently.', Confirm: 'Remove' })) Act(`videos/${Video.id}/delete`, null, 'Video removed'); })))));
 	}
+	const ReportLabels = { video: 'Video', comment: 'Comment', user: 'Account' };
+	function ReportTarget(Report) {
+		if (!Report.exists) return El('div', { class: 'report-preview missing' }, Svg(Icons[Report.target_type === 'user' ? 'users' : Report.target_type === 'video' ? 'videos' : 'comments'], 28), El('span', {}, 'Removed'));
+		if (Report.target_type === 'video') return El('a', { class: 'report-preview video', href: `/@${Report.owner}/video/${Report.target_id}`, target: '_blank', rel: 'noopener', 'aria-label': Report.video_description || 'Open reported video' }, El('img', { src: Report.cover, alt: '', loading: 'lazy' }), Svg(Icons.videos, 22));
+		if (Report.target_type === 'comment') return El('a', { class: 'report-preview comment', href: `/admin/comments/${Report.target_id}`, 'data-link': '', 'aria-label': 'Open reported comment' }, Svg(Icons.comments, 30));
+		return El('a', { class: 'report-preview account', href: `/admin/users/${Report.owner_id}`, 'data-link': '', 'aria-label': `Open @${Report.owner}` }, Avatar(Report.owner_avatar, 52));
+	}
+	function ReportCard(Report, { Compact = false } = {}) {
+		const Close = (Action, Resolution) => Act(`reports/${Report.id}/${Action}`, { resolution: Resolution }, Action === 'resolve' ? 'Report resolved' : 'Report dismissed');
+		const Open = Report.status === 'open';
+		async function Review() {
+			const Notes = El('textarea', { class: 'input', rows: 3, maxlength: 500, placeholder: 'What action was taken?' });
+			const Body = El('div', { class: 'report-detail' },
+				El('div', { class: 'report-detail-target' }, ReportTarget(Report), El('div', { class: 'grow' }, El('strong', {}, ReportLabels[Report.target_type]),
+					El('span', {}, Report.video_description || Report.comment_body || Report.owner_name || 'Content removed'), Muted(Report.owner ? '@' + Report.owner : 'Deleted account'))),
+				Facts([['Reason', CategoryLabels[Report.category] ?? Report.category], ['Reporter', Report.reporter ? '@' + Report.reporter : 'Deleted account'], ['Reported', Exact(Report.created_at)], ['Status', Report.status]]),
+				Report.description ? El('p', { class: 'body report-description' }, Report.description) : null,
+				Open ? Field('Resolution note (optional)', Notes) : Report.resolution ? El('p', { class: 'body' }, Report.resolution) : null);
+			const Result = await Dialog({ Title: 'Review report', Body, Confirm: Open ? 'Resolve report' : 'Done', Danger: false, Read: () => Notes.value.trim() });
+			if (Open && Result !== null) Close('resolve', Result || 'Reviewed by moderator');
+		}
+		const Remove = Report.exists && Report.target_type !== 'user' ? Button(`Remove ${Report.target_type}`, async () => {
+			if (!await Dialog({ Title: `Remove this ${Report.target_type}?`, Message: 'It’s deleted permanently and every open report on it is resolved.', Confirm: 'Remove' })) return;
+			if (await Act(`${Report.target_type}s/${Report.target_id}/delete`, null, `${ReportLabels[Report.target_type]} removed`, async () => {})) Close('resolve', `Removed the ${Report.target_type}`);
+		}) : null;
+		return El('li', { class: `report${Compact ? ' report-compact' : ''}` }, ReportTarget(Report),
+			El('div', { class: 'report-copy' },
+				El('div', { class: 'report-heading' }, El('strong', {}, CategoryLabels[Report.category] ?? Report.category), Tag(ReportLabels[Report.target_type]), Report.open_on_target > 1 ? Tag(`${Report.open_on_target} reports`, true) : null, Open ? null : Tag(Report.status === 'resolved' ? 'Resolved' : 'Dismissed')),
+				El('p', { class: 'report-subject' }, Report.exists ? Report.video_description || Report.comment_body || Report.owner_name : `${ReportLabels[Report.target_type]} no longer available`),
+				Report.description ? El('p', { class: 'body report-description' }, Report.description) : null,
+				El('div', { class: 'report-meta' }, El('span', {}, 'By ', Report.reporter ? '@' + Report.reporter : 'a deleted account'), El('span', { title: Exact(Report.created_at) }, Ago(Report.created_at)),
+					Compact || !Report.owner ? null : Link(`/admin/users/${Report.owner_id}`, '@' + Report.owner), Report.owner_suspended ? Tag('Suspended') : null),
+				Open ? null : Muted(`${Report.status === 'resolved' ? 'Resolved' : 'Dismissed'} by ${Report.resolver ? '@' + Report.resolver : 'a deleted admin'}${Report.resolution ? ' · ' + Report.resolution : ''}`)),
+			El('div', { class: 'report-actions' }, Button(Open ? 'Review' : 'Details', Review), Open ? ActionMenu(`Actions for report ${Report.id}`,
+				Report.owner && Report.exists ? Button('Add violation', () => ViolationForm(Report.owner_id, { Preset: Report.category, Reason: Report.description, Video: Report.target_type === 'video' ? Report.target_id : '', Comment: Report.target_type === 'comment' ? Report.target_id : '', After: () => Close('resolve', 'Violation added') })) : null,
+				Button('Dismiss report', async () => { if (await Dialog({ Title: 'Dismiss this report?', Message: 'No violation was found. All open reports for this content will be dismissed.', Confirm: 'Dismiss', Danger: false })) Close('dismiss', 'No violation'); }),
+				Remove,
+				Report.owner && Report.owner_id !== Boot.me.id && !Report.owner_suspended ? Button('Suspend owner', async () => { if (await Dialog({ Title: `Suspend @${Report.owner}?`, Message: 'They’ll be signed out everywhere and every open report on this is resolved.', Confirm: 'Suspend' })) { if (await Act(`users/${Report.owner_id}/suspend`, null, `@${Report.owner} suspended`, async () => {})) Close('resolve', 'Suspended the owner'); } }) : null) : null));
+	}
+
 	function More(Has, Load) { return Has ? El('div', { class: 'more' }, Button('Load more', Load, { Size: 'medium' })) : null; }
 
 	const Pages = {
 		async overview() {
 			const Data = await Api('overview');
-			const Stats = [['Users', Data.stats.users], ['New this week', Data.stats.new_users], ['Suspended', Data.stats.suspended], ['Violations (30 days)', Data.stats.violations], ['Videos', Data.stats.videos], ['Views', Data.stats.views], ['Comments', Data.stats.comments], ['Likes', Data.stats.likes], ['Active sessions', Data.stats.sessions], ['Open invites', Data.stats.invites]];
+			const Stats = [['Open reports', Data.stats.reports], ['Users', Data.stats.users], ['New this week', Data.stats.new_users], ['Suspended', Data.stats.suspended], ['Violations (30 days)', Data.stats.violations], ['Videos', Data.stats.videos], ['Views', Data.stats.views], ['Comments', Data.stats.comments], ['Likes', Data.stats.likes], ['Active sessions', Data.stats.sessions], ['Open invites', Data.stats.invites]];
 			return ['Overview', [
 				El('div', { class: 'stats' }, Stats.map(([Label, Value]) => El('div', { class: 'stat' }, El('strong', {}, Number(Value).toLocaleString()), El('span', {}, Label)))),
 				El('div', { class: 'columns' },
 					Card('Newest accounts', El('ul', { class: 'list' }, Data.signups.map(User => El('li', {}, Link(`/admin/users/${User.id}`, Avatar(User.avatar, 36)), El('div', { class: 'grow' }, El('strong', {}, Link(`/admin/users/${User.id}`, User.display_name)), Muted(`@${User.username} · ${Flag(User.country)} · ${Ago(User.created_at)}`)))))),
 					Card('Unimplemented client calls', Muted('Since this server started.'), Data.missing.length ? El('ul', { class: 'list compact' }, Data.missing.map(Row => El('li', {}, El('code', { class: 'grow' }, Row.call), Muted(String(Row.count))))) : Empty('None.'))),
+			]];
+		},
+		async reports(Before = null, Rows = []) {
+			const Status = new URLSearchParams(location.search).get('status') ?? 'open';
+			const Data = await Api(`reports?status=${Status}${Before ? '&before=' + Before : ''}`);
+			const All = [...Rows, ...Data.reports];
+			return ['Reports', [
+				El('div', { class: 'chips', role: 'tablist' }, [['open', 'Open'], ['resolved', 'Resolved'], ['dismissed', 'Dismissed']].map(([Value, Label]) => Link(`/admin/reports${Value === 'open' ? '' : '?status=' + Value}`, El('span', { class: `chip${Value === Status ? ' active' : ''}`, role: 'tab', 'aria-selected': String(Value === Status) }, Label)))),
+				All.length ? El('ul', { class: 'list report-list' }, All.map(Report => ReportCard(Report))) : Empty(Status === 'open' ? 'No open reports. Nice.' : `No ${Status} reports.`),
+				More(Data.hasMore, async () => Fill(...await Pages.reports(All.at(-1).id, All))),
 			]];
 		},
 		async users(Query = new URLSearchParams(location.search).get('q') ?? '', Before = null, Rows = []) {
@@ -175,14 +279,15 @@
 					El('p', { class: 'handle' }, '@' + User.username),
 					User.bio ? El('p', { class: 'body' }, User.bio) : Muted('No bio.'),
 					El('p', { class: 'counts' }, El('strong', {}, Number(User.stats.followingCount).toLocaleString()), ' Following  ', El('strong', {}, Number(User.stats.followerCount).toLocaleString()), ' Followers  ', El('strong', {}, Number(User.stats.heartCount).toLocaleString()), ' Likes  ', El('strong', {}, Number(User.stats.videoCount).toLocaleString()), ' Videos')),
-				El('div', { class: 'actions vertical' },
+				El('div', { class: 'actions profile-actions' },
 					Button('View profile', () => open('/@' + User.username, '_blank', 'noopener')),
 					Button('Add violation', () => ViolationForm(User.id), { Kind: 'primary' }),
+					ActionMenu(`Actions for @${User.username}`,
 					Self ? null : User.suspended_at
 						? Button('Unsuspend', () => Act(`users/${User.id}/unsuspend`, null, `@${User.username} unsuspended`))
 						: Button('Suspend', async () => { if (await Dialog({ Title: `Suspend @${User.username}?`, Message: 'They’ll be signed out everywhere and can’t log in until you unsuspend them.', Confirm: 'Suspend' })) Act(`users/${User.id}/suspend`, null, `@${User.username} suspended`); }),
 					Self ? null : Button(User.role === 'admin' ? 'Make member' : 'Make admin', async () => { if (await Dialog({ Title: User.role === 'admin' ? `Remove @${User.username}’s admin access?` : `Make @${User.username} an admin?`, Message: User.role === 'admin' ? 'They’ll lose access to this panel.' : 'Admins can see everyone’s security details, suspend, delete, and change settings.', Confirm: User.role === 'admin' ? 'Make member' : 'Make admin', Danger: User.role !== 'admin' })) Act(`users/${User.id}/role`, { role: User.role === 'admin' ? 'member' : 'admin' }, 'Role changed'); }),
-					Self ? null : Button('Delete account', async () => { const Confirm = Input({ placeholder: User.username, autocomplete: 'off', 'aria-label': `Type ${User.username} to confirm` }); const Value = await Dialog({ Title: `Delete @${User.username}?`, Message: 'This permanently deletes the account, their videos and files, comments, likes, and follows.', Confirm: 'Delete', Body: Confirm, Read: () => Confirm.value }); if (Value !== null) Act(`users/${User.id}/delete`, { confirm: Value }, `@${User.username} deleted`, () => Go('/admin/users')); })));
+					Self ? null : Button('Delete account', async () => { const Confirm = Input({ placeholder: User.username, autocomplete: 'off', 'aria-label': `Type ${User.username} to confirm` }); const Value = await Dialog({ Title: `Delete @${User.username}?`, Message: 'This permanently deletes the account, their videos and files, comments, likes, and follows.', Confirm: 'Delete', Body: Confirm, Read: () => Confirm.value }); if (Value !== null) Act(`users/${User.id}/delete`, { confirm: Value }, `@${User.username} deleted`, () => Go('/admin/users')); }))));
 			const Signup = Data.signup;
 			const Account = Card('Account', Facts([
 				['User ID', El('code', {}, User.id)], ['Joined', `${Exact(User.created_at)} (${Ago(User.created_at)})`],
@@ -205,6 +310,9 @@
 			return [`@${User.username}`, [
 				El('p', { class: 'crumbs' }, Link('/admin/users', 'Users'), ' / ', '@' + User.username), Header,
 				El('div', { class: 'columns' }, Account, El('div', { class: 'stack' }, Violations, Sessions)),
+				El('div', { class: 'columns' },
+					Card(`Reports against them (${Data.reportsAgainst.filter(Row => Row.status === 'open').length} open)`, Data.reportsAgainst.length ? El('ul', { class: 'list' }, Data.reportsAgainst.map(Report => ReportCard(Report, { Compact: true }))) : Empty('No reports.')),
+					Card(`Reports they filed (${Data.reportsFiled.length})`, Data.reportsFiled.length ? El('ul', { class: 'list compact' }, Data.reportsFiled.map(Report => El('li', {}, El('div', { class: 'grow' }, El('strong', {}, CategoryLabels[Report.category], Tag(ReportLabels[Report.target_type]), Tag(Report.status)), Muted(`Against ${Report.owner ? '@' + Report.owner : 'a deleted account'} · ${Ago(Report.created_at)}`))))) : Empty('None.'))),
 				Related, Events,
 				Card(`Videos (${Data.videos.length})`, VideoGrid(Data.videos.map(Video => ({ ...Video, author_id: User.id })))),
 				Card(`Comments (${Data.comments.length})`, Data.comments.length ? El('ul', { class: 'list' }, Data.comments.map(Comment => CommentRow({ ...Comment, author_id: User.id }, { Author: false }))) : Empty('No comments.')),
@@ -305,6 +413,7 @@
 
 	const Main = El('main', { class: 'content', id: 'content' });
 	function Fill(Title, Nodes) {
+		CloseMenus();
 		document.title = `${Title} · Admin · ${Boot.name}`;
 		Main.replaceChildren(El('h1', {}, Title), ...[Nodes].flat(2).filter(Boolean));
 	}
@@ -313,7 +422,7 @@
 		let Match;
 		if ((Match = Path.match(/^\/admin\/users\/(\d+)$/))) return ['users', () => Pages.user(Match[1])];
 		if ((Match = Path.match(/^\/admin\/comments\/(\d+)$/))) return ['comments', () => Pages.comment(Match[1])];
-		const Section = { '/admin': 'overview', '/admin/users': 'users', '/admin/videos': 'videos', '/admin/comments': 'comments', '/admin/invites': 'invites', '/admin/settings': 'settings', '/admin/audit': 'audit' }[Path];
+		const Section = { '/admin': 'overview', '/admin/reports': 'reports', '/admin/users': 'users', '/admin/videos': 'videos', '/admin/comments': 'comments', '/admin/invites': 'invites', '/admin/settings': 'settings', '/admin/audit': 'audit' }[Path];
 		return Section ? [Section, () => Pages[Section]()] : ['overview', async () => ['Not found', [Empty('That admin page doesn’t exist.')]]];
 	}
 	async function Render() {

@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- Repair the native report reason/details flow and verify submission through its success screen.
+- Organize admin report cards with contained previews and review dialogs; group secondary report, video, and account actions in keyboard-accessible menus.
+
 - Hydrate the original client's signed-in user state from local sessions, render its native avatar menu and own profile, and connect native logout confirmation to session revocation.
 - Remove the account button text workaround and prevent stale bridge caching.
 - Capture and serve the original standalone TikTok login application, preserve its fonts/layout, and authenticate its username/password form against local accounts.

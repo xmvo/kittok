@@ -46,7 +46,7 @@
 		const Url = new URL(Value, location.origin);
 		if (Url.origin === location.origin || ['blob:', 'data:'].includes(Url.protocol)) return Url.href;
 		if (Url.hostname === 'www.tiktok.com' && Url.pathname === '/module_meta/common-login/vmok-manifest.json') return location.origin + Url.pathname;
-		if (/\/(?:api|passport|node-webapp|tiktok)\//.test(Url.pathname)) return location.origin + Url.pathname + Url.search;
+		if (/\/(?:api|passport|node-webapp|tiktok|aweme|node)\//.test(Url.pathname)) return location.origin + Url.pathname + Url.search;
 		return location.origin + '/_blocked?host=' + encodeURIComponent(Url.hostname);
 	}
 	window.fetch = (Input, Options) => {

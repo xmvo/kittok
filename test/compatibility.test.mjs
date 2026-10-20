@@ -627,6 +627,55 @@ test('admin user pages show tracked security details, violations, comment lookup
 	assert.ok(Audit.includes('user.violations') && Audit.includes('violation.revoke') && Audit.includes('user.sessions.revoke') && Audit.includes('brand.upload'));
 });
 
+test('original client reports reach the admin queue, deduplicate, and close together', async () => {
+	const Admin = (Route, Body, Headers = Auth()) => Call('/_kittok/admin/' + Route, Body ? 'POST' : 'GET', Body, Headers);
+	const Friendly = await Login(Pool, 'friend', Password);
+	const AsFriend = { cookie: `kittok_session=${Friendly.Token}`, 'x-csrf-token': Friendly.Csrf };
+	const Reasons = await (await Call(`/node/report/reasons?report_type=video&object_id=${VideoId}&lang=en`)).json();
+	assert.equal(Reasons.statusCode, 0); assert.ok(Reasons.body.length >= 5);
+	assert.deepEqual(Object.keys(Reasons.body[0]).sort(), ['audit_type', 'next_reason', 'option', 'reason_code', 'reason_type', 'special_type', 'text']);
+	assert.equal(Reasons.body[0].reason_type, Reasons.body[0].reason_code); assert.deepEqual(Reasons.body[0].next_reason, []);
+	for (const Reason of Reasons.body) {
+		const Option = JSON.parse(Reason.option);
+		assert.equal(Option.action.action_type, 'route');
+		assert.equal(Option.action.action_params.route_path, 'Detail_WithDesc');
+		assert.equal(Option.action.action_params.title_text, Reason.text);
+	}
+	const Report = (Query, Headers = AsFriend) => Call(`/aweme/v2/aweme/feedback/?${new URLSearchParams({ app_name: 'tiktok_web', aid: 1988, reporter_id: Friend.id, ...Query })}`, 'GET', undefined, Headers);
+	assert.equal((await Report({ object_id: VideoId, target: VideoId, owner_id: Owner.id, report_type: 'video', reason: 101 }, { cookie: AsFriend.cookie })).status, 403);
+	assert.equal((await Report({ object_id: VideoId, report_type: 'video', reason: 999 })).status, 400);
+	assert.equal((await Report({ object_id: VideoId, report_type: 'music', reason: 101 })).status, 400);
+	assert.equal((await Report({ object_id: '1', report_type: 'video', reason: 101 })).status, 404);
+	assert.equal((await Report({ object_id: Friend.id, report_type: 'user', reason: 101 })).status, 400);
+	const Sent = await Report({ object_id: VideoId, target: VideoId, owner_id: Friend.id, report_type: 'video', reason: 101, report_desc: 'Same promo everywhere' });
+	assert.deepEqual(await Sent.json(), { status_code: 0, statusCode: 0, status_msg: '', data: {} });
+	assert.equal((await Report({ object_id: VideoId, report_type: 'video', reason: 103 })).status, 200);
+	const KittenLogin = await Login(Pool, 'fresh_name', Password);
+	assert.equal((await Report({ object_id: VideoId, report_type: 'video', reason: 104 }, { cookie: `kittok_session=${KittenLogin.Token}`, 'x-csrf-token': KittenLogin.Csrf })).status, 200);
+	assert.equal((await Report({ object_id: Owner.id, report_type: 'user', reason: 108, report_desc: 'Pretending to be me' })).status, 200);
+	assert.equal((await Pool.query("SELECT * FROM reports WHERE target_type='video' AND target_id=$1", [VideoId])).rowCount, 2);
+	const Queue = (await (await Admin('reports')).json()).reports;
+	const VideoReport = Queue.find(Row => Row.target_type === 'video' && Row.reporter === 'friend');
+	assert.equal(VideoReport.category, 'spam'); assert.equal(VideoReport.description, 'Same promo everywhere'); assert.equal(VideoReport.owner, 'owner'); assert.equal(VideoReport.open_on_target, 2); assert.equal(VideoReport.exists, true);
+	assert.ok(VideoReport.cover.startsWith(Origin + '/media/'));
+	assert.ok(Queue.some(Row => Row.target_type === 'user' && Row.category === 'impersonation'));
+	assert.equal((await (await Admin('overview')).json()).stats.reports, 3);
+	const Detail = await (await Admin(`users/${Owner.id}`)).json();
+	assert.equal(Detail.reportsAgainst.length, 3);
+	assert.equal((await (await Admin(`users/${Friend.id}`)).json()).reportsFiled.length, 2);
+	assert.equal((await Admin(`reports/${VideoReport.id}/resolve`, { resolution: 'Warned the owner' })).status, 200);
+	assert.equal((await (await Admin('reports')).json()).reports.length, 1);
+	const Resolved = (await (await Admin('reports?status=resolved')).json()).reports;
+	assert.equal(Resolved.length, 2); assert.ok(Resolved.every(Row => Row.resolver === 'owner' && Row.resolution === 'Warned the owner'));
+	assert.equal((await Report({ object_id: VideoId, report_type: 'video', reason: 101 })).status, 200);
+	const UserReport = (await (await Admin('reports')).json()).reports.find(Row => Row.target_type === 'user');
+	assert.equal((await Admin(`reports/${UserReport.id}/dismiss`, {})).status, 200);
+	assert.equal((await Admin('reports/999999999/dismiss', {})).status, 404);
+	assert.equal((await (await Admin('reports?status=dismissed')).json()).reports.length, 1);
+	assert.equal((await (await Admin('audit')).json()).actions[0].action, 'report.dismiss');
+	await Pool.query('DELETE FROM reports');
+});
+
 test('users, sessions, videos, and social data survive a server restart', async () => {
 	await Stop(); await Start();
 	const Current = await (await Call('/api/v1/session', 'GET', undefined, { cookie: Cookie })).json(); assert.equal(Current.user.uniqueId, 'owner');

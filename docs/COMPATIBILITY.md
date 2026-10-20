@@ -23,7 +23,8 @@ Version 0.1.0 establishes an independently hostable server and persistent data. 
 | Profile and item detail | Response adapters and authored data | Own profile opens from the native account dropdown and survives refresh; editing and remaining profile interactions need integration |
 | User and video search | Usernames and display names; video captions, newest first | Native Top, Users, and Videos tabs verified. Photos and LIVE return empty results |
 | Video search, notifications, DMs, LIVE, shop, coins | Not implemented | Visible original controls do not imply working features |
-| Admin panel | `/admin`: overview, users with security details and violations, videos, comment lookup by ID, invites, settings (sign-up, name, features, limits, announcement, rules, brand images), and an audit log | Verified in the browser: every page and action, feature switches and the announcement in the client, and brand uploads. There are no user reports yet |
+| Reports | Local report reasons, authenticated submissions, moderation queue, resolve/dismiss actions | Native reason selection, optional description, Submit, and success feedback verified. Admin report cards, review dialog, menus, and compact user-page cards verified in dark and light themes |
+| Admin panel | `/admin`: overview, users with security details and violations, videos, comment lookup by ID, invites, settings (sign-up, name, features, limits, announcement, rules, brand images), and an audit log | Verified in the browser: every page and action, feature switches and the announcement in the client, and brand uploads. Report, video, and account actions use keyboard-accessible three-dot menus; report previews and review dialogs are contained in their cards |
 
 The client can emit nonfatal errors for unsupported service calls. Unknown APIs return HTTP 501 and are counted in `/_debug/unknown` for logged-in administrators. API success alone does not establish a working screen. Browser verification and database tests must be reported separately.
 
@@ -75,3 +76,7 @@ The client's security SDK re-opens XHR requests and replays their headers, so `X
 Threads are one level deep. A reply to a reply is attached to the root comment, and its `reply_to_reply_id` target is not stored.
 
 Next work: verify the remaining native social interactions, integrate profile editing and remaining profile/search interactions, then add moderation and operational features before inviting an untrusted public community.
+
+## Report dialog contract
+
+`GET /node/report/reasons` returns reasons with a JSON `option` containing `action.action_type: "route"` and `action.action_params.route_path: "Detail_WithDesc"`. An empty option cannot navigate the current client, and `Desc` opens a confirmation page without the description field. The original description step submits `report_desc` to the local feedback adapter and displays its own success screen.

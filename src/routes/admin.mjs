@@ -10,6 +10,11 @@ import { Page } from './account.mjs';
 
 const Categories = ['spam', 'harassment', 'hate', 'nudity', 'violence', 'self_harm', 'misinformation', 'impersonation', 'copyright', 'other'];
 const Before = Value => Value ? Id(Value) : null;
+const ReportSql = `SELECT r.*, rep.username AS reporter, own.username AS owner, own.display_name AS owner_name, own.avatar_name, own.suspended_at AS owner_suspended, res.username AS resolver,
+	v.description AS video_description, v.cover_name, c.body AS comment_body, c.video_id AS comment_video_id,
+	(SELECT count(*)::int FROM reports o WHERE o.target_type = r.target_type AND o.target_id = r.target_id AND o.status = 'open') AS open_on_target
+	FROM reports r LEFT JOIN users rep ON rep.id = r.reporter_id LEFT JOIN users own ON own.id = r.owner_id LEFT JOIN users res ON res.id = r.resolved_by
+	LEFT JOIN videos v ON r.target_type = 'video' AND v.id = r.target_id LEFT JOIN comments c ON r.target_type = 'comment' AND c.id = r.target_id`;
 
 let Styles;
 function TikTokStyles() {
@@ -43,6 +48,7 @@ async function DeleteVideos(Pool, Config, Where, Values) {
 
 export async function Admin(Context) {
 	const { Request, Response, Url, Pool, Config, User, Unknown } = Context;
+	const ReportShape = Row => ({ ...Row, owner_avatar: AvatarUrl(Row, Config.Origin), cover: Row.cover_name ? `${Config.Origin}/media/${Row.cover_name}` : null, exists: Row.target_type === 'user' ? Boolean(Row.owner) : Row.target_type === 'video' ? Boolean(Row.cover_name) : Row.comment_body !== null });
 	const Path = Url.pathname;
 
 	const BrandMatch = Path.match(/^\/brand\/([a-zA-Z]+)$/);
@@ -85,7 +91,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 				(SELECT count(*)::int FROM users WHERE suspended_at IS NOT NULL) AS suspended, (SELECT count(*)::int FROM videos) AS videos, (SELECT coalesce(sum(view_count), 0)::int FROM videos) AS views,
 				(SELECT count(*)::int FROM comments) AS comments, (SELECT count(*)::int FROM likes) AS likes, (SELECT count(*)::int FROM sessions WHERE expires_at > now()) AS sessions,
 				(SELECT count(*)::int FROM violations WHERE revoked_at IS NULL AND created_at > now() - interval '30 days') AS violations,
-				(SELECT count(*)::int FROM invites WHERE expires_at > now() AND uses < max_uses) AS invites`)).rows[0];
+				(SELECT count(*)::int FROM invites WHERE expires_at > now() AND uses < max_uses) AS invites, (SELECT count(*)::int FROM reports WHERE status = 'open') AS reports`)).rows[0];
 			const Signups = (await Pool.query('SELECT u.id, u.username, u.display_name, u.avatar_name, u.created_at, e.country FROM users u LEFT JOIN LATERAL (SELECT country FROM user_events WHERE user_id = u.id AND kind = \'signup\' ORDER BY id LIMIT 1) e ON true ORDER BY u.id DESC LIMIT 6')).rows;
 			const Missing = [...(Unknown ?? new Map())].sort((A, B) => B[1] - A[1]).slice(0, 8).map(([Call, Count]) => ({ call: Call, count: Count }));
 			Json(Response, { stats: Stats, registration: Config.Registration, signups: Signups.map(Row => ({ ...Row, avatar: AvatarUrl(Row, Config.Origin) })), missing: Missing }); return true;
@@ -107,7 +113,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			const Target = Id(UserMatch[1]);
 			const Profile = (await Pool.query('SELECT id, username, display_name, bio, role, avatar_name, created_at, suspended_at, notices_read_at FROM users WHERE id = $1', [Target])).rows[0];
 			if (!Profile) throw new HttpError(404, 'UserNotFound');
-			const [Events, Sessions, Videos, Comments, Violations, Related, Seen] = await Promise.all([
+			const [Events, Sessions, Videos, Comments, Violations, Related, Seen, Against, Filed] = await Promise.all([
 				Pool.query('SELECT id, kind, host(ip) AS ip, country, language, user_agent, detail, created_at FROM user_events WHERE user_id = $1 ORDER BY id DESC LIMIT 100', [Target]),
 				Pool.query('SELECT token_hash, host(ip) AS ip, country, user_agent, created_at, last_seen_at, expires_at FROM sessions WHERE user_id = $1 AND expires_at > now() ORDER BY last_seen_at DESC', [Target]),
 				Pool.query(`SELECT v.id, v.description, v.cover_name, v.created_at, v.view_count::int AS views, (SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes, (SELECT count(*)::int FROM comments c WHERE c.video_id = v.id) AS comments FROM videos v WHERE v.author_id = $1 ORDER BY v.id DESC LIMIT 60`, [Target]),
@@ -116,6 +122,8 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 				Pool.query(`SELECT u.id, u.username, u.display_name, u.avatar_name, u.suspended_at, array_agg(DISTINCT host(o.ip)) AS ips FROM user_events mine JOIN user_events o ON o.ip = mine.ip AND o.user_id <> mine.user_id JOIN users u ON u.id = o.user_id
 					WHERE mine.user_id = $1 AND mine.ip IS NOT NULL GROUP BY u.id ORDER BY u.id DESC LIMIT 20`, [Target]),
 				Pool.query(`SELECT array_remove(array_agg(DISTINCT country), NULL) AS countries, array_remove(array_agg(DISTINCT language), NULL) AS languages, count(DISTINCT ip)::int AS ips FROM user_events WHERE user_id = $1`, [Target]),
+				Pool.query(`${ReportSql} WHERE r.owner_id = $1 ORDER BY r.id DESC LIMIT 50`, [Target]),
+				Pool.query(`${ReportSql} WHERE r.reporter_id = $1 ORDER BY r.id DESC LIMIT 50`, [Target]),
 			]);
 			const Signup = [...Events.rows].reverse().find(Row => Row.kind === 'signup') ?? null;
 			Json(Response, {
@@ -125,7 +133,13 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 				videos: Videos.rows.map(Row => ({ ...Row, cover: `${Config.Origin}/media/${Row.cover_name}` })),
 				comments: Comments.rows, violations: Violations.rows,
 				related: Related.rows.map(Row => ({ ...Row, avatar: AvatarUrl(Row, Config.Origin) })),
+				reportsAgainst: Against.rows.map(ReportShape), reportsFiled: Filed.rows.map(ReportShape),
 			}); return true;
+		}
+		if (Route === 'reports') {
+			const Status = ['open', 'resolved', 'dismissed'].includes(Params.get('status')) ? Params.get('status') : 'open';
+			const Rows = (await Pool.query(`${ReportSql} WHERE r.status = $1 AND ($2::bigint IS NULL OR r.id < $2) ORDER BY r.id DESC LIMIT 50`, [Status, Before(Params.get('before'))])).rows;
+			Json(Response, { reports: Rows.map(ReportShape), hasMore: Rows.length === 50 }); return true;
 		}
 		if (Route === 'videos') {
 			const Rows = (await Pool.query(`SELECT v.id, v.description, v.cover_name, v.created_at, v.view_count::int AS views, u.id AS author_id, u.username,
@@ -230,6 +244,15 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 		}
 		await Audit(Pool, User, `user.${Action.replace('/', '.')}`, `@${Found.username}`, Detail);
 		Json(Response, { ok: true }); return true;
+	}
+	const ReportMatch = Route.match(/^reports\/(\d+)\/(resolve|dismiss)$/);
+	if (ReportMatch) {
+		const Report = (await Pool.query('SELECT target_type, target_id FROM reports WHERE id = $1', [Id(ReportMatch[1])])).rows[0];
+		if (!Report) throw new HttpError(404, 'ReportNotFound');
+		const Status = ReportMatch[2] === 'resolve' ? 'resolved' : 'dismissed';
+		const Closed = await Pool.query(`UPDATE reports SET status = $3, resolved_by = $4, resolved_at = now(), resolution = $5 WHERE target_type = $1 AND target_id = $2 AND status = 'open'`, [Report.target_type, Report.target_id, Status, User.id, String(Body.resolution ?? '').trim().slice(0, 500)]);
+		await Audit(Pool, User, `report.${ReportMatch[2]}`, `${Report.target_type} ${Report.target_id}`, `${Closed.rowCount} report${Closed.rowCount === 1 ? '' : 's'}${Body.resolution ? ': ' + Body.resolution : ''}`);
+		Json(Response, { closed: Closed.rowCount }); return true;
 	}
 	const ViolationMatch = Route.match(/^violations\/(\d+)\/revoke$/);
 	if (ViolationMatch) {

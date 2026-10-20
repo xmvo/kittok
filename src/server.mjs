@@ -104,7 +104,7 @@ const Server = createServer(async (Request, Response) => {
 			if (Path === '/_debug/blocked') return Json(Response, Object.fromEntries(Blocked));
 		}
 		if (await Admin(Context) || await Account(Context) || await Api(Context) || await Passport(Context) || await Compatibility(Context)) return;
-		if (/^\/(?:api|passport|node-webapp|tiktok)\//.test(Path)) {
+		if (/^\/(?:api|passport|node-webapp|tiktok|aweme|node)\//.test(Path)) {
 			const Key = `${Request.method} ${Path}`;
 			if (Unknown.size < 500) Unknown.set(Key, (Unknown.get(Key) ?? 0) + 1);
 			return Json(Response, { statusCode: 501, status_code: 501, error: 'NotImplemented', path: Path }, 501);
