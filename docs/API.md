@@ -36,6 +36,10 @@ Admins open `/admin` (also linked from the sidebar and `/account`). It is a stan
 | Method | Route | Behavior |
 | --- | --- | --- |
 | GET | `/_kittok/admin/overview` | Instance counts, newest accounts, and the most frequent unimplemented client calls |
+| GET | `/_kittok/admin/console` | Queue counts (open tickets, oldest waiting, pending appeals, 30-day overturn rate, decisions today, active restrictions, bans), instance counts, and 14 days of daily reports and decisions |
+| GET | `/_kittok/admin/tickets?type=video\|comment\|user` | One ticket per reported item with its open report count, reasons tallied, top reason, owner with active strikes, and a priority from the most severe reason and report volume, highest first |
+| GET | `/_kittok/admin/tickets/TYPE/ID` | The item (video file and cover, comment with its video and parent, or profile), every report on it, the open report IDs, decisions taken on it, and the owner's `standing` |
+| GET | `/_kittok/admin/decisions?action=&category=&before=ID` | Enforcement log, newest first, 50 per page, with each decision's restricted features |
 | GET | `/_kittok/admin/users?q=&before=ID` | Users, newest first, 50 per page. `q` matches username, display name, user ID, or an IP address seen in the activity log |
 | GET | `/_kittok/admin/users/ID` | Profile, stats, sign-up details, countries and languages seen, activity log, active sessions, accounts sharing an IP, videos, comments, violations (moderation decisions), and `standing` (state, active strikes per feature and policy, thresholds, restrictions) |
 | POST | `/_kittok/admin/users/ID/suspend` / `unsuspend` | Suspend records a permanent ban decision (JSON `{category?, reason?}`), signs the user out everywhere, and blocks login; unsuspend reverses every active ban |

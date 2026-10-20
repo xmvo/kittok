@@ -662,6 +662,15 @@ test('original client reports reach the admin queue, deduplicate, and close toge
 	assert.ok(VideoReport.cover.startsWith(Origin + '/media/'));
 	assert.ok(Queue.some(Row => Row.target_type === 'user' && Row.category === 'impersonation'));
 	assert.equal((await (await Admin('overview')).json()).stats.reports, 3);
+	const Tickets = (await (await Admin('tickets')).json()).tickets;
+	assert.deepEqual(Tickets.map(Row => [Row.type, Row.reports]).sort(), [['user', 1], ['video', 2]]);
+	const VideoTicket = Tickets.find(Row => Row.type === 'video');
+	assert.equal(VideoTicket.id, String(VideoId)); assert.equal(VideoTicket.reasons.spam, 1); assert.equal(VideoTicket.owner.username, 'owner');
+	assert.deepEqual((await (await Admin('tickets?type=user')).json()).tickets.map(Row => Row.type), ['user']);
+	const Review = await (await Admin(`tickets/video/${VideoId}`)).json();
+	assert.equal(Review.open.length, 2); assert.equal(Review.reports.length, 2); assert.ok(Review.content.file.startsWith(Origin + '/media/')); assert.ok(Review.owner.standing.thresholds);
+	assert.equal((await Admin('tickets/video/1')).status, 200);
+	assert.equal((await (await Admin('console')).json()).counts.tickets, 2);
 	const Detail = await (await Admin(`users/${Owner.id}`)).json();
 	assert.equal(Detail.reportsAgainst.length, 3);
 	assert.equal((await (await Admin(`users/${Friend.id}`)).json()).reportsFiled.length, 2);
@@ -950,6 +959,8 @@ test('moderation gives warnings, per-feature strikes, timed feature restrictions
 	assert.equal((await Enforce({ target_type: 'comment', target_id: Third, category: 'spam', reason: 'Comment spam', content_action: 'remove', account_action: 'strike' })).autoBan, null);
 	const Banned = await Enforce({ target_type: 'comment', target_id: Fourth, category: 'spam', reason: 'Comment spam', content_action: 'remove', account_action: 'strike' });
 	assert.equal(Banned.autoBan.account_action, 'ban'); assert.equal(Banned.autoBan.reason, 'Your account reached the strike limit for comments.');
+	const Bans = (await (await Admin('decisions?action=ban')).json()).decisions;
+	assert.ok(Bans.length && Bans.every(Row => Row.account_action === 'ban')); assert.equal(Bans[0].owner, 'offender');
 	assert.ok((await Pool.query('SELECT suspended_at FROM users WHERE id = $1', [Offender.id])).rows[0].suspended_at);
 	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, { cookie: As.cookie })).json()).user, null);
 	assert.equal((await (await Call(`/api/commit/follow/user/?type=1&user_id=${Offender.id}`, 'POST', undefined, Auth())).json()).status_code, 24);

@@ -177,6 +177,74 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			Json(Response, { actions: Rows, hasMore: Rows.length === 50 }); return true;
 		}
 		if (Route === 'settings') { Json(Response, Settings(Config)); return true; }
+		if (Route === 'console') {
+			const Counts = (await Pool.query(`SELECT (SELECT count(DISTINCT (target_type, target_id))::int FROM reports WHERE status = 'open') AS tickets,
+				(SELECT count(*)::int FROM moderation_appeals WHERE status = 'pending') AS appeals,
+				(SELECT count(*)::int FROM moderation_decisions WHERE created_at > now() - interval '24 hours') AS decisions_today,
+				(SELECT count(*)::int FROM moderation_restrictions WHERE lifted_at IS NULL AND (expires_at IS NULL OR expires_at > now())) AS restrictions,
+				(SELECT count(*)::int FROM users WHERE suspended_at IS NOT NULL) AS banned,
+				(SELECT min(created_at) FROM reports WHERE status = 'open') AS oldest_ticket,
+				(SELECT count(*)::int FROM moderation_appeals WHERE reviewed_at > now() - interval '30 days') AS appeals_reviewed,
+				(SELECT count(*)::int FROM moderation_appeals WHERE status = 'restored' AND reviewed_at > now() - interval '30 days') AS appeals_restored,
+				(SELECT count(*)::int FROM users) AS users, (SELECT count(*)::int FROM users WHERE created_at > now() - interval '7 days') AS new_users,
+				(SELECT count(*)::int FROM videos) AS videos, (SELECT count(*)::int FROM comments) AS comments, (SELECT count(*)::int FROM sessions WHERE expires_at > now()) AS sessions`)).rows[0];
+			const Daily = (await Pool.query(`SELECT d::date AS day, (SELECT count(*)::int FROM moderation_decisions WHERE created_at::date = d::date) AS decisions,
+				(SELECT count(*)::int FROM reports WHERE created_at::date = d::date) AS reports FROM generate_series(current_date - 13, current_date, interval '1 day') d ORDER BY d`)).rows;
+			const Missing = [...(Unknown ?? new Map())].sort((A, B) => B[1] - A[1]).slice(0, 6).map(([Call, Count]) => ({ call: Call, count: Count }));
+			Json(Response, { counts: Counts, daily: Daily, missing: Missing, registration: Config.Registration }); return true;
+		}
+		if (Route === 'tickets') {
+			const Rows = (await Pool.query(`SELECT r.target_type, r.target_id, count(*)::int AS reports, min(r.created_at) AS first_at, max(r.created_at) AS last_at, min(r.id) AS report_id,
+				array_agg(r.category ORDER BY r.id) AS categories, r.owner_id, own.username, own.display_name, own.avatar_name, own.suspended_at,
+				v.description, v.cover_name, c.body, cv.cover_name AS comment_cover,
+				(SELECT count(*)::int FROM moderation_decisions d WHERE d.owner_id = r.owner_id AND d.account_action = 'strike' AND d.reversed_at IS NULL AND d.penalty_expires_at > now()) AS strikes
+				FROM reports r LEFT JOIN users own ON own.id = r.owner_id LEFT JOIN videos v ON r.target_type = 'video' AND v.id = r.target_id
+				LEFT JOIN comments c ON r.target_type = 'comment' AND c.id = r.target_id LEFT JOIN videos cv ON cv.id = c.video_id
+				WHERE r.status = 'open' AND ($1 = '' OR r.target_type = $1)
+				GROUP BY r.target_type, r.target_id, r.owner_id, own.id, v.id, c.id, cv.id`, [['video', 'comment', 'user'].includes(Params.get('type')) ? Params.get('type') : ''])).rows;
+			const Severity = { self_harm: 5, violence: 5, hate: 4, nudity: 4, harassment: 3, impersonation: 3, misinformation: 2, copyright: 2, spam: 1, other: 1 };
+			const Tickets = Rows.map(Row => {
+				const Tally = {}; for (const Category of Row.categories) Tally[Category] = (Tally[Category] ?? 0) + 1;
+				const Top = Object.entries(Tally).sort((A, B) => B[1] - A[1] || Severity[B[0]] - Severity[A[0]])[0][0];
+				const Priority = Math.max(...Row.categories.map(Category => Severity[Category] ?? 1)) * 10 + Math.min(Row.reports, 9);
+				return { type: Row.target_type, id: Row.target_id, report: Row.report_id, reports: Row.reports, first_at: Row.first_at, last_at: Row.last_at, reasons: Tally, top: Top, priority: Priority,
+					preview: Row.target_type === 'video' ? Row.description : Row.target_type === 'comment' ? Row.body : Row.display_name,
+					thumb: Row.cover_name || Row.comment_cover ? `${Config.Origin}/media/${Row.cover_name || Row.comment_cover}` : null,
+					owner: Row.owner_id ? { id: Row.owner_id, username: Row.username, display_name: Row.display_name, avatar: AvatarUrl(Row, Config.Origin), banned: Boolean(Row.suspended_at), strikes: Row.strikes } : null };
+			}).sort((A, B) => B.priority - A.priority || new Date(A.first_at) - new Date(B.first_at));
+			Json(Response, { tickets: Tickets }); return true;
+		}
+		const TicketMatch = Route.match(/^tickets\/(video|comment|user)\/(\d+)$/);
+		if (TicketMatch) {
+			const [, Type, RawId] = TicketMatch, TargetId = Id(RawId);
+			const Content = (await Pool.query({
+				video: `SELECT v.id, v.description AS text, v.file_name, v.cover_name, v.width, v.height, v.duration, v.created_at, v.view_count::int AS views, v.author_id AS owner,
+					(SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes, (SELECT count(*)::int FROM comments c WHERE c.video_id = v.id) AS comments FROM videos v WHERE v.id = $1`,
+				comment: `SELECT c.id, c.body AS text, c.created_at, c.video_id, c.parent_id, c.author_id AS owner, v.description AS video_text, v.cover_name, p.body AS parent_text, pu.username AS parent_author,
+					(SELECT count(*)::int FROM comment_likes l WHERE l.comment_id = c.id) AS likes FROM comments c JOIN videos v ON v.id = c.video_id LEFT JOIN comments p ON p.id = c.parent_id LEFT JOIN users pu ON pu.id = p.author_id WHERE c.id = $1`,
+				user: 'SELECT u.id, u.display_name AS text, u.bio, u.created_at, u.id AS owner FROM users u WHERE u.id = $1',
+			}[Type], [TargetId])).rows[0] ?? null;
+			const Reports = (await Pool.query('SELECT r.id, r.category, r.description, r.status, r.created_at, r.resolution, u.username AS reporter FROM reports r LEFT JOIN users u ON u.id = r.reporter_id WHERE r.target_type = $1 AND r.target_id = $2 ORDER BY r.id DESC', [Type, TargetId])).rows;
+			const OwnerId = Content?.owner ?? (await Pool.query('SELECT owner_id FROM reports WHERE target_type = $1 AND target_id = $2 LIMIT 1', [Type, TargetId])).rows[0]?.owner_id;
+			const Owner = OwnerId ? (await Pool.query('SELECT id, username, display_name, avatar_name, role, created_at, suspended_at FROM users WHERE id = $1', [OwnerId])).rows[0] : null;
+			const Decisions = (await Pool.query(`SELECT d.*, m.username AS moderator FROM moderation_decisions d LEFT JOIN users m ON m.id = d.moderator_id WHERE d.target_type = $1 AND d.target_id = $2 ORDER BY d.id DESC`, [Type, TargetId])).rows;
+			const Media = Name => Name ? `${Config.Origin}/media/${Name}` : null;
+			Json(Response, {
+				type: Type, id: TargetId, open: Reports.filter(Row => Row.status === 'open').map(Row => Row.id),
+				content: Content && { ...Content, file: Media(Content.file_name), cover: Media(Content.cover_name), file_name: undefined, cover_name: undefined },
+				reports: Reports, decisions: Decisions,
+				owner: Owner && { ...Owner, avatar: AvatarUrl(Owner, Config.Origin), standing: await Standing(Pool, Owner.id, Config.Moderation) },
+			}); return true;
+		}
+		if (Route === 'decisions') {
+			const Action = ['warning', 'strike', 'ban', 'none'].includes(Params.get('action')) ? Params.get('action') : null;
+			const Category = Categories.includes(Params.get('category')) ? Params.get('category') : null;
+			const Rows = (await Pool.query(`SELECT d.id, d.target_type, d.target_id, d.category, d.reason, d.content_action, d.account_action, d.feature, d.severe, d.created_at, d.reversed_at, d.snapshot,
+				o.id AS owner_id, o.username AS owner, o.avatar_name, m.username AS moderator, (SELECT array_agg(r.feature) FROM moderation_restrictions r WHERE r.decision_id = d.id) AS restrictions
+				FROM moderation_decisions d LEFT JOIN users o ON o.id = d.owner_id LEFT JOIN users m ON m.id = d.moderator_id
+				WHERE ($1::bigint IS NULL OR d.id < $1) AND ($2::text IS NULL OR d.account_action = $2) AND ($3::text IS NULL OR d.category = $3) ORDER BY d.id DESC LIMIT 50`, [Before(Params.get('before')), Action, Category])).rows;
+			Json(Response, { decisions: Rows.map(Row => ({ ...Row, avatar: AvatarUrl(Row, Config.Origin) })), hasMore: Rows.length === 50 }); return true;
+		}
 		if (Route === 'appeals') {
 			const Status = ['pending', 'restored', 'upheld'].includes(Params.get('status')) ? Params.get('status') : 'pending';
 			const Rows = (await Pool.query(`SELECT a.*, u.username, u.display_name, u.avatar_name, d.target_type, d.target_id, d.category, d.reason AS decision_reason, d.content_action, d.account_action, d.snapshot, d.created_at AS decided_at,
