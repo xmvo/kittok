@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Pin up to three videos to the top of your profile, and make the profile's Popular and Oldest sorting work.
 - Fill the Explore category tabs: uploads pick a category or get one guessed from their hashtags.
 - Native sign-up: the client's own email form with real emailed codes over SMTP, its age gate and Create username step, an Invite code field on invite-only instances, and email logins.
 - Fit the admin console to phone screens and add a script that preloads every decoration image.

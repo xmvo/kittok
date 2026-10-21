@@ -126,8 +126,16 @@ export async function Compatibility(Context) {
 			if (!User || (Params.get('secUid') && Params.get('secUid') !== User.id)) { Json(Response, { statusCode: 0, status_code: 0, itemList: [], cursor: '0', hasMore: false, extra: { logid: 'kittok' } }); return true; }
 			Filter[Path.includes('/favorite/') ? 'likedBy' : 'savedBy'] = User.id;
 		}
+		let Pinned = [];
+		if (Path === '/api/post/item_list/') {
+			Filter.order = ['latest', 'popular', 'oldest'][Number(Params.get('post_item_list_request_type') ?? 0)] ?? 'latest';
+			if (Filter.order === 'latest') {
+				if (!Filter.before) Pinned = (await Videos(Pool, Config.Origin, { ...Filter, pinned: true, limit: 3 })).items;
+				Filter.pinned = false;
+			}
+		}
 		const Feed = await Videos(Pool, Config.Origin, Filter);
-		Json(Response, { statusCode: 0, status_code: 0, itemList: Feed.items, cursor: Feed.cursor, hasMore: Feed.hasMore, extra: { logid: 'kittok' } }); return true;
+		Json(Response, { statusCode: 0, status_code: 0, itemList: [...Pinned, ...Feed.items], cursor: Feed.cursor, hasMore: Feed.hasMore, extra: { logid: 'kittok' } }); return true;
 	}
 	if (Path === '/api/item/detail/') {
 		RequireMethod(Request, ['GET']);

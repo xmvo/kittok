@@ -184,11 +184,15 @@ export async function UserStats(Pool, UserId) {
 	return { ...Result.rows[0], heart: Result.rows[0].heartCount };
 }
 
-export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, repostedBy, collection, id, exclude, tag, viewer, query, forYou, category, limit = 20 } = {}) {
+export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, repostedBy, collection, id, exclude, tag, viewer, query, forYou, category, pinned, order = 'latest', limit = 20 } = {}) {
 	const Values = [viewer ?? null];
 	const Conditions = [];
 	function Where(Sql, Value) { Values.push(Value); Conditions.push(Sql.replace('?', `$${Values.length}`)); }
-	if (before) Where('v.id < ?', Id(before));
+	const Offset = order === 'popular' ? Math.max(0, Math.floor(Number(before) || 0)) : 0;
+	if (before && order === 'latest') Where('v.id < ?', Id(before));
+	if (before && order === 'oldest') Where('v.id > ?', Id(before));
+	if (pinned === true) Conditions.push('v.pinned_at IS NOT NULL');
+	if (pinned === false) Conditions.push('v.pinned_at IS NULL');
 	if (author) Where('v.author_id = ?', Id(author));
 	if (following) Where('EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.following_id = v.author_id)', following);
 	if (likedBy) Where('EXISTS (SELECT 1 FROM likes l WHERE l.user_id = ? AND l.video_id = v.id)', likedBy);
@@ -214,11 +218,11 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 		EXISTS (SELECT 1 FROM favorites f WHERE f.video_id = v.id AND f.user_id = $1) AS saved,
 		${RelationSql('$1', 'v.author_id')} AS relation, ${CommentsAllowedSql('$1::bigint')} AS can_comment
 		FROM videos v JOIN users u ON u.id = v.author_id ${Conditions.length ? `WHERE ${Conditions.join(' AND ')}` : ''}
-		ORDER BY v.id DESC LIMIT $${Values.length}`, Values);
+		ORDER BY ${pinned ? 'v.pinned_at DESC' : order === 'oldest' ? 'v.id ASC' : order === 'popular' ? 'v.view_count DESC, v.id DESC' : 'v.id DESC'} LIMIT $${Values.length} OFFSET ${Offset}`, Values);
 	const HasMore = Result.rows.length === Values.at(-1);
 	const Rows = HasMore ? Result.rows.slice(0, -1) : Result.rows;
 	const Mentioned = await MentionedUsers(Pool, Rows.map(Row => Row.description));
-	return { items: Rows.map(Row => VideoShape(Row, Origin, Mentioned, viewer)), hasMore: HasMore, cursor: Rows.at(-1)?.id ?? '0' };
+	return { items: Rows.map(Row => VideoShape(Row, Origin, Mentioned, viewer)), hasMore: HasMore, cursor: order === 'popular' ? String(Offset + Rows.length) : Rows.at(-1)?.id ?? '0' };
 }
 
 export function VideoShape(Row, Origin, Mentioned, Viewer) {
@@ -231,7 +235,7 @@ export function VideoShape(Row, Origin, Mentioned, Viewer) {
 	const Challenges = [...new Set(Found.filter(Entity => Entity.type === 1).map(Entity => Entity.name))]
 		.map(Name => ({ id: TagId(Name), title: Name, desc: '', profileThumb: '', profileMedium: '', profileLarger: '', coverThumb: '', coverMedium: '', coverLarger: '', isCommerce: false }));
 	return {
-		id: Row.id, desc: Row.description, createTime: Math.floor(new Date(Row.created_at).getTime() / 1000),
+		id: Row.id, desc: Row.description, createTime: Math.floor(new Date(Row.created_at).getTime() / 1000), isPinnedItem: Boolean(Row.pinned_at),
 		author: Author, stats: Stats, statsV2: Object.fromEntries(Object.entries(Stats).map(([Key, Value]) => [Key, String(Value)])),
 		video: {
 			id: Row.id, width: Row.width, height: Row.height, duration: Row.duration, ratio: `${Row.height}p`,

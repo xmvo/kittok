@@ -1671,6 +1671,28 @@ test('explore categories come from the upload choice or the caption and filter t
 	assert.equal((await Pool.query('SELECT category FROM videos WHERE id = $1', [VideoId])).rows[0].category, GuessCategory((await Pool.query('SELECT description FROM videos WHERE id = $1', [VideoId])).rows[0].description));
 });
 
+test('pinned videos lead the native Latest tab, Popular and Oldest sort for real, and pins stop at three', async () => {
+	const Base = (await Pool.query('SELECT * FROM videos WHERE id = $1', [VideoId])).rows[0];
+	const Extra = [];
+	for (const [Index, Views] of [[1, 50], [2, 5], [3, 500], [4, 1]].entries()) Extra.push((await Pool.query(`INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes, view_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`, [Owner.id, `Sort ${Index}`, `sort-${Index}-${Base.file_name}`, Base.cover_name, Base.width, Base.height, Base.duration, Base.bytes, Views[1]])).rows[0].id);
+	const List = async (Type, Cursor = 0) => (await (await Call(`/api/post/item_list/?secUid=${Owner.id}&count=30&cursor=${Cursor}&post_item_list_request_type=${Type}&needPinnedItemIds=true`)).json());
+	const Ids = Data => Data.itemList.map(Item => Item.id);
+	const Settings = (Id, Pinned) => fetch(`${Origin}/account/posts/${Id}`, { method: 'POST', redirect: 'manual', headers: { cookie: Cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: Session.csrfToken, visibility: 'public', comments: 'default', category: '', ...(Pinned ? { pinned: '1' } : {}) }) });
+	assert.equal((await Settings(Extra[1], true)).headers.get('location'), `/account/posts/${Extra[1]}?saved=1`);
+	const Latest = await List(0);
+	assert.equal(Latest.itemList[0].id, Extra[1]); assert.equal(Latest.itemList[0].isPinnedItem, true);
+	assert.equal(Ids(Latest).filter(Id => Id === Extra[1]).length, 1); assert.ok(Latest.itemList.slice(1).every(Item => !Item.isPinnedItem));
+	assert.deepEqual(Ids(await List(1)).slice(0, 3), [Extra[2], Extra[0], Extra[1]]);
+	assert.equal(Ids(await List(2)).at(0), VideoId);
+	for (const Id of [Extra[0], Extra[2]]) await Settings(Id, true);
+	assert.equal((await Settings(Extra[3], true)).headers.get('location'), `/account/posts/${Extra[3]}?error=pins`);
+	assert.deepEqual(Ids(await List(0)).slice(0, 3), [Extra[2], Extra[0], Extra[1]]);
+	for (const Id of Extra) await Settings(Id, false);
+	assert.ok((await List(0)).itemList.every(Item => !Item.isPinnedItem));
+	await Pool.query('DELETE FROM videos WHERE id = ANY($1::bigint[])', [Extra]);
+});
+
 test('misc switches turn Kittok features off and back on without a restart', async () => {
 	const Settings = await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json();
 	assert.ok(Object.values(Settings.misc).every(Boolean));
