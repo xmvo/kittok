@@ -3,6 +3,7 @@ import { RequireCsrf } from '../auth.mjs';
 import { Page } from './account.mjs';
 import { AvatarUrl } from '../store.mjs';
 import { PostSettings, SetPrivateAccount, DecideFollowRequest, FollowRequests } from '../privacy.mjs';
+import { Public } from '../client/shell.mjs';
 
 const Visibility = (Private, Current = 'public') => [['public', Private ? 'Followers (approved)' : 'Everyone'], ['followers', 'Followers'], ['friends', 'Friends (followers you follow back)'], ['only_me', 'Only you']].filter(([Value]) => !Private || Value !== (Current === 'followers' ? 'public' : 'followers'));
 const Comments = [['default', 'Use account settings'], ['everyone', 'Everyone'], ['followers', 'Followers'], ['friends', 'Friends'], ['none', 'No one']];
@@ -21,7 +22,7 @@ export async function Studio({ Request, Response, Url, Pool, Config, User }) {
 		Title = 'Upload video';
 		Content = `<div class="studio-heading"><div><h1>Upload video</h1><p>Post a video to your account</p></div><a href="/account/posts">Manage posts</a></div>
 		<form id="upload" class="upload-layout"><section class="upload-file"><label id="drop-zone" tabindex="0"><span class="upload-symbol" aria-hidden="true">↑</span><strong>Select video to upload</strong><span>Or drag and drop a file</span><span class="file-help">MP4 or WebM · Up to ${Math.round(Config.MaxVideoBytes / 1024 / 1024)} MB · ${Config.MaxVideoSeconds} seconds</span><input required name="video" type="file" accept="video/mp4,video/webm,video/quicktime"><span class="choose-file">Select video</span></label><video id="video-preview" controls playsinline hidden></video><button id="change-video" class="secondary" type="button" hidden>Change video</button><p id="file-name"></p></section>
-		<section class="upload-details"><label>Caption<textarea name="description" maxlength="2200" rows="5" placeholder="Describe your video"></textarea><span id="caption-count">0 / 2200</span></label>${Select('visibility', 'Who can view this video', Visibility(User.private_account), 'public')}${Select('comments', 'Who can comment', Comments, 'default')}<p class="field-help">Your account’s privacy and comment settings also apply.</p><div class="upload-actions"><button type="reset" class="secondary">Discard</button><button type="submit">Post</button></div><progress id="upload-progress" max="100" value="0" hidden></progress><p id="status" role="status" aria-live="polite"></p><a id="posted-link" hidden>View video</a></section></form><script id="upload-config" type="application/json">${JSON.stringify({ csrf: User.csrf_token, maxBytes: Config.MaxVideoBytes, username: User.username }).replaceAll('<', '\\u003c')}</script><script src="/public/upload.js"></script>`;
+		<section class="upload-details"><label>Caption<textarea name="description" maxlength="2200" rows="5" placeholder="Describe your video"></textarea><span id="caption-count">0 / 2200</span></label>${Select('visibility', 'Who can view this video', Visibility(User.private_account), 'public')}${Select('comments', 'Who can comment', Comments, 'default')}<p class="field-help">Your account’s privacy and comment settings also apply.</p><div class="upload-actions"><button type="reset" class="secondary">Discard</button><button type="submit">Post</button></div><progress id="upload-progress" max="100" value="0" hidden></progress><p id="status" role="status" aria-live="polite"></p><a id="posted-link" hidden>View video</a></section></form><script id="upload-config" type="application/json">${JSON.stringify({ csrf: User.csrf_token, maxBytes: Config.MaxVideoBytes, username: User.username }).replaceAll('<', '\\u003c')}</script><script src="${Public('upload.js')}"></script>`;
 	} else if (Path === '/account/privacy') {
 		if (Request.method === 'POST') {
 			const Body = await ReadBody(Request); RequireCsrf(Request, User, Body.csrf);
@@ -61,6 +62,6 @@ export async function Studio({ Request, Response, Url, Pool, Config, User }) {
 	}
 	Response.setHeader('content-type', 'text/html; charset=utf-8');
 	Response.setHeader('cache-control', 'no-store');
-	Response.end(Page(Config, Title, `<link rel="stylesheet" href="/public/studio.css"><nav class="account-nav"><a href="/@${User.username}">Your profile</a><a href="/account/privacy">Privacy</a><a href="/account/requests">Follow requests</a></nav>${Content}`).replace('<main>', '<main class="studio">'));
+	Response.end(Page(Config, Title, `<link rel="stylesheet" href="${Public('studio.css')}"><nav class="account-nav"><a href="/@${User.username}">Your profile</a><a href="/account/privacy">Privacy</a><a href="/account/requests">Follow requests</a></nav>${Content}`).replace('<main>', '<main class="studio">'));
 	return true;
 }

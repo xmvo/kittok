@@ -1,6 +1,9 @@
 import { ReadJsonScript, ReplaceJsonScript, RewriteAssets } from './archive.mjs';
 import { AvatarUrl } from '../store.mjs';
 import { Misc } from '../settings.mjs';
+import { statSync } from 'node:fs';
+
+export const Public = Name => `/public/${Name}?v=${Math.trunc(statSync(new URL(`../../public/${Name}`, import.meta.url)).mtimeMs).toString(36)}`;
 
 const Slot = Name => `[class*="DivMainNavContainer"] > :has([data-e2e="${Name}"])`;
 const FeatureSelectors = {
@@ -66,5 +69,5 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	const Instance = { name: Config?.Name ?? 'Kittok', account: User ? { username: User.username, displayName: User.display_name, role: User.role } : null, csrfToken: User?.csrf_token ?? null, misc: { ...Misc }, announcement: Config?.Announcement?.text ? Config.Announcement : null };
 	const Hidden = Object.entries(Config?.Features ?? {}).filter(([, On]) => !On).flatMap(([Name]) => FeatureSelectors[Name] ?? []);
 	Html = Html.replace(/<title>[\s\S]*?<\/title>/, `<title>${Instance.name.replace(/[<&]/g, '')}</title>`);
-	return Html.replace('<head>', `<head><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="/public/brand.css"><link rel="stylesheet" href="/public/user-badges.css"><link rel="stylesheet" href="/public/responsive.css"><script src="/public/user-badges.js" defer></script><script src="/public/message-actions.js" defer></script>${Hidden.length ? `<style>${Hidden.join(',')}{display:none!important}</style>` : ''}<script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);
+	return Html.replace('<head>', `<head><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="${Public('brand.css')}"><link rel="stylesheet" href="${Public('user-badges.css')}"><link rel="stylesheet" href="${Public('responsive.css')}"><script src="${Public('user-badges.js')}" defer></script><script src="${Public('message-actions.js')}" defer></script>${Hidden.length ? `<style>${Hidden.join(',')}{display:none!important}</style>` : ''}<script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);
 }

@@ -10,6 +10,7 @@ import { Page } from './account.mjs';
 import { Enforce, DecideReport, ReverseDecision, LiftRestriction, MessageText, ReviewAppeal, Standing } from '../moderation.mjs';
 import { Transaction } from '../db.mjs';
 import { BadgeCatalog, PrideFlag, UserBadges, PublicBadges } from '../badges.mjs';
+import { Public } from '../client/shell.mjs';
 
 const Categories = ['spam', 'harassment', 'hate', 'nudity', 'violence', 'self_harm', 'misinformation', 'impersonation', 'copyright', 'other'];
 const Before = Value => Value ? Id(Value) : null;
@@ -81,7 +82,7 @@ export async function Admin(Context) {
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
 		Response.end(`<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon">
 <script>try{const T=localStorage.getItem('kittok-admin-theme');document.documentElement.dataset.theme=T||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')}catch{}</script>
-${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin-boot" type="application/json">${JSON.stringify(Boot).replaceAll('<', '\\u003c')}</script><script src="/public/admin.js" defer></script></head><body><div id="kittok-admin"></div></body></html>`);
+${Links}<link rel="stylesheet" href="${Public('admin.css')}"><script id="kittok-admin-boot" type="application/json">${JSON.stringify(Boot).replaceAll('<', '\\u003c')}</script><script src="${Public('admin.js')}" defer></script></head><body><div id="kittok-admin"></div></body></html>`);
 		return true;
 	}
 

@@ -4,9 +4,10 @@ import { DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 import { Standing, Appeal, RestrictableFeatures, ViolationFeatures, Until, AssertAllowed } from '../moderation.mjs';
 import { BadgeCatalog, PrideFlag, PublicBadges } from '../badges.mjs';
 import { Misc } from '../settings.mjs';
+import { Public } from '../client/shell.mjs';
 
 export function Page(Config, Title, Content) {
-	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${Escape(Title)} · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="/public/account.css"><body><main><a class="brand" href="/"><img src="/brand/icon" alt="">${Escape(Config.Name)}</a>${Content}</main></body></html>`;
+	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${Escape(Title)} · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="${Public('account.css')}"><body><main><a class="brand" href="/"><img src="/brand/icon" alt="">${Escape(Config.Name)}</a>${Content}</main></body></html>`;
 }
 
 const States = { good: ['Good standing', 'Your account has no active restrictions.'], at_risk: ['At risk', 'Your account is close to a strike limit. Another violation could get it permanently banned.'],
