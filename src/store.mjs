@@ -53,9 +53,8 @@ export async function MentionedUsers(Pool, Texts) {
 }
 
 export function CommentExtra(Text, Mentioned) {
-	return Entities(Text, Mentioned).map(Entity => Entity.type === 1
-		? { start: Entity.start, end: Entity.end, type: 1, hashtag_name: Entity.name, hashtag_id: TagId(Entity.name), is_commerce: false }
-		: { start: Entity.start, end: Entity.end, type: 0, user_id: Entity.user.id, sec_uid: Entity.user.id, hashtag_name: '', is_commerce: false });
+	return Entities(Text, Mentioned).filter(Entity => Entity.type === 0)
+		.map(Entity => ({ start: Entity.start, end: Entity.end, type: 0, user_id: Entity.user.id, sec_uid: Entity.user.username, hashtag_name: '', is_commerce: false }));
 }
 
 export const BlockedBetween = (A, B) => `EXISTS (SELECT 1 FROM blocks WHERE (blocker_id = ${A} AND blocked_id = ${B}) OR (blocker_id = ${B} AND blocked_id = ${A}))`;

@@ -910,7 +910,7 @@ test('message requests stay out of the inbox until accepted, and reported messag
 	const Decided = await Call(`/_kittok/admin/reports/${Review.open[0]}/decide`, 'POST', { verdict: 'violation', category: 'harassment', reason: 'Unwanted message', content_action: 'remove', account_action: 'strike' }, Auth());
 	assert.equal(Decided.status, 200); assert.equal((await Decided.json()).decision.feature, 'message');
 	assert.equal((await Im(AsHost, 301, 'messages_in_conversation_body', { conversation_short_id: Chat.conversation_short_id, conversation_type: 1, direction: 1, limit: 20 })).body.messages_in_conversation_body.messages?.length ?? 0, 0);
-	assert.equal((await (await Call('/api/share/settings/?device_platform=webapp_pc&mode=1', 'GET', undefined, AsHost)).json()).share_platforms[0].platform_id, 'message');
+	assert.deepEqual((await (await Call('/api/share/settings/?device_platform=webapp_pc&mode=1', 'GET', undefined, AsHost)).json()).share_platforms.slice(0, 2).map(Platform => Platform.platform_id), ['repost', 'message']);
 	assert.equal((await (await Call(`/api/im/item_detail/?itemId=${VideoId}`, 'GET', undefined, AsHost)).json()).itemInfo.itemStruct.id, VideoId);
 	assert.equal((await (await Call('/api/im/item_detail/?itemId=12345', 'GET', undefined, AsHost)).json()).statusCode, 10204);
 	await Pool.query('DELETE FROM reports');
@@ -1493,7 +1493,7 @@ test('hashtags, mentions, related and explore feeds, comment labels, merged like
 	const Mine = await Publish('Pinned thought from the creator', Auth());
 	const Mention = await Publish('@owner look at #KitTok and @nobody_here', AsThird);
 	assert.equal(Mine.label_type, 1);
-	assert.deepEqual(Mention.text_extra.map(Entity => [Entity.type, Entity.start, Entity.end, Entity.user_id ?? Entity.hashtag_name]), [[0, 0, 6, Owner.id], [1, 15, 22, 'kittok']]);
+	assert.deepEqual(Mention.text_extra.map(Entity => [Entity.type, Entity.start, Entity.end, Entity.user_id, Entity.sec_uid]), [[0, 0, 6, Owner.id, 'owner']]);
 	await Post(`/api/comment/digg/?aweme_id=${VideoId}&cid=${Mention.cid}&digg_type=1`);
 	const Listed = async () => (await Get(`/api/comment/list/?aweme_id=${VideoId}&count=50&cursor=0`)).comments.find(Comment => Comment.cid === Mention.cid);
 	assert.equal((await Listed()).is_author_digged, true); assert.equal((await Listed()).label_type, 0);
@@ -1550,4 +1550,20 @@ test('named collections hold your own favorites, respect privacy, and follow the
 	assert.deepEqual((await Get(`/api/collection/item_list/?collectionId=${Second.collectionId}&count=30&cursor=0`)).itemList, []);
 	await Post(`/api/collection/delete/?collectionId=${First.collectionId}`); await Post(`/api/collection/delete/?collectionId=${Second.collectionId}`);
 	assert.deepEqual((await Get(`/api/user/collection_list/?secUid=${Owner.id}&count=30&cursor=0`)).collectionList, []);
+});
+
+test('the native inbox lists follow requests and approves them with from_user_id', async () => {
+	await CreateUser(Pool, { username: 'inbox_asker', displayName: 'Inbox Asker', password: Password }, 'closed', true);
+	const Signed = await Login(Pool, 'inbox_asker', Password);
+	const AsAsker = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	await Pool.query('UPDATE users SET private_account = true WHERE id = $1', [Owner.id]);
+	assert.equal((await (await Call(`/api/commit/follow/user/?user_id=${Owner.id}&type=1`, 'POST', undefined, AsAsker)).json()).follow_status, 4);
+	const List = await (await Call(`/api/user/following/request/list/?user_id=${Owner.id}&count=20&max_time=0`, 'GET', undefined, Auth())).json();
+	assert.equal(List.total, 1); assert.equal(List.has_more, false); assert.deepEqual(List.request_users.map(User => User.unique_id), ['inbox_asker']); assert.ok(List.min_time > 0);
+	assert.equal((await Call('/api/user/following/request/list/?count=20&max_time=0')).status, 401);
+	const Asker = List.request_users[0].uid;
+	assert.equal((await (await Call(`/api/commit/follow/request/approve/?from_user_id=${Asker}&from=33`, 'POST', undefined, Auth())).json()).status_code, 0);
+	assert.equal((await Pool.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [Asker, Owner.id])).rowCount, 1);
+	assert.equal((await (await Call('/api/user/following/request/list/?count=20&max_time=0', 'GET', undefined, Auth())).json()).total, 0);
+	await Pool.query('UPDATE users SET private_account = false WHERE id = $1', [Owner.id]);
 });

@@ -82,10 +82,11 @@
 		return Found;
 	}
 	function Verified(Host) {
-		if (!Host.closest('a')) return null;
+		const Wrapper = Host.closest('a')?.parentElement;
+		if (!Wrapper) return null;
 		for (let Node = Host; Node; Node = Node.parentElement) {
 			if (Node.nextElementSibling?.tagName.toLowerCase() === 'svg') return Node.nextElementSibling;
-			if (Node.tagName === 'A') return null;
+			if (Node === Wrapper) return null;
 		}
 		return null;
 	}

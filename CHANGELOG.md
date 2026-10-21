@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Show follow requests in the native inbox with Accept and Delete, offer Repost in the share sheet, link @mentions in comments to the right profile, keep pride and community badges after the verified check in comments, and stop the analytics SDK's once-a-second retries.
 - Fill the video page's related list and the Explore grid; Explore categories other than All stay empty because videos carry no topic labels.
 - Link hashtags and @mentions in captions and comments, serve hashtag pages with video and view counts, and add mention notices to the Mentions inbox tab.
 - Merge likes on the same video or comment into one notice with the newest two likers and a total, as the native inbox shows them.

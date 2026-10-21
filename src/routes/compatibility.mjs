@@ -129,6 +129,11 @@ export async function Compatibility(Context) {
 		const Result = await Videos(Pool, Config.Origin, { id: Params.get('itemId'), viewer: User?.id });
 		Json(Response, Result.items.length ? { statusCode: 0, status_code: 0, itemInfo: { itemStruct: Result.items[0] } } : { statusCode: 10204, status_code: 10204, status_msg: 'Video unavailable' }); return true;
 	}
+	if (Path === '/v1/list') {
+		RequireMethod(Request, ['POST']);
+		Request.resume();
+		Json(Response, { e: 0 }); return true;
+	}
 	if (Path === '/api/playlist/name_check') {
 		RequireMethod(Request, ['GET']);
 		const Name = String(Params.get('name') ?? '').trim();
@@ -297,7 +302,8 @@ export async function Compatibility(Context) {
 		Json(Response, { status_code: 0, users: Result.rows.map(Row => {
 			const Avatar = { url_list: [AvatarUrl(Row, Config.Origin)] };
 			return { im_user_profile: { user_id: Row.id, unique_id: Row.username, nick_name: Row.display_name, avatars: { avatar_medium: Avatar, avatar_small: Avatar },
-				follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, block_info: { block: Row.relation === 4 } } };
+				follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, block_info: { block: Row.relation === 4 },
+				user_verify_reason: Row.verified ? 'Verified account' : '', enterprise_verify_reason: '' } };
 		}) }); return true;
 	}
 	if (Path === '/_kittok/view') {
@@ -310,7 +316,7 @@ export async function Compatibility(Context) {
 	}
 	if (Path === '/api/share/settings/') {
 		RequireMethod(Request, ['GET']);
-		const Platforms = [...(Config.Features?.messages !== false ? ['message'] : []), 'copy', 'embed', 'whatsapp', 'facebook', 'twitter', 'sms', 'reddit', 'pinterest'];
+		const Platforms = ['repost', ...(Config.Features?.messages !== false ? ['message'] : []), 'copy', 'embed', 'whatsapp', 'facebook', 'twitter', 'sms', 'reddit', 'pinterest'];
 		Json(Response, { status_code: 0, status_msg: '', share_platforms: Platforms.map(Platform => ({ platform_id: Platform })) }); return true;
 	}
 	if (Path === '/api/im/stranger/unlimit' || Path === '/api/im/stranger/unlimit/') {
@@ -561,10 +567,22 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']); if (!User) throw new HttpError(401, 'NotLoggedIn');
 		Json(Response, { requests: await FollowRequests(Pool, User.id) }); return true;
 	}
+	if (Path === '/api/user/following/request/list/') {
+		RequireMethod(Request, ['GET']); if (!User) throw new HttpError(401, 'NotLoggedIn');
+		const Before = Number(Params.get('max_time')) || null, Limit = PageSize(Params.get('count'), 20);
+		const Rows = (await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, ${RelationSql('$1::bigint', 'u.id')} AS relation,
+			extract(epoch FROM r.created_at)::float8 AS epoch, count(*) OVER ()::int AS total
+			FROM follow_requests r JOIN users u ON u.id = r.follower_id
+			WHERE r.following_id = $1 AND u.suspended_at IS NULL AND NOT ${BlockedBetween('$1', 'u.id')} AND ($2::float8 IS NULL OR r.created_at < to_timestamp($2))
+			ORDER BY r.created_at DESC LIMIT $3`, [User.id, Before, Limit + 1])).rows;
+		const Page = Rows.slice(0, Limit);
+		const Total = Before ? (await FollowRequests(Pool, User.id)).length : Rows[0]?.total ?? 0;
+		Json(Response, { status_code: 0, request_users: Page.map(Row => ApiUser(Row, Config.Origin)), has_more: Rows.length > Limit, min_time: Page.at(-1) ? Math.floor(Page.at(-1).epoch) : 0, total: Total }); return true;
+	}
 	if (['/api/commit/follow/request/approve/', '/api/commit/follow/request/reject/'].includes(Path)) {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
-		await DecideFollowRequest(Pool, User.id, Id(Body.user_id || Body.sec_user_id), Path.includes('/approve/'));
+		await DecideFollowRequest(Pool, User.id, Id(Body.from_user_id || Body.user_id || Body.sec_user_id), Path.includes('/approve/'));
 		Json(Response, { status_code: 0, statusCode: 0 }); return true;
 	}
 	if (Path === '/api/commit/follow/user/' || Path === '/api/follow/') {
