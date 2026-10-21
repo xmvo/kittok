@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { HttpError, Id, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { CreateUser, Login, RequireCsrf, SessionCookie, ClientInfo } from '../auth.mjs';
 import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment, SetBlock } from '../store.mjs';
-import { DownloadCopy, ImportVideo, ReceiveVideo, ServeMedia } from '../media.mjs';
+import { DownloadCopy, ImportVideo, ReceiveVideo, ServeMedia, WarmDownloads } from '../media.mjs';
 import { AssertAllowed, RemovedSql } from '../moderation.mjs';
 import { BadgeCatalog, BadgeSvg, PrideFlag, PublicBadges } from '../badges.mjs';
 import { AvatarDecoration, DecorationCatalog, DecorationImage, PublicDecoration } from '../decorations.mjs';
@@ -129,6 +129,7 @@ export async function Api(Context) {
 			File = await ReceiveVideo(Request, Config);
 			const VideoId = await ImportVideo(Pool, Config, User.id, File, Url.searchParams.get('description') ?? '', Settings);
 			Json(Response, { id: VideoId }, 201);
+			WarmDownloads(Pool, Config).catch(() => {});
 		} finally { Context.Uploading.value--; if (File) await rm(File, { force: true }); }
 		return true;
 	}

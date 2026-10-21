@@ -1,6 +1,7 @@
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { setPriority } from 'node:os';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import { createHash, randomUUID } from 'node:crypto';
@@ -13,9 +14,10 @@ import { AssetFile, Root } from './client/archive.mjs';
 export const Mime = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.mp4': 'video/mp4', '.json': 'application/json', '.ico': 'image/x-icon' };
 const SafeName = /^[a-zA-Z0-9_-]+\.(?:mp4|jpg|png|svg)$/;
 
-function Run(Executable, Args, Failure = 'InvalidVideo', Timeout = 180000) {
+function Run(Executable, Args, Failure = 'InvalidVideo', Timeout = 180000, Nice = 0) {
 	return new Promise((Resolve, Reject) => {
 		const Process = spawn(Executable, Args, { stdio: ['ignore', 'pipe', 'pipe'] });
+		if (Nice && Process.pid) try { setPriority(Process.pid, Nice); } catch {}
 		const Chunks = [];
 		let Size = 0;
 		const Timer = setTimeout(() => { Process.kill('SIGKILL'); Reject(new HttpError(422, 'VideoProcessingTimeout')); }, Timeout).unref();
@@ -121,11 +123,11 @@ export async function SaveMessageImage(Config, Input) {
 	} catch (Error) { await rm(File, { force: true }); throw Error; }
 }
 
-const WatermarkVersion = 2, Outro = 2.5, Downloading = new Map(), Queue = [];
+const WatermarkVersion = 3, Outro = 2.5, Downloading = new Map(), Queue = [];
 let Encoding = 0;
 const TikTokFont = AssetFile('https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Bold.woff2?_default_font=1&v=2');
 
-async function Watermark(Config, Row, Output) {
+async function Watermark(Config, Row, Output, Background) {
 	const Input = join(Config.MediaDir, Row.file_name);
 	const Logo = Config.Brand?.wordmarkDark ? join(Config.MediaDir, Config.Brand.wordmarkDark) : join(Root, 'public/logo.svg'), Svg = Logo.endsWith('.svg');
 	const Probe = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', '-show_streams', '-of', 'json', Input]));
@@ -134,7 +136,8 @@ async function Watermark(Config, Row, Output) {
 	const LogoTrack = ViewBox ? { width: Number(ViewBox[1]), height: Number(ViewBox[2]) } : JSON.parse(await Run(Config.FFprobe, ['-v', 'error', '-show_streams', '-of', 'json', Logo], 'InvalidImage')).streams[0];
 	const [Numerator, Denominator] = String(Track.r_frame_rate ?? '30/1').split('/').map(Number);
 	const Rate = Math.min(Math.max(Math.round(Numerator / (Denominator || 1)) || 30, 10), 60);
-	const Width = Track.width, Height = Track.height, Duration = Number(Row.duration), Base = Math.min(Width, Height), Even = Value => Math.max(2, Math.round(Value / 2) * 2);
+	const Even = Value => Math.max(2, Math.round(Value / 2) * 2), Shrink = Math.min(1, 720 / Math.min(Track.width, Track.height));
+	const Width = Even(Track.width * Shrink), Height = Even(Track.height * Shrink), Duration = Number(Row.duration), Base = Math.min(Width, Height);
 	const Aspect = LogoTrack.height / LogoTrack.width;
 	const LogoW = Even(Base * 0.25), LogoH = Math.round(LogoW * Aspect), Size = Math.round(Base * 0.042), Margin = Math.round(Base * 0.04), Inset = Math.round(LogoW * 0.03);
 	const Top = Math.round(Height * 0.06), Gap = Math.round(Size * 0.15), Bottom = Height - Math.round(Height * 0.06) - (LogoH + Gap + Size), Half = (Duration / 2).toFixed(3);
@@ -145,7 +148,7 @@ async function Watermark(Config, Row, Output) {
 	const Graph = [
 		[`[1:v]${[...Scale(LogoW), 'format=rgba'].join(',')},split=3[logo1][logo2][logos]`],
 		['[logos]colorchannelmixer=rr=0:gg=0:bb=0:aa=0.35,gblur=sigma=2,split[shadow1][shadow2]'],
-		[`[0:v]setsar=1,fps=${Rate}[base]`],
+		[`[0:v]${Shrink < 1 ? `scale=${Width}:${Height},` : ''}setsar=1,fps=${Rate}[base]`],
 		[`[base][shadow1]overlay=x=${Margin + 2}:y=${Top + 2}:enable='lt(t,${Half})'[v1]`],
 		[`[v1][logo1]overlay=x=${Margin}:y=${Top}:enable='lt(t,${Half})'[v2]`],
 		[`[v2][shadow2]overlay=x=${Width - Margin - LogoW + 2}:y=${Bottom + 2}:enable='gte(t,${Half})'[v3]`],
@@ -157,25 +160,29 @@ async function Watermark(Config, Row, Output) {
 		[`[e1]drawtext=${Text}:fontsize=${EndSize}:x=(w-text_w)/2:y=${Math.round(Height * 0.42 + EndH / 2 + EndSize * 0.5)}:alpha='if(lt(t,0.35),0,min(1,(t-0.35)/0.35))',format=yuv420p[end]`],
 		...(Audio ? [['[0:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo[a0]'], [`anullsrc=r=44100:cl=stereo,atrim=duration=${Outro}[a1]`], ['[main][a0][end][a1]concat=n=2:v=1:a=1[v][a]']] : [['[main][end]concat=n=2:v=1:a=0[v]']]),
 	].join(';');
-	const LogoInput = Width => [...(Svg ? ['-width', String(Width)] : []), '-i', Logo];
-	await Run(Config.FFmpeg, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-protocol_whitelist', 'file', '-i', Input, ...LogoInput(LogoW), '-loop', '1', '-framerate', String(Rate), '-t', String(Outro), ...LogoInput(EndW),
-		'-filter_complex', Graph, '-map', '[v]', ...(Audio ? ['-map', '[a]', '-c:a', 'aac', '-b:a', '128k'] : []), '-c:v', 'libx264', '-preset', Duration > 90 ? 'ultrafast' : 'veryfast', '-crf', '23',
-		'-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-map_metadata', '-1', '-threads', '2', '-n', Output], 'DownloadFailed', Math.max(180000, Duration * 3000));
+	const LogoInput = (Width, Height) => [...(Svg ? ['-width', String(Width), '-height', String(Height)] : []), '-i', Logo];
+	await Run(Config.FFmpeg, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-protocol_whitelist', 'file', '-i', Input, ...LogoInput(LogoW, LogoH), '-loop', '1', '-framerate', String(Rate), '-t', String(Outro), ...LogoInput(EndW, EndH),
+		'-filter_complex', Graph, '-map', '[v]', ...(Audio ? ['-map', '[a]', '-c:a', 'aac', '-b:a', '128k'] : []), '-c:v', 'libx264', '-preset', Background ? 'veryfast' : 'ultrafast', '-crf', Background ? '26' : '28',
+		'-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-map_metadata', '-1', '-threads', Background ? '2' : '0', '-n', Output], 'DownloadFailed', Math.max(180000, Duration * 3000), Background ? 10 : 0);
 }
 
-export async function DownloadCopy(Pool, Config, Row) {
-	const Name = `dl-${Row.id}-${createHash('sha256').update(`${WatermarkVersion}:${Row.username}:${Config.Brand?.wordmarkDark ?? ''}`).digest('hex').slice(0, 16)}.mp4`;
-	if (Row.download_name === Name && (await stat(join(Config.MediaDir, Name)).catch(() => null))?.isFile()) return Name;
+const DownloadName = (Config, Row) => `dl-${Row.id}-${createHash('sha256').update(`${WatermarkVersion}:${Row.username}:${Config.Brand?.wordmarkDark ?? ''}`).digest('hex').slice(0, 16)}.mp4`;
+const Ready = async (Config, Row) => Row.download_name === DownloadName(Config, Row) && (await stat(join(Config.MediaDir, Row.download_name)).catch(() => null))?.isFile();
+
+export async function DownloadCopy(Pool, Config, Row, Background = false) {
+	const Name = DownloadName(Config, Row);
+	if (await Ready(Config, Row)) return Name;
 	if (!Downloading.has(Name)) Downloading.set(Name, (async () => {
 		if (Encoding >= 2) await new Promise(Resolve => Queue.push(Resolve));
 		Encoding++;
 		const Partial = join(Config.MediaDir, '.incoming', `${randomUUID()}.mp4`);
 		try {
 			await mkdir(join(Config.MediaDir, '.incoming'), { recursive: true });
-			await Watermark(Config, Row, Partial);
+			await Watermark(Config, Row, Partial, Background);
 			await rename(Partial, join(Config.MediaDir, Name));
-			const Previous = (await Pool.query('UPDATE videos v SET download_name = $2 FROM (SELECT download_name FROM videos WHERE id = $1) old WHERE v.id = $1 RETURNING old.download_name', [Row.id, Name])).rows[0]?.download_name;
-			if (Previous && Previous !== Name) await RemoveMedia(Config, Previous);
+			const Updated = (await Pool.query('UPDATE videos v SET download_name = $2 FROM (SELECT download_name FROM videos WHERE id = $1) old WHERE v.id = $1 RETURNING old.download_name', [Row.id, Name])).rows[0];
+			if (!Updated) { await RemoveMedia(Config, Name); throw new HttpError(404, 'VideoNotFound'); }
+			if (Updated.download_name && Updated.download_name !== Name) await RemoveMedia(Config, Updated.download_name);
 			return Name;
 		} finally {
 			await rm(Partial, { force: true });
@@ -189,6 +196,19 @@ export async function DownloadCopy(Pool, Config, Row) {
 export async function SweepStories(Pool, Config) {
 	const Rows = (await Pool.query("DELETE FROM videos WHERE story_expires_at < now() - interval '1 day' RETURNING file_name, cover_name, download_name")).rows;
 	for (const Row of Rows) await Promise.all([RemoveMedia(Config, Row.file_name), RemoveMedia(Config, Row.cover_name), Row.download_name && RemoveMedia(Config, Row.download_name)]);
+}
+
+let Warming = null, WarmAgain = false;
+export function WarmDownloads(Pool, Config) {
+	if (Warming) { WarmAgain = true; return Warming; }
+	Warming = (async () => {
+		do {
+			WarmAgain = false;
+			const Rows = (await Pool.query('SELECT v.id, v.file_name, v.duration, v.download_name, u.username FROM videos v JOIN users u ON u.id = v.author_id WHERE v.story_expires_at IS NULL ORDER BY v.view_count DESC, v.id DESC')).rows;
+			for (const Row of Rows) if (!(await Ready(Config, Row))) await DownloadCopy(Pool, Config, Row, true).catch(() => {});
+		} while (WarmAgain);
+	})().finally(() => { Warming = null; });
+	return Warming;
 }
 
 export const AvatarExists =async (Config, Name) => (await stat(join(Config.MediaDir, Name)).catch(() => null))?.isFile() ?? false;

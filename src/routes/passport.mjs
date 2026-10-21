@@ -3,6 +3,7 @@ import { CreateUser, Hash, Login, PasswordHash, RequireCsrf, SessionCookie, Clie
 import { MailConfigured, SendMail, SignupCodes } from '../mail.mjs';
 import { Escape, HttpError, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { AvatarUrl } from '../store.mjs';
+import { WarmDownloads } from '../media.mjs';
 import { ActiveRestriction, RestrictionText, BanTicket } from '../moderation.mjs';
 
 export function DecodePassportValue(Value, Mixed) {
@@ -116,7 +117,10 @@ export async function Passport(Context) {
 		if (!/^[a-z0-9_]{3,24}$/.test(Name)) { Json(Response, { message: 'error', data: { error_code: 1027, description: 'Use 3 to 24 lowercase letters, numbers, or underscores.' } }); return true; }
 		try {
 			const Updated = (await Pool.query(`UPDATE users SET username = $2, display_name = CASE WHEN $3 AND display_name = username THEN $2 ELSE display_name END WHERE id = $1 RETURNING id, username, display_name, avatar_name`, [User.id, Name, Path.endsWith('/account/set/')])).rows[0];
-			if (Name !== User.username) await RecordEvent(Pool, User.id, 'username_change', ClientInfo(Request, Config), `@${User.username} → @${Name}`);
+			if (Name !== User.username) {
+				await RecordEvent(Pool, User.id, 'username_change', ClientInfo(Request, Config), `@${User.username} → @${Name}`);
+				WarmDownloads(Pool, Config).catch(() => {});
+			}
 			Json(Response, { message: 'success', data: PassportUser(Updated, Config) });
 		} catch (Error) {
 			if (Error.code !== '23505') throw Error;

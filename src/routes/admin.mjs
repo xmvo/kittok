@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Escape, HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { Hash, RequireCsrf, Token } from '../auth.mjs';
-import { RemoveMedia, SaveBrandImage } from '../media.mjs';
+import { RemoveMedia, SaveBrandImage, WarmDownloads } from '../media.mjs';
 import { AvatarUrl, UserStats } from '../store.mjs';
 import { ClientDir, Root } from '../client/archive.mjs';
 import { BrandSlots, Features, MiscFeatures, SaveSetting, Settings } from '../settings.mjs';
@@ -268,6 +268,7 @@ export async function Admin(Context) {
 		await SaveSetting(Pool, Config, 'brand', Brand);
 		if (Previous && Previous !== Name) await RemoveMedia(Config, Previous);
 		await Audit(Pool, User, Name ? 'brand.upload' : 'brand.reset', Slot);
+		if (Slot === 'wordmarkDark') WarmDownloads(Pool, Config).catch(() => {});
 		Json(Response, Settings(Config).brand); return true;
 	}
 	const Body = await ReadBody(Request, 32768);

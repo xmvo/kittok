@@ -12,7 +12,7 @@ import { LoadConfig } from './config.mjs';
 import { Database, Migrate } from './db.mjs';
 import { Viewer, RateLimiter } from './auth.mjs';
 import { HttpError, Json, RequireMethod, ReadBody } from './http.mjs';
-import { Mime, ServeMedia, SweepStories } from './media.mjs';
+import { Mime, ServeMedia, SweepStories, WarmDownloads } from './media.mjs';
 import { Api } from './routes/api.mjs';
 import { Compatibility } from './routes/compatibility.mjs';
 import { Account } from './routes/account.mjs';
@@ -44,6 +44,7 @@ const Cleanup = setInterval(() => {
 	DeleteExpiredAccounts(Pool, Config).catch(() => console.error('AccountDeletionFailed'));
 	SweepMessageMedia(Pool, Config).catch(() => console.error('MessageMediaCleanupFailed'));
 	SweepStories(Pool, Config).catch(() => console.error('StoryCleanupFailed'));
+	WarmDownloads(Pool, Config).catch(() => console.error('DownloadWarmupFailed'));
 }, 3600000).unref();
 
 const Server = createServer(async (Request, Response) => {
@@ -177,6 +178,7 @@ Server.on('upgrade', async (Request, Socket) => {
 Server.requestTimeout = 240000;
 Server.headersTimeout = 15000;
 Server.listen(Config.Port, Config.Host, () => console.log(`Kittok ready: ${Config.Origin}`));
+setTimeout(() => WarmDownloads(Pool, Config).catch(() => console.error('DownloadWarmupFailed')), 30000).unref();
 let Closing = false;
 async function Shutdown() {
 	if (Closing) return;
