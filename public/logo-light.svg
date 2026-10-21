@@ -1,28 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 110" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 110" role="img" aria-labelledby="title">
   <title id="title">Kittok</title>
   <defs>
-    <path id="cat" d="M20 50 18 18Q18 10 25 14L44 28Q55 25 66 28L85 14Q92 10 92 18L90 50Q99 84 71 95Q55 101 39 95Q11 84 20 50Z"/>
+    <path id="ears" d="M355 172C336 300 335 470 349 598Q351 612 366 607C452 560 718 556 803 610Q819 614 821 598C835 470 834 300 815 172C762 214 648 332 613 470L547 475C522 332 408 214 355 172Z"/>
     <path id="o" fill-rule="evenodd" d="M299 44C282 44 273 54 273 71S282 98 299 98 325 88 325 71 316 44 299 44ZM299 57C307 57 310 62 310 71S307 85 299 85 288 80 288 71 291 57 299 57Z"/>
   </defs>
-  <use href="#cat" fill="#25F4EE" transform="translate(-4 -3)"/>
-  <use href="#cat" fill="#FE2C55" transform="translate(4 3)"/>
-  <use href="#cat" fill="#fff" stroke="#161823" stroke-width="2.4" stroke-linejoin="round"/>
-  <path fill="#FFC2D1" d="M27 22 41 33Q32 37 28 44Z M83 22 69 33Q78 37 82 44Z"/>
-  <g fill="#161823">
-    <ellipse cx="40" cy="59" rx="7" ry="10"/>
-    <ellipse cx="70" cy="59" rx="7" ry="10"/>
+  <g transform="translate(58 56) scale(0.18) translate(-585 -390)">
+    <use href="#ears" fill="#25F4EE" transform="translate(-24 2)"/>
+    <use href="#ears" fill="#FE2C55" transform="translate(22 8)"/>
+    <use href="#ears" fill="#161823"/>
   </g>
-  <g fill="#fff"><circle cx="42.5" cy="55.5" r="2.6"/><circle cx="72.5" cy="55.5" r="2.6"/></g>
-  <path fill="#FE2C55" d="M50.5 71.5Q55 68.5 59.5 71.5L55 77Z"/>
-  <path d="M55 76.5v3.5m0 0q-5 6-9.5 0m9.5 0q5 6 9.5 0M36 73l-11-2.5m11 8.5-11 2m49-8 11-2.5m-11 8.5 11 2" fill="none" stroke="#161823" stroke-width="2" stroke-linecap="round"/>
   <g fill="#161823">
     <path d="M121 24h16v30l23-30h19l-28 35 30 38h-20l-24-32v32h-16Z"/>
     <path d="M185 45h15v52h-15Zm0-21h15v14h-15Z"/>
     <path d="M211 31h15v14h12v13h-12v22q0 6 7 6h5v11h-9q-18 0-18-17V58h-7V45h7Z"/>
-    <path d="M238 24h52v15h-18v58h-16V39h-18Z"/>
-    <path d="M333 24h15v41l15-20h18l-20 24 22 28h-19l-16-22v22h-15Z"/>
+    <path transform="translate(8 0)" d="M238 24h52v15h-18v58h-16V39h-18Z"/>
+    <path transform="translate(29 0)" d="M333 24h15v41l15-20h18l-20 24 22 28h-19l-16-22v22h-15Z"/>
   </g>
-  <use href="#o" fill="#25F4EE" transform="translate(-3 -2)"/>
-  <use href="#o" fill="#FE2C55" transform="translate(3 2)"/>
-  <use href="#o" fill="#161823"/>
+  <g transform="translate(31 0)">
+    <use href="#o" fill="#25F4EE" transform="translate(-3 -2)"/>
+    <use href="#o" fill="#FE2C55" transform="translate(3 2)"/>
+    <use href="#o" fill="#161823"/>
+  </g>
 </svg>

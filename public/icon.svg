@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Kittok</title>
+  <defs><path id="ears" d="M355 172C336 300 335 470 349 598Q351 612 366 607C452 560 718 556 803 610Q819 614 821 598C835 470 834 300 815 172C762 214 648 332 613 470L547 475C522 332 408 214 355 172Z"/></defs>
+  <rect width="512" height="512" rx="112" fill="#000"/>
+  <g transform="translate(256 262) scale(0.66) translate(-585 -390)">
+    <use href="#ears" fill="#25F4EE" transform="translate(-22 2)"/>
+    <use href="#ears" fill="#FE2C55" transform="translate(20 7)"/>
+    <path fill="#25F4EE" d="M300 326 328 312 328 330 300 342ZM302 446 328 434 328 450 302 460Z"/>
+    <path fill="#FE2C55" d="M876 330 848 318 848 336 876 346ZM874 452 846 440 846 456 874 466Z"/>
+    <use href="#ears" fill="#fff"/>
+  </g>
+</svg>

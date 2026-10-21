@@ -15,7 +15,7 @@ export const MiscFeatures = {
 	unsend: ['Unsend messages', 'Senders can unsend within three minutes'],
 };
 export const Misc = Object.fromEntries(Object.keys(MiscFeatures).map(Name => [Name, true]));
-export const BrandSlots = { wordmarkDark: '/public/logo.svg', wordmarkLight: '/public/logo-light.svg', icon: '/public/avatar.svg', favicon: '/public/avatar.svg' };
+export const BrandSlots = { wordmarkDark: '/public/logo.svg', wordmarkLight: '/public/logo-light.svg', icon: '/public/icon.svg', favicon: '/public/icon.svg' };
 
 function Validate(Key, Value) {
 	if (Key === 'registration') {
