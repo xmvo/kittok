@@ -6,7 +6,7 @@ export const FollowsSql = (Viewer, Author) => `EXISTS (SELECT 1 FROM follows WHE
 export const FriendsSql = (Viewer, Author) => `(${FollowsSql(Viewer, Author)} AND ${FollowsSql(Author, Viewer)})`;
 export const PairBlockedSql = (A, B) => `EXISTS (SELECT 1 FROM blocks WHERE (blocker_id = ${A} AND blocked_id = ${B}) OR (blocker_id = ${B} AND blocked_id = ${A}))`;
 export const VideoVisibleSql = (Viewer, Video = 'v', Author = 'u') => `(${Author}.suspended_at IS NULL AND NOT ${RemovedSql('video', `${Video}.id`)} AND NOT ${PairBlockedSql(Viewer, `${Video}.author_id`)} AND (
-	${Video}.author_id = ${Viewer} OR (
+	${Video}.author_id = ${Viewer} OR (${Video}.story_expires_at IS NULL OR ${Video}.story_expires_at > now()) AND (
 		(NOT ${Author}.private_account OR ${FollowsSql(Viewer, `${Video}.author_id`)}) AND (
 			${Video}.visibility = 'public' OR (${Video}.visibility = 'followers' AND ${FollowsSql(Viewer, `${Video}.author_id`)})
 			OR (${Video}.visibility = 'friends' AND ${FriendsSql(Viewer, `${Video}.author_id`)})))))`;

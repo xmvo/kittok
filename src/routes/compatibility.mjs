@@ -9,7 +9,7 @@ import { AssertVideoVisible, VideoVisibleSql, SetPrivateAccount, DecideFollowReq
 import { PublicBadges } from '../badges.mjs';
 import { Categories } from '../categories.mjs';
 import { Misc } from '../settings.mjs';
-import { FindUser, UserShape, UserStats, Videos, SetRelation, TagId, TagName, TagSql, MentionedUsers, CommentExtra, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
+import { FindUser, StoryStatus, UserShape, UserStats, Videos, SetRelation, TagId, TagName, TagSql, MentionedUsers, CommentExtra, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
 
@@ -146,8 +146,6 @@ export async function Compatibility(Context) {
 		if (!Item) { Json(Response, { statusCode: 10219, status_code: 10219 }); return true; }
 		Json(Response, { statusCode: 0, status_code: 0, musicInfo: { music: { ...Item.music, playUrl: Item.video.playAddr, private: false }, author: Item.author, stats: { videoCount: 1 } }, shareMate: {} }); return true;
 	}
-	if (Path === '/api/story/user_list/') { RequireMethod(Request, ['GET']); Json(Response, { statusCode: 0, status_code: 0, storyUsers: [], totalCount: '0', hasMore: false }); return true; }
-	if (['/api/story/item_list/', '/api/story/batch/item_list/', '/api/story/user/story_list/'].includes(Path)) { RequireMethod(Request, ['GET']); Json(Response, { statusCode: 0, status_code: 0, itemList: [], hasMore: false, cursor: '0' }); return true; }
 	if (Path === '/api/user/playlist/') { RequireMethod(Request, ['GET']); Json(Response, { statusCode: 0, status_code: 0, playList: [], cursor: '0', hasMore: false }); return true; }
 	if (Path === '/api/discover/user/') {
 		RequireMethod(Request, ['GET']);
@@ -217,7 +215,7 @@ export async function Compatibility(Context) {
 	if (Path === '/api/user/detail/') {
 		RequireMethod(Request, ['GET']);
 		const Target = await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'));
-		Json(Response, { statusCode: 0, userInfo: { user: UserShape({ ...Target, relation: await Relation(Pool, User?.id, Target.id) }, Config.Origin), stats: await UserStats(Pool, Target.id) } }); return true;
+		Json(Response, { statusCode: 0, userInfo: { user: UserShape({ ...Target, relation: await Relation(Pool, User?.id, Target.id), story_status: await StoryStatus(Pool, User?.id, Target.id) }, Config.Origin), stats: await UserStats(Pool, Target.id) } }); return true;
 	}
 	if (Path === '/api/user/list/') {
 		RequireMethod(Request, ['GET']);

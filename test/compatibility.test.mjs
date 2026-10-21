@@ -2033,6 +2033,55 @@ test('download video saves a copy marked with the logo and @username plus an end
 	assert.equal((await fetch(`${Origin}/media/${Source.download_name}`)).status, 404);
 });
 
+test('stories show for 24 hours in the tray of people who follow you, start at the first unseen one, and keep out of profiles and feeds', async () => {
+	const Users = {}, As = {};
+	for (const Name of ['story_a', 'story_b', 'story_c']) {
+		Users[Name] = await CreateUser(Pool, { username: Name, password: Password }, 'closed', true);
+		const Signed = await Login(Pool, Name, Password);
+		As[Name] = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	}
+	await Pool.query('INSERT INTO follows(follower_id, following_id) VALUES ($1, $2)', [Users.story_b.id, Users.story_a.id]);
+	const Insert = async (Name, Story, Ago = 0) => (await Pool.query(`INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes, category, story_expires_at, created_at)
+		VALUES ($1, $2, $2 || '.mp4', $2 || '.jpg', 96, 160, 1, 1000, 0, CASE WHEN $3 THEN now() + interval '24 hours' - make_interval(hours => $4) END, now() - make_interval(hours => $4)) RETURNING id`, [Users.story_a.id, Name, Story, Ago])).rows[0].id;
+	const Stories = [await Insert('story-one', true), await Insert('story-two', true), await Insert('story-three', true)];
+	const Expired = await Insert('story-old', true, 30), Post = await Insert('story-post', false);
+	const Get = async (Path, Headers = As.story_b) => (await Call(Path, 'GET', undefined, Headers)).json();
+	const Tray = async Headers => (await Get('/api/story/user_list/?cursor=0&storyFeedScene=3', Headers)).storyUsers.map(Entry => [Entry.user.uniqueId, Entry.user.UserStoryStatus]);
+	assert.deepEqual(await Tray(As.story_b), [['story_a', 1]]);
+	assert.deepEqual(await Tray(As.story_c), []);
+	assert.deepEqual(await Tray(As.story_a), [['story_a', 1]]);
+	const Items = async (Query, Headers) => Get(`/api/story/item_list/?authorId=${Users.story_a.id}&${Query}`, Headers);
+	const First = await Items('cursor=0');
+	assert.deepEqual([First.itemList.map(Item => Item.id), First.TotalCount, First.CurrentPosition, First.HasMoreAfter], [Stories, '3', '0', false]);
+	assert.ok(First.itemList.every(Item => Item.story.Viewed === false && Item.author.uniqueId === 'story_a'));
+	const Seen = Id => Call(`/tiktok/story/view/report/v1?story_id=${Id}`, 'POST', undefined, As.story_b);
+	assert.equal((await Call(`/tiktok/story/view/report/v1?story_id=${Stories[0]}`, 'POST', undefined, { cookie: As.story_b.cookie })).status, 403);
+	assert.equal((await Seen(Stories[0])).status, 200);
+	const Next = await Items('cursor=0');
+	assert.deepEqual([Next.CurrentPosition, Next.itemList.map(Item => Item.id), Next.HasMoreBefore], ['1', Stories.slice(1), true]);
+	const Before = await Items('cursor=1&loadBackward=true');
+	assert.deepEqual([Before.CurrentPosition, Before.itemList.map(Item => [Item.id, Item.story.Viewed])], ['0', [[Stories[0], true]]]);
+	await Seen(Stories[1]); await Seen(Stories[2]);
+	assert.deepEqual(await Tray(As.story_b), [['story_a', 2]]);
+	assert.equal((await Items('cursor=0')).AllViewed, true);
+	assert.equal((await Get(`/api/user/detail/?uniqueId=story_a`)).userInfo.user.UserStoryStatus, 2);
+	assert.equal((await Get(`/api/user/detail/?uniqueId=story_a`)).userInfo.stats.videoCount, 1);
+	assert.deepEqual((await Get(`/api/post/item_list/?secUid=${Users.story_a.id}&count=30&cursor=0`)).itemList.map(Item => Item.id), [Post]);
+	assert.ok(!(await Get('/api/recommend/item_list/?count=30')).itemList?.some(Item => Stories.includes(Item.id)));
+	const Batch = await Get(`/api/story/batch/item_list/?authorIds=${Users.story_a.id}&insertStoryId=${Stories[2]}`);
+	assert.deepEqual([Batch.batchStoryItemLists[0].AuthorId, Batch.batchStoryItemLists[0].CurrentPosition], [Users.story_a.id, '2']);
+	assert.deepEqual((await Get(`/api/story/user/story_list/?authorIds=${Users.story_a.id}`)).storyIdListStructs[0].storyIds, Stories);
+	const Viewers = await Get(`/api/story/viewer_list/?storyId=${Stories[0]}&cursor=0`, As.story_a);
+	assert.deepEqual([Viewers.storyViewerList.map(Entry => Entry.user.user.uniqueId), Viewers.totalViewers], [['story_b'], '1']);
+	assert.equal((await Call(`/api/story/viewer_list/?storyId=${Stories[0]}`, 'GET', undefined, As.story_b)).status, 404);
+	assert.equal((await Call(`/api/item/detail/?itemId=${Expired}`, 'GET', undefined, As.story_b)).status, 404);
+	assert.ok(!(await Items('cursor=0')).itemList.some(Item => Item.id === Expired));
+	const Uploaded = await fetch(Origin + '/api/v1/videos?description=My%20story&story=1', { method: 'POST', headers: { ...As.story_a, 'content-type': 'video/mp4' }, body: await readFile(join(Directory, 'input.mp4')) });
+	assert.equal(Uploaded.status, 201);
+	assert.ok((await Pool.query('SELECT story_expires_at > now() + interval \'23 hours\' AS fresh FROM videos WHERE id = $1', [(await Uploaded.json()).id])).rows[0].fresh);
+	assert.equal((await Items('cursor=0')).TotalCount, '4');
+});
+
 test('misc switches turn Kittok features off and back on without a restart', async () => {
 	const Settings = await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json();
 	assert.ok(Object.values(Settings.misc).every(Boolean));

@@ -35,7 +35,8 @@ export async function ImportVideo(Pool, Config, UserId, Input, Description = '',
 	if (typeof Description !== 'string' || Description.length > 2200) throw new HttpError(400, 'DescriptionTooLong');
 	const Video = await TranscodeVideo(Config, Input, Config.MaxVideoBytes, Config.MaxVideoSeconds);
 	try {
-		const Result = await Pool.query('INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes, visibility, comment_permission, category) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id', [UserId, Description, Video.VideoName, Video.CoverName, Video.Width, Video.Height, Video.Duration, Video.Bytes, Settings.visibility, Settings.comment_permission, Settings.category ?? GuessCategory(Description)]);
+		const Result = await Pool.query("INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes, visibility, comment_permission, category, story_expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CASE WHEN $12 THEN now() + interval '24 hours' END) RETURNING id",
+			[UserId, Description, Video.VideoName, Video.CoverName, Video.Width, Video.Height, Video.Duration, Video.Bytes, Settings.visibility, Settings.comment_permission, Settings.story ? 0 : Settings.category ?? GuessCategory(Description), Boolean(Settings.story)]);
 		return Result.rows[0].id;
 	} catch (Error) {
 		await Promise.allSettled([RemoveMedia(Config, Video.VideoName), RemoveMedia(Config, Video.CoverName)]);
@@ -183,6 +184,11 @@ export async function DownloadCopy(Pool, Config, Row) {
 		}
 	})());
 	return Downloading.get(Name);
+}
+
+export async function SweepStories(Pool, Config) {
+	const Rows = (await Pool.query("DELETE FROM videos WHERE story_expires_at < now() - interval '1 day' RETURNING file_name, cover_name, download_name")).rows;
+	for (const Row of Rows) await Promise.all([RemoveMedia(Config, Row.file_name), RemoveMedia(Config, Row.cover_name), Row.download_name && RemoveMedia(Config, Row.download_name)]);
 }
 
 export const AvatarExists =async (Config, Name) => (await stat(join(Config.MediaDir, Name)).catch(() => null))?.isFile() ?? false;

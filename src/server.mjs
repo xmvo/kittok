@@ -12,7 +12,7 @@ import { LoadConfig } from './config.mjs';
 import { Database, Migrate } from './db.mjs';
 import { Viewer, RateLimiter } from './auth.mjs';
 import { HttpError, Json, RequireMethod, ReadBody } from './http.mjs';
-import { Mime, ServeMedia } from './media.mjs';
+import { Mime, ServeMedia, SweepStories } from './media.mjs';
 import { Api } from './routes/api.mjs';
 import { Compatibility } from './routes/compatibility.mjs';
 import { Account } from './routes/account.mjs';
@@ -20,6 +20,7 @@ import { Passport } from './routes/passport.mjs';
 import { Studio } from './routes/studio.mjs';
 import { Admin } from './routes/admin.mjs';
 import { Im, HandleRequest, Proto, SweepMessageMedia } from './routes/im.mjs';
+import { Stories } from './routes/stories.mjs';
 import { Upgrade, Sweep } from './im/frontier.mjs';
 import { AssertVideoVisible } from './privacy.mjs';
 import { LoadSettings } from './settings.mjs';
@@ -42,6 +43,7 @@ const Cleanup = setInterval(() => {
 	Pool.query('DELETE FROM data_exports WHERE expires_at < now()').catch(() => console.error('ExportCleanupFailed'));
 	DeleteExpiredAccounts(Pool, Config).catch(() => console.error('AccountDeletionFailed'));
 	SweepMessageMedia(Pool, Config).catch(() => console.error('MessageMediaCleanupFailed'));
+	SweepStories(Pool, Config).catch(() => console.error('StoryCleanupFailed'));
 }, 3600000).unref();
 
 const Server = createServer(async (Request, Response) => {
@@ -125,7 +127,7 @@ const Server = createServer(async (Request, Response) => {
 			if (Path === '/_debug/unknown') return Json(Response, Object.fromEntries(Unknown));
 			if (Path === '/_debug/blocked') return Json(Response, Object.fromEntries(Blocked));
 		}
-		if (await Admin(Context) || await Studio(Context) || await Account(Context) || await Api(Context) || await Pns(Context) || await Passport(Context) || await Im(Context) || await Compatibility(Context)) return;
+		if (await Admin(Context) || await Studio(Context) || await Account(Context) || await Api(Context) || await Pns(Context) || await Passport(Context) || await Im(Context) || await Stories(Context) || await Compatibility(Context)) return;
 		if (/^\/(?:api|passport|node-webapp|tiktok|tns-api|aweme|node|v[1-3])\//.test(Path)) {
 			const Key = `${Request.method} ${Path}`;
 			if (Unknown.size < 500) Unknown.set(Key, (Unknown.get(Key) ?? 0) + 1);

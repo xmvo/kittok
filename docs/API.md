@@ -33,7 +33,7 @@ All routes are on the instance's configured public origin. Responses are JSON. I
 | PATCH | `/api/v1/profile/badges` | Authenticated JSON `{prideFlag}`: set your optional public flag, or `""` to remove it. Profile restrictions apply; community badges and verification cannot be changed here |
 | DELETE | `/api/v1/session` | Revoke the current session and clear its cookie |
 | GET | `/api/v1/videos?cursor=ID` | Paginated public feed: `items`, `hasMore`, `cursor` |
-| POST | `/api/v1/videos?description=CAPTION&visibility=public&comments=default` | Upload raw video bytes. Privacy is stored atomically with the new video; returns `{id}` after transcoding |
+| POST | `/api/v1/videos?description=CAPTION&visibility=public&comments=default` | Upload raw video bytes. Privacy is stored atomically with the new video; returns `{id}` after transcoding. `story=1` posts it as a 24-hour story instead |
 | PATCH | `/api/v1/videos/ID` | Owner-only JSON `{visibility, comments}`; audiences: `public`, `followers`, `friends`, `only_me`; comments: `default`, `everyone`, `followers`, `friends`, `none` |
 | PATCH | `/api/v1/profile/privacy` | JSON `{privateAccount: boolean, comments}`; account comments use the same audiences except `default` |
 | GET | `/api/v1/follow-requests` | Your pending incoming requests, newest first (up to 100); review them at `/account/requests` |

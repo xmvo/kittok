@@ -13,6 +13,7 @@ export function UserShape(User, Origin) {
 	return {
 		id: User.id, uniqueId: User.username, nickname: User.display_name, secUid: User.id,
 		signature: User.bio ?? '', verified: Misc.verifiedBadges && Boolean(User.verified), privateAccount: Boolean(User.private_account), secret: Boolean(User.private_account), downloadSetting: User.allow_downloads === false ? 3 : 0,
+		UserStoryStatus: User.story_status ?? 0,
 		prideFlag: User.pride_flag ?? '', kittokBadges: PublicBadges(User),
 		avatarThumb: Avatar, avatarMedium: Avatar, avatarLarger: Avatar,
 		following: 0, relation: User.relation ?? 0,
@@ -174,21 +175,30 @@ export async function FindUser(Pool, Value, ById = false) {
 	return Result.rows[0];
 }
 
+export const StoryStatusSql = (Viewer, Author) => `(SELECT CASE WHEN ${Viewer} IS NULL OR count(*) = 0 THEN 0 WHEN bool_and(EXISTS (SELECT 1 FROM story_views sv WHERE sv.story_id = s.id AND sv.viewer_id = ${Viewer})) THEN 2 ELSE 1 END
+	FROM videos s JOIN users su ON su.id = s.author_id WHERE s.author_id = ${Author} AND s.story_expires_at > now() AND ${VideoVisibleSql(Viewer, 's', 'su')})`;
+
+export async function StoryStatus(Pool, Viewer, Author) {
+	return (await Pool.query(`SELECT ${StoryStatusSql('$1::bigint', '$2::bigint')} AS status`, [Viewer ?? null, Author])).rows[0].status;
+}
+
 export async function UserStats(Pool, UserId) {
 	const Result = await Pool.query(`SELECT
 		(SELECT count(*)::int FROM follows WHERE following_id = $1) AS "followerCount",
 		(SELECT count(*)::int FROM follows WHERE follower_id = $1) AS "followingCount",
-		(SELECT count(*)::int FROM videos WHERE author_id = $1) AS "videoCount",
+		(SELECT count(*)::int FROM videos WHERE author_id = $1 AND story_expires_at IS NULL) AS "videoCount",
 		(SELECT count(*)::int FROM likes l JOIN videos v ON v.id = l.video_id WHERE v.author_id = $1) AS "heartCount",
 		(SELECT count(*)::int FROM likes WHERE user_id = $1) AS "diggCount"`, [UserId]);
 	return { ...Result.rows[0], heart: Result.rows[0].heartCount };
 }
 
-export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, repostedBy, collection, id, exclude, tag, viewer, query, forYou, category, pinned, friendsOf, order = 'latest', limit = 20 } = {}) {
+export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, repostedBy, collection, id, exclude, tag, viewer, query, forYou, category, pinned, friendsOf, story = false, offset = 0, order = 'latest', limit = 20 } = {}) {
 	const Values = [viewer ?? null];
 	const Conditions = [];
 	function Where(Sql, Value) { Values.push(Value); Conditions.push(Sql.replace('?', `$${Values.length}`)); }
-	const Offset = order === 'popular' ? Math.max(0, Math.floor(Number(before) || 0)) : 0;
+	const Offset = order === 'popular' ? Math.max(0, Math.floor(Number(before) || 0)) : Math.max(0, Math.floor(Number(offset) || 0));
+	if (story) Conditions.push('v.story_expires_at > now()');
+	else if (!id) Conditions.push('v.story_expires_at IS NULL');
 	if (before && order === 'latest') Where('v.id < ?', Id(before));
 	if (before && order === 'oldest') Where('v.id > ?', Id(before));
 	if (pinned === true) Conditions.push('v.pinned_at IS NOT NULL');
@@ -217,7 +227,8 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 		EXISTS (SELECT 1 FROM reposts r WHERE r.video_id = v.id AND r.user_id = $1) AS reposted,
 		EXISTS (SELECT 1 FROM likes l WHERE l.video_id = v.id AND l.user_id = $1) AS liked,
 		EXISTS (SELECT 1 FROM favorites f WHERE f.video_id = v.id AND f.user_id = $1) AS saved,
-		${RelationSql('$1', 'v.author_id')} AS relation, ${CommentsAllowedSql('$1::bigint')} AS can_comment
+		${RelationSql('$1', 'v.author_id')} AS relation, ${CommentsAllowedSql('$1::bigint')} AS can_comment, ${StoryStatusSql('$1::bigint', 'v.author_id')} AS story_status,
+		v.story_expires_at IS NOT NULL AND EXISTS (SELECT 1 FROM story_views sv WHERE sv.story_id = v.id AND sv.viewer_id = $1) AS story_viewed
 		FROM videos v JOIN users u ON u.id = v.author_id ${Conditions.length ? `WHERE ${Conditions.join(' AND ')}` : ''}
 		ORDER BY ${pinned ? 'v.pinned_at DESC' : order === 'oldest' ? 'v.id ASC' : order === 'popular' ? 'v.view_count DESC, v.id DESC' : 'v.id DESC'} LIMIT $${Values.length} OFFSET ${Offset}`, Values);
 	const HasMore = Result.rows.length === Values.at(-1);
@@ -250,6 +261,7 @@ export function VideoShape(Row, Origin, Mentioned, Viewer) {
 		textExtra: TextExtra, challenges: Challenges, repostList: Misc.reposts && Row.reposted && Viewer ? [{ secUid: Viewer, uid: Viewer }] : [], digged: Row.liked, collected: Row.saved, itemCommentStatus: Row.can_comment === false ? 1 : 0,
 		officalItem: false, secret: Row.visibility === 'only_me', privateItem: Row.visibility === 'only_me', shareEnabled: true, duetEnabled: false, stitchEnabled: false,
 		authorPrivate: Boolean(Row.private_account), downloadSetting: Row.allow_downloads === false ? 3 : 0, itemMute: false,
+		...(Row.story_expires_at ? { story: { Viewed: Boolean(Row.story_viewed), ExpiredAt: String(Math.floor(new Date(Row.story_expires_at).getTime() / 1000)) } } : {}),
 		forFriend: Row.visibility === 'friends', originalItem: false, isAd: false, item_control: {}, contents: [{ desc: Row.description, textExtra: TextExtra }],
 	};
 }

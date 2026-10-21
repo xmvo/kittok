@@ -34,15 +34,16 @@
 		const File = Selected ?? Input.files[0]; if (!File) { Status.textContent = 'Select a video first.'; return; }
 		Busy = true; const Controls = [...Form.querySelectorAll('button,input,textarea,select')]; Controls.forEach(Control => { Control.disabled = true; });
 		Status.textContent = 'Uploading…'; if (Progress) { Progress.hidden = false; Progress.value = 0; }
-		const Query = new URLSearchParams({ description: Form.elements.description.value, visibility: Form.elements.visibility?.value ?? 'public', comments: Form.elements.comments?.value ?? 'default', category: Form.elements.category?.value ?? '' });
+		const Story = Form.elements.story?.checked ?? false;
+		const Query = new URLSearchParams({ description: Form.elements.description.value, visibility: Form.elements.visibility?.value ?? 'public', comments: Form.elements.comments?.value ?? 'default', category: Form.elements.category?.value ?? '', story: Story ? '1' : '0' });
 		const Request = new XMLHttpRequest(); Request.open('POST', '/api/v1/videos?' + Query);
 		Request.setRequestHeader('content-type', File.type || 'video/mp4'); Request.setRequestHeader('x-csrf-token', Config.csrf);
 		Request.upload.onprogress = Event => { if (Event.lengthComputable && Progress) Progress.value = Event.loaded / Event.total * 100; if (Event.loaded === Event.total) Status.textContent = 'Processing video…'; };
 		Request.onload = () => {
 			let Result; try { Result = JSON.parse(Request.responseText); } catch {}
 			if (Request.status < 200 || Request.status >= 300 || !Result?.id) { Status.textContent = Result?.error ?? 'Couldn’t post. Try again.'; return; }
-			Busy = false; Reset(); Form.reset(); Status.textContent = 'Your video has been posted.';
-			if (Posted) { Posted.href = '/@' + Config.username + '/video/' + Result.id; Posted.hidden = false; }
+			Busy = false; Reset(); Form.reset(); Status.textContent = Story ? 'Your story has been posted. It disappears after 24 hours.' : 'Your video has been posted.';
+			if (Posted) { Posted.href = Story ? '/@' + Config.username : '/@' + Config.username + '/video/' + Result.id; Posted.textContent = Story ? 'View profile' : 'View video'; Posted.hidden = false; }
 		};
 		Request.onerror = () => { Status.textContent = 'Connection lost. Try again.'; };
 		Request.onloadend = () => { Busy = false; Controls.forEach(Control => { Control.disabled = false; }); };
