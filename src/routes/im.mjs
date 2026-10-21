@@ -30,8 +30,16 @@ function PropertyList(Properties) {
 		create_time: String(Math.floor(Item.at / 1000)), create_time_micro: String(Item.at * 1000) })) }]));
 }
 
+function ReferenceInfo(Row) {
+	const Reference = Row.reference;
+	if (!Reference) return undefined;
+	return { referenced_message_id: Reference.id, hint: Reference.hint ?? '', ref_message_type: String(Reference.type ?? 7), referenced_message_status: Row.reference_status ?? 0,
+		root_message_id: Reference.root ?? Reference.id, root_message_conv_index: Reference.root_index ?? '0', sender: Reference.sender };
+}
+
 function MessageShape(Row, RequestViewer) {
 	return {
+		reference_info: ReferenceInfo(Row),
 		property_list: PropertyList(Row.properties),
 		conversation_id: Row.conversation_key, conversation_type: Row.conversation_type, conversation_short_id: Row.conversation_id, server_message_id: Row.id,
 		index_in_conversation: Row.index_in_conversation, index_in_conversation_v2: Row.index_in_conversation, index_in_conversation_v1: Row.index_in_conversation,
@@ -40,7 +48,8 @@ function MessageShape(Row, RequestViewer) {
 	};
 }
 
-const MessageColumns = 'm.*, c.conversation_key, c.conversation_type';
+const MessageColumns = `m.*, c.conversation_key, c.conversation_type, (SELECT CASE WHEN quoted.recalled_at IS NOT NULL THEN 3 WHEN ${RemovedSql('message', 'quoted.id')} THEN 2 ELSE 0 END
+	FROM messages quoted WHERE quoted.id = (m.reference->>'id')::bigint) AS reference_status`;
 const Visible = `NOT ${RemovedSql('message', 'm.id')} AND NOT me.user_id = ANY(m.hidden_for)`;
 const RequestVisible = `EXISTS (SELECT 1 FROM messages visible_message WHERE visible_message.conversation_id=me.conversation_id AND visible_message.index_in_conversation>me.min_index AND NOT me.user_id = ANY(visible_message.hidden_for) AND NOT ${RemovedSql('message', 'visible_message.id')})
 	AND NOT EXISTS (SELECT 1 FROM conversation_members other JOIN users request_author ON request_author.id=other.user_id WHERE other.conversation_id=me.conversation_id AND other.user_id<>me.user_id AND (request_author.suspended_at IS NOT NULL OR ${BlockedBetween('other.user_id', 'me.user_id')}))`;
@@ -160,6 +169,10 @@ async function SendMessage(Context, Body) {
 	if (!ClientId || ClientId.length > 64 || !Content || Content.length > 20000 || Type <= 0 || Type >= 50000) throw new ImError(Status.InvalidRequest, 'InvalidMessage');
 	const Ext = Object.fromEntries(Object.entries(Body.ext ?? {}).filter(([Key]) => Key !== 'stranger' && !Key.startsWith('s:')).slice(0, 30).map(([Key, Value]) => [Key.slice(0, 100), String(Value).slice(0, 2000)]));
 	Limiter.Hit(`dm:${User.id}`, 60);
+	const Quoted = /^\d{1,19}$/.test(String(Body.ref_msg_info?.referenced_message_id ?? '')) ? (await Pool.query(`SELECT m.id, m.message_type, m.sender_id, m.index_in_conversation, m.reference FROM messages m
+		JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $3 WHERE m.id = $1 AND m.conversation_id = $2 AND m.index_in_conversation > me.min_index AND ${Visible}`, [Body.ref_msg_info.referenced_message_id, Room.id, User.id])).rows[0] : undefined;
+	const Reference = Quoted ? { id: Quoted.id, type: Quoted.message_type, sender: Quoted.sender_id, hint: String(Body.ref_msg_info.hint ?? '').slice(0, 500),
+		root: Quoted.reference?.root ?? Quoted.id, root_index: Quoted.reference?.root_index ?? Quoted.index_in_conversation } : null;
 	const Row = await Transaction(Pool, async Client => {
 		await Client.query('SELECT pg_advisory_xact_lock(741950193)');
 		const Existing = await Client.query(`SELECT ${MessageColumns} FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE m.sender_id = $1 AND m.client_message_id = $2`, [User.id, ClientId]);
@@ -169,8 +182,8 @@ async function SendMessage(Context, Body) {
 			const Count = (await Client.query('SELECT count(*)::int AS count FROM messages WHERE conversation_id=$1 AND sender_id=$2', [Room.id, User.id])).rows[0].count;
 			if (BigInt(Recipient.min_index) > 0n || Count >= 3) return { Limited: true };
 		}
-		const Inserted = await Client.query(`INSERT INTO messages(conversation_id, sender_id, client_message_id, message_type, content, ext, index_in_conversation)
-			SELECT $1, $2, $3, $4, $5, $6, coalesce(max(index_in_conversation), 0) + 1 FROM messages WHERE conversation_id = $1 RETURNING *`, [Room.id, User.id, ClientId, Type, Content, Ext]);
+		const Inserted = await Client.query(`INSERT INTO messages(conversation_id, sender_id, client_message_id, message_type, content, ext, index_in_conversation, reference)
+			SELECT $1, $2, $3, $4, $5, $6, coalesce(max(index_in_conversation), 0) + 1, $7 FROM messages WHERE conversation_id = $1 RETURNING *`, [Room.id, User.id, ClientId, Type, Content, Ext, Reference]);
 		await Client.query('UPDATE conversation_members SET request = false WHERE conversation_id = $1 AND user_id = $2', [Room.id, User.id]);
 		return { ...Inserted.rows[0], conversation_key: Room.conversation_key, conversation_type: Room.conversation_type };
 	});
@@ -183,7 +196,7 @@ async function SendMessage(Context, Body) {
 			const Unread = (await Pool.query(`SELECT count(*)::int AS count FROM messages m JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $2
 				WHERE m.conversation_id = $1 AND m.sender_id <> $2 AND m.index_in_conversation > greatest(me.read_index, me.min_index)`, [Room.id, Member.user_id])).rows[0].count;
 			PushTo([Member.user_id], Envelope(Cmd.NewMessageNotify, {
-				conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, notify_type: 1, message: Message, badge_count: Unread, badge_count_v2: Unread,
+				conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, notify_type: 1, message: Message, badge_count: Unread, badge_count_v2: Unread, ref_msg_info: Message.reference_info,
 				previous_cursor: Previous, next_cursor: Row.id, index_in_conversation: Row.index_in_conversation, index_in_conversation_v2: Row.index_in_conversation,
 			}, RequestInbox ? 3 : 0));
 		}

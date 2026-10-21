@@ -1758,7 +1758,7 @@ test('friends feed, suggested accounts, music pages, stories, search suggestions
 	for (const Quiet of ['/tiktok/v1/screen_time/upload/', '/api/feedback/v1/newest_reply/', '/passport/token/beat/web/']) assert.equal((await (await Call(Quiet, 'POST')).json()).status_code, 0);
 });
 
-test('direct message reactions use the client property commands, push to the chat, and stay with the message', async () => {
+test('direct message reactions and replies use the client\'s own commands, push to the chat, and stay with the message', async () => {
 	const Alpha = await CreateUser(Pool, { username: 'react_alpha', password: Password }, 'closed', true);
 	const Beta = await CreateUser(Pool, { username: 'react_beta', password: Password }, 'closed', true);
 	await CreateUser(Pool, { username: 'react_gamma', password: Password }, 'closed', true);
@@ -1796,6 +1796,17 @@ test('direct message reactions use the client property commands, push to the cha
 	await Pool.query('INSERT INTO blocks(blocker_id, blocked_id) VALUES ($1, $2)', [Alpha.id, Beta.id]);
 	assert.equal((await React(AsBeta, [{ operation: 0, key: 'e:😂', value: '' }])).body.modify_message_property_body.status, 3);
 	await Pool.query('DELETE FROM blocks WHERE blocker_id = $1', [Alpha.id]);
+	const Reply = async (Id, Quote) => (await Im(AsBeta, 100, 'send_message_body', { conversation_short_id: Chat.conversation_short_id, conversation_type: 1, message_type: 7, content: '{"aweType":703,"text":"replying"}', client_message_id: Id, ref_msg_info: { referenced_message_id: Quote, hint: 'react to me' } })).body.send_message_body;
+	const Answer = await Reply('reply-1', Sent.server_message_id);
+	const Quoted = async () => (await Thread(AsAlpha)).find(Message => Message.server_message_id === Answer.server_message_id).reference_info;
+	assert.deepEqual(await Quoted(), { referenced_message_id: Sent.server_message_id, hint: 'react to me', ref_message_type: '7', referenced_message_status: 0, root_message_id: Sent.server_message_id, root_message_conv_index: '1', sender: Alpha.id });
+	await Pool.query("UPDATE messages SET recalled_at = now() WHERE id = $1", [Sent.server_message_id]);
+	assert.equal((await Quoted()).referenced_message_status, 3);
+	await Pool.query("UPDATE messages SET recalled_at = NULL WHERE id = $1", [Sent.server_message_id]);
+	const Elsewhere = (await Im(AsGamma, 609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Alpha.id] })).body.create_conversation_v2_body;
+	const Outside = (await Im(AsAlpha, 100, 'send_message_body', { conversation_short_id: Chat.conversation_short_id, conversation_type: 1, message_type: 7, content: '{"aweType":703,"text":"bad quote"}', client_message_id: 'reply-2', ref_msg_info: { referenced_message_id: '1' } })).body.send_message_body;
+	assert.equal((await Thread(AsAlpha)).find(Message => Message.server_message_id === Outside.server_message_id).reference_info, undefined);
+	assert.ok(Elsewhere);
 	const Settings = (await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json()).misc;
 	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: { ...Settings, messageReactions: false } }, Auth())).status, 200);
 	assert.equal((await React(AsBeta, [{ operation: 0, key: 'e:😂', value: '' }])).body.modify_message_property_body.status, 3);

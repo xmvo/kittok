@@ -2,7 +2,7 @@
 
 ## 0.1.0
 
-- Emoji reactions on direct messages through the client's own reaction picker, pushed live to the other person.
+- Emoji reactions on direct messages through the client's own reaction picker, pushed live to the other person, and replies that keep their quoted message.
 - The Friends page, music pages, and search suggestions work; stories and playlists show their empty states; and the client's telemetry calls get quiet answers. Add a systemd user service for source installs.
 - Forgot password works through the native reset screen, admins can turn off the sign-up email code, and your own videos' menu gets Pin to profile, Post settings, and Manage posts.
 - Pin up to three videos to the top of your profile, and make the profile's Popular and Oldest sorting work.
