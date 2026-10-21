@@ -12,7 +12,7 @@ export const Proto = Codec(Schema);
 const Cmd = { SendMessage: 100, MessagesByUser: 200, MessagesByUserInitV2: 203, MessagesByUserCombo: 204, MessagesInConversation: 301, MessagesInRange: 304, MarkConversationReadV3: 2002, NewMessageNotify: 500, MarkReadNotify: 501,
 	MarkConversationDelete: 603, MarkConversationRead: 604, ParticipantsList: 605, ConversationInfoV2: 608, CreateConversationV2: 609, ConversationInfoListV2: 610,
 	MgetParticipants: 654, InputStatus: 411, InputStatusNotify: 510, ReadIndexV3: 2000, MinIndexV3: 2001, UserConversationList: 2006, UnreadCount: 2030, BatchReadIndex: 2038,
-	DeleteMessage: 701, RecallMessage: 702, StrangerConversations: 1001, StrangerMessages: 1002, DeleteStrangerMessage: 1003, DeleteStrangerConversation: 1004, DeleteAllStrangerConversations: 1005,
+	DeleteMessage: 701, RecallMessage: 702, ModifyMessageProperty: 705, StrangerConversations: 1001, StrangerMessages: 1002, DeleteStrangerMessage: 1003, DeleteStrangerConversation: 1004, DeleteAllStrangerConversations: 1005,
 	MarkStrangerConversationRead: 1006, MarkAllStrangerConversationsRead: 1007, StrangerUnreadCount: 1008 };
 const Status = { Ok: 0, InvalidRequest: 4, InvalidCommand: 5, UserForbidden: 11, ResourceExhausted: 429, ConversationNotExist: 1001 };
 const SendStatus = { Succeeded: 0, NotInConversation: 1, NotAllowed: 2, CheckFailed: 3, Blocked: 5 };
@@ -25,12 +25,18 @@ class ImError extends Error {
 	constructor(Code, Message) { super(Message); this.Code = Code; }
 }
 
+function PropertyList(Properties) {
+	return Object.fromEntries(Object.entries(Properties ?? {}).map(([Key, Items]) => [Key, { Items: Items.map(Item => ({ uid: Item.uid, sec_uid: Item.uid, idempotent_id: Item.idempotent_id, value: Item.value,
+		create_time: String(Math.floor(Item.at / 1000)), create_time_micro: String(Item.at * 1000) })) }]));
+}
+
 function MessageShape(Row, RequestViewer) {
 	return {
+		property_list: PropertyList(Row.properties),
 		conversation_id: Row.conversation_key, conversation_type: Row.conversation_type, conversation_short_id: Row.conversation_id, server_message_id: Row.id,
 		index_in_conversation: Row.index_in_conversation, index_in_conversation_v2: Row.index_in_conversation, index_in_conversation_v1: Row.index_in_conversation,
 		order_in_conversation: Row.index_in_conversation, message_type: Row.message_type, sender: Row.sender_id, sec_sender: Row.sender_id, content: Row.recalled_at ? '{"aweType":0,"text":""}' : Row.content,
-		ext: { ...Row.ext, ...(Row.recalled_at ? { 's:is_recalled': 'true' } : {}), 's:client_message_id': Row.client_message_id, ...(RequestViewer ? { stranger: RequestViewer } : {}) }, create_time: String(new Date(Row.created_at).getTime()), version: '0', status: 0,
+		ext: { ...Row.ext, ...(Row.recalled_at ? { 's:is_recalled': 'true' } : {}), 's:client_message_id': Row.client_message_id, ...(RequestViewer ? { stranger: RequestViewer } : {}) }, create_time: String(new Date(Row.created_at).getTime()), version: String(Row.property_version ?? 0), status: 0,
 	};
 }
 
@@ -235,6 +241,42 @@ const Handlers = {
 			}, RequestInbox ? 3 : 0));
 		}
 		return null;
+	},
+	async [Cmd.ModifyMessageProperty]({ Pool, User, Limiter }, Body) {
+		const Change = Body.property_list ?? {};
+		const Fail = Code => ({ status: Code, version: '0' });
+		if (!Misc.messageReactions) return Fail(3);
+		const Room = await Conversation(Pool, User.id, Change);
+		const Others = Room.members.map(Member => Member.user_id).filter(Id => Id !== User.id);
+		if (Room.conversation_type === 1 && (await Pool.query(`SELECT ${BlockedBetween('$1::bigint', '$2::bigint')} AS blocked`, [User.id, Others[0]])).rows[0].blocked) return Fail(3);
+		if (await ActiveRestriction(Pool, User.id, 'message')) return Fail(3);
+		const Contents = (Change.modify_property_content ?? []).slice(0, 10);
+		if (!Contents.length || Contents.some(Content => ![0, 1].includes(Number(Content.operation ?? 0)) || !/^e:[^\s]{1,40}$/u.test(String(Content.key ?? '')) || String(Content.value ?? '').length > 200)) return Fail(2);
+		Limiter.Hit(`reaction:${User.id}`, 120);
+		const Row = await Transaction(Pool, async Client => {
+			const Target = (await Client.query(`SELECT ${MessageColumns} FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $3
+				WHERE m.id = $1 AND m.conversation_id = $2 AND m.recalled_at IS NULL AND m.index_in_conversation > me.min_index AND ${Visible} FOR UPDATE OF m`, [Change.server_message_id ?? '0', Room.id, User.id])).rows[0];
+			if (!Target) return null;
+			const Properties = structuredClone(Target.properties ?? {});
+			for (const Content of Contents) {
+				const Key = String(Content.key), Items = (Properties[Key] ?? []).filter(Item => Item.idempotent_id !== User.id);
+				if (Number(Content.operation ?? 0) === 0) Items.push({ uid: User.id, idempotent_id: User.id, value: String(Content.value ?? ''), at: Date.now() });
+				if (Items.length) Properties[Key] = Items; else delete Properties[Key];
+			}
+			const Mine = Object.entries(Properties).filter(([, Items]) => Items.some(Item => Item.idempotent_id === User.id));
+			if (Mine.length > 3 || Object.keys(Properties).length > 30) return { Rejected: true };
+			return (await Client.query('UPDATE messages SET properties = $2, property_version = property_version + 1 WHERE id = $1 RETURNING *', [Target.id, Properties])).rows.map(Updated => ({ ...Updated, conversation_key: Room.conversation_key, conversation_type: Room.conversation_type }))[0];
+		});
+		if (!Row) throw new ImError(Status.InvalidRequest, 'MessageNotFound');
+		if (Row.Rejected) return Fail(2);
+		for (const Member of Room.members) {
+			const RequestInbox = Member.request;
+			const Cursor = await UserCursor(Pool, Member.user_id, null, RequestInbox);
+			PushTo([Member.user_id], Envelope(Cmd.NewMessageNotify, { conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, previous_cursor: Cursor, next_cursor: Cursor,
+				message: { ...MessageShape({ ...Row, message_type: 70002, content: '{}' }, RequestInbox ? Member.user_id : undefined), ext: { 's:client_message_id': Row.client_message_id, 's:server_message_id': Row.id, ...(RequestInbox ? { stranger: Member.user_id } : {}) } }
+			}, RequestInbox ? 3 : 0));
+		}
+		return { status: 0, version: String(Row.property_version) };
 	},
 	async [Cmd.CreateConversationV2]({ Pool, User }, Body) {
 		if (Number(Body.conversation_type ?? 1) !== 1) throw new ImError(Status.InvalidRequest, 'GroupChatsUnsupported');

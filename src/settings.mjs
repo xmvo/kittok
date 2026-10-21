@@ -14,6 +14,7 @@ export const MiscFeatures = {
 	messageRequests: ['Message requests', 'Messages that recipients route to requests wait there; off delivers them to the inbox'],
 	readReceipts: ['Read receipts', 'Seen status when both people turn it on'],
 	unsend: ['Unsend messages', 'Senders can unsend within three minutes'],
+	messageReactions: ['Message reactions', 'Emoji reactions on direct messages'],
 };
 export const Misc = Object.fromEntries(Object.keys(MiscFeatures).map(Name => [Name, true]));
 export const BrandSlots = { wordmarkDark: '/public/logo.svg', wordmarkLight: '/public/logo-light.svg', icon: '/public/icon.svg', favicon: '/public/icon.svg' };

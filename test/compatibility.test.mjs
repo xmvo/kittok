@@ -1758,6 +1758,50 @@ test('friends feed, suggested accounts, music pages, stories, search suggestions
 	for (const Quiet of ['/tiktok/v1/screen_time/upload/', '/api/feedback/v1/newest_reply/', '/passport/token/beat/web/']) assert.equal((await (await Call(Quiet, 'POST')).json()).status_code, 0);
 });
 
+test('direct message reactions use the client property commands, push to the chat, and stay with the message', async () => {
+	const Alpha = await CreateUser(Pool, { username: 'react_alpha', password: Password }, 'closed', true);
+	const Beta = await CreateUser(Pool, { username: 'react_beta', password: Password }, 'closed', true);
+	await CreateUser(Pool, { username: 'react_gamma', password: Password }, 'closed', true);
+	await Pool.query('INSERT INTO follows(follower_id, following_id) VALUES ($1, $2), ($2, $1)', [Alpha.id, Beta.id]);
+	const Session = async Name => { const Signed = await Login(Pool, Name, Password); return { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf }; };
+	const AsAlpha = await Session('react_alpha'), AsBeta = await Session('react_beta'), AsGamma = await Session('react_gamma');
+	const Im = async (Headers, Cmd, Field, Body) => Proto.Decode('Response', Buffer.from(await (await fetch(`${Origin}/v1/kittok`, { method: 'POST', headers: { ...Headers, 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: Cmd, sequence_id: '1', inbox_type: 0, body: { [Field]: Body } }) })).arrayBuffer()));
+	const Chat = (await Im(AsAlpha, 609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Beta.id] })).body.create_conversation_v2_body.conversation;
+	const Sent = (await Im(AsAlpha, 100, 'send_message_body', { conversation_short_id: Chat.conversation_short_id, conversation_type: 1, message_type: 7, content: '{"aweType":0,"text":"react to me"}', client_message_id: 'react-1' })).body.send_message_body;
+	const Socket = new WebSocket(Origin.replace('http', 'ws') + '/ws/v2', { protocols: ['pbbp2'], headers: { ...AsAlpha, origin: Origin } });
+	Socket.binaryType = 'arraybuffer';
+	const Received = [];
+	Socket.onmessage = Event => Received.push(Event.data);
+	await new Promise((Resolve, Reject) => { Socket.onopen = Resolve; Socket.onerror = Reject; });
+	const React = (Headers, Contents) => Im(Headers, 705, 'modify_message_property_body', { property_list: { conversation_id: Chat.conversation_id, conversation_short_id: Chat.conversation_short_id, conversation_type: 1, server_message_id: Sent.server_message_id, client_message_id: 'react-1', modify_property_content: Contents } });
+	const Done = await React(AsBeta, [{ operation: 0, key: 'e:❤️', value: '', idempotent_id: 'anything' }]);
+	assert.equal(Done.status_code, 0); assert.equal(Done.body.modify_message_property_body.status, 0); assert.equal(Done.body.modify_message_property_body.version, '1');
+	await new Promise(Resolve => setTimeout(Resolve, 200));
+	const Pushes = Received.filter(Data => typeof Data !== 'string').map(Data => Proto.Decode('Response', Proto.Decode('Frame', new Uint8Array(Data)).payload)).filter(Push => Push.cmd === 500);
+	const Update = Pushes.at(-1).body.has_new_message_notify.message;
+	assert.equal(Update.message_type, 70002); assert.equal(Update.ext['s:client_message_id'], 'react-1'); assert.equal(Update.version, '1');
+	assert.deepEqual(Update.property_list['e:❤️'].Items.map(Item => [Item.uid, Item.idempotent_id]), [[Beta.id, Beta.id]]);
+	Socket.close();
+	const Thread = async Headers => (await Im(Headers, 301, 'messages_in_conversation_body', { conversation_short_id: Chat.conversation_short_id, conversation_type: 1, direction: 1, anchor_index: '0', limit: 20 })).body.messages_in_conversation_body.messages;
+	assert.deepEqual(Object.keys((await Thread(AsAlpha)).find(Message => Message.server_message_id === Sent.server_message_id).property_list), ['e:❤️']);
+	await React(AsAlpha, [{ operation: 0, key: 'e:👍', value: '' }]);
+	assert.equal((await React(AsBeta, [{ operation: 1, key: 'e:👍', value: '', idempotent_id: Alpha.id }])).body.modify_message_property_body.status, 0);
+	assert.deepEqual(Object.keys((await Thread(AsBeta)).find(Message => Message.server_message_id === Sent.server_message_id).property_list).sort(), ['e:❤️', 'e:👍'].sort());
+	await React(AsBeta, [{ operation: 1, key: 'e:❤️', value: '' }]);
+	assert.deepEqual(Object.keys((await Thread(AsAlpha)).find(Message => Message.server_message_id === Sent.server_message_id).property_list), ['e:👍']);
+	assert.notEqual((await React(AsGamma, [{ operation: 0, key: 'e:😂', value: '' }])).status_code, 0);
+	assert.equal((await React(AsBeta, [{ operation: 0, key: 'nope', value: '' }])).body.modify_message_property_body.status, 2);
+	assert.equal((await React(AsBeta, [{ operation: 5, key: 'e:😂', value: '' }])).body.modify_message_property_body.status, 2);
+	assert.equal((await React(AsBeta, ['😂', '😭', '😡', '🎉'].map(Emoji => ({ operation: 0, key: `e:${Emoji}`, value: '' })))).body.modify_message_property_body.status, 2);
+	await Pool.query('INSERT INTO blocks(blocker_id, blocked_id) VALUES ($1, $2)', [Alpha.id, Beta.id]);
+	assert.equal((await React(AsBeta, [{ operation: 0, key: 'e:😂', value: '' }])).body.modify_message_property_body.status, 3);
+	await Pool.query('DELETE FROM blocks WHERE blocker_id = $1', [Alpha.id]);
+	const Settings = (await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json()).misc;
+	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: { ...Settings, messageReactions: false } }, Auth())).status, 200);
+	assert.equal((await React(AsBeta, [{ operation: 0, key: 'e:😂', value: '' }])).body.modify_message_property_body.status, 3);
+	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: Settings }, Auth())).status, 200);
+});
+
 test('misc switches turn Kittok features off and back on without a restart', async () => {
 	const Settings = await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json();
 	assert.ok(Object.values(Settings.misc).every(Boolean));
