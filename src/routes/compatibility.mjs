@@ -96,9 +96,9 @@ export async function Compatibility(Context) {
 			disableStandaloneAidLoginList: [], disableStandaloneAppFlags: {},
 		} }); return true;
 	}
-	if (['/api/preload/item_list/', '/api/recommend/item_list/', '/api/following/item_list/', '/api/post/item_list/', '/api/favorite/item_list/', '/api/collection/item_list/', '/api/user/collect/item_list/', '/api/related/item_list/', '/api/explore/item_list/', '/api/repost/item_list/', '/api/challenge/item_list/', '/api/collection/candidate/item_list/'].includes(Path)) {
+	if (['/api/preload/item_list/', '/api/recommend/item_list/', '/api/following/item_list/', '/api/post/item_list/', '/api/favorite/item_list/', '/api/collection/item_list/', '/api/user/collect/item_list/', '/api/related/item_list/', '/api/explore/item_list/', '/api/repost/item_list/', '/api/challenge/item_list/', '/api/collection/candidate/item_list/', '/api/friends/item_list/', '/api/prefetch/explore/item_list/'].includes(Path)) {
 		RequireMethod(Request, ['GET', 'POST']);
-		const Filter = { viewer: User?.id, forYou: ['/api/preload/item_list/', '/api/recommend/item_list/', '/api/related/item_list/', '/api/explore/item_list/'].includes(Path), before: Params.get('cursor') === '0' ? undefined : Params.get('cursor'), limit: Params.get('count') };
+		const Filter = { viewer: User?.id, forYou: ['/api/preload/item_list/', '/api/recommend/item_list/', '/api/related/item_list/', '/api/explore/item_list/', '/api/prefetch/explore/item_list/'].includes(Path), before: Params.get('cursor') === '0' ? undefined : Params.get('cursor'), limit: Params.get('count') };
 		const Empty = () => Json(Response, { statusCode: 0, status_code: 0, itemList: [], cursor: '0', hasMore: false, extra: { logid: 'kittok' } });
 		if (Path.includes('/explore/') && (Params.get('categoryType') ?? '120') !== '120') {
 			const Type = Number(Params.get('categoryType'));
@@ -116,6 +116,7 @@ export async function Compatibility(Context) {
 		if (Path.includes('/challenge/')) { Filter.tag = await TagName(Pool, String(Params.get('challengeID') ?? '')); if (!Filter.tag) { Empty(); return true; } }
 		if (Path.includes('/related/')) Filter.exclude = Params.get('itemID') || Params.get('itemId');
 		if (Path.includes('/following/')) { if (!User) throw new HttpError(401, 'NotLoggedIn'); Filter.following = User.id; }
+		if (Path.includes('/friends/')) { if (!User) { Empty(); return true; } Filter.friendsOf = User.id; }
 		if (Path.includes('/post/')) Filter.author = (await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'))).id;
 		if (Path === '/api/collection/item_list/') {
 			const Collection = (await Pool.query('SELECT id FROM collections WHERE id = $1 AND (public OR user_id = $2::bigint)', [Id(Params.get('collectionId')), User?.id ?? null])).rows[0];
@@ -137,6 +138,42 @@ export async function Compatibility(Context) {
 		const Feed = await Videos(Pool, Config.Origin, Filter);
 		Json(Response, { statusCode: 0, status_code: 0, itemList: [...Pinned, ...Feed.items], cursor: Feed.cursor, hasMore: Feed.hasMore, extra: { logid: 'kittok' } }); return true;
 	}
+	if (Path === '/api/music/detail/' || Path === '/api/music/item_list/') {
+		RequireMethod(Request, ['GET']);
+		const MusicId = Params.get('musicId') ?? Params.get('musicID') ?? '';
+		const Item = /^\d{1,19}$/.test(MusicId) ? (await Videos(Pool, Config.Origin, { id: MusicId, viewer: User?.id })).items[0] : undefined;
+		if (Path === '/api/music/item_list/') { Json(Response, { statusCode: 0, status_code: 0, itemList: Item && Params.get('cursor') !== '1' ? [Item] : [], cursor: '1', hasMore: false }); return true; }
+		if (!Item) { Json(Response, { statusCode: 10219, status_code: 10219 }); return true; }
+		Json(Response, { statusCode: 0, status_code: 0, musicInfo: { music: { ...Item.music, playUrl: Item.video.playAddr, private: false }, author: Item.author, stats: { videoCount: 1 } }, shareMate: {} }); return true;
+	}
+	if (Path === '/api/story/user_list/') { RequireMethod(Request, ['GET']); Json(Response, { statusCode: 0, status_code: 0, storyUsers: [], totalCount: '0', hasMore: false }); return true; }
+	if (['/api/story/item_list/', '/api/story/batch/item_list/', '/api/story/user/story_list/'].includes(Path)) { RequireMethod(Request, ['GET']); Json(Response, { statusCode: 0, status_code: 0, itemList: [], hasMore: false, cursor: '0' }); return true; }
+	if (Path === '/api/user/playlist/') { RequireMethod(Request, ['GET']); Json(Response, { statusCode: 0, status_code: 0, playList: [], cursor: '0', hasMore: false }); return true; }
+	if (Path === '/api/discover/user/') {
+		RequireMethod(Request, ['GET']);
+		const Start = Offset(Params.get('offset')), Count = PageSize(Params.get('count'), 10);
+		let List = User ? await FollowList(Pool, User.id, User.id, 'following', Start, Count) : { users: [], total: 0 };
+		if (!List.total) List = await FollowList(Pool, User?.id, User?.id ?? '0', 'suggested', Start, Count);
+		const UserInfoList = await Promise.all(List.users.map(async Row => ({ user: UserShape(Row, Config.Origin), stats: await UserStats(Pool, Row.id),
+			itemList: Params.get('needItemList') === 'true' ? (await Videos(Pool, Config.Origin, { author: Row.id, viewer: User?.id, limit: 1 })).items : [] })));
+		Json(Response, { statusCode: 0, status_code: 0, userInfoList: UserInfoList, offset: String(Start + UserInfoList.length), hasMore: Start + UserInfoList.length < List.total }); return true;
+	}
+	if (Path === '/api/search/general/preview/' || Path === '/api/search/user/preview/') {
+		RequireMethod(Request, ['GET']);
+		const Keyword = (Params.get('keyword') ?? '').trim().toLowerCase().replace(/^[#@]/, '').slice(0, 50);
+		if (!Keyword || Config.Features?.search === false) { Json(Response, { status_code: 0, sug_list: [] }); return true; }
+		const Prefix = `${Keyword.replace(/[\\%_]/g, '\\$&')}%`;
+		const Tags = Misc.hashtags ? (await Pool.query(`SELECT lower(m[1]) AS word, count(*) AS uses FROM videos v JOIN users u ON u.id = v.author_id, regexp_matches(v.description, '#([[:alnum:]_]+)', 'g') AS m
+			WHERE ${VideoVisibleSql('NULL::bigint')} AND lower(m[1]) LIKE $1 ESCAPE '\\' GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 5`, [Prefix])).rows.map(Row => Row.word) : [];
+		const Names = (await Pool.query(`SELECT username AS word FROM users WHERE username LIKE $1 ESCAPE '\\' AND suspended_at IS NULL ORDER BY username LIMIT 5`, [Prefix])).rows.map(Row => Row.word);
+		const Words = [...new Set([...Tags, ...Names])].slice(0, 8);
+		Json(Response, { status_code: 0, sug_list: Words.map((Word, Index) => ({ content: Word, pos: [{ begin: 0, end: Math.min(Keyword.length, Word.length) }], extra_info: {}, word_record: { group_id: String(Index), words_content: Word } })), log_pb: { impr_id: 'kittok' } }); return true;
+	}
+	if (Path === '/api/search/suggest/guide/') { RequireMethod(Request, ['GET']); Json(Response, { status_code: 0, data: [], log_id: 'kittok' }); return true; }
+	if (['/tiktok/v1/screen_time/upload/', '/tiktok/v1/app_open_times/upload/', '/api/feedback/v1/newest_reply/', '/api/ba/business/suite/permission/list/', '/aweme/v1/report/inbox/notice', '/tiktok/v1/community_notes/intake/check',
+		'/tiktok/v1/csp/get_pa', '/tiktok/v1/csp/pa_prompt', '/aweme/v1/guardian/platform/children/info/', '/aweme/v1/guardian/platform/parent/info/', '/tiktok/ppf/api/eligibility/v2', '/api/ad/tiktok_web/banner/v1/',
+		'/api/shop/brandy_desktop/tiktok-ug/get_compaign_banner', '/api/seo/keyword/item_tags/', '/api/customtdk/item/', '/tiktok/music/tt_to_dsp/platform/list/v1', '/tiktok/v1/screen_time/list/', '/tiktok/v1/compliance/guadig/settings/',
+		'/tiktok/popup/display/v1/', '/passport/token/beat/web/'].includes(Path)) { Json(Response, { status_code: 0, statusCode: 0, status_msg: '' }); return true; }
 	if (Path === '/api/item/detail/') {
 		RequireMethod(Request, ['GET']);
 		const Result = await Videos(Pool, Config.Origin, { id: Params.get('itemId'), viewer: User?.id });

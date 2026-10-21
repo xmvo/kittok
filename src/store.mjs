@@ -184,7 +184,7 @@ export async function UserStats(Pool, UserId) {
 	return { ...Result.rows[0], heart: Result.rows[0].heartCount };
 }
 
-export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, repostedBy, collection, id, exclude, tag, viewer, query, forYou, category, pinned, order = 'latest', limit = 20 } = {}) {
+export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, repostedBy, collection, id, exclude, tag, viewer, query, forYou, category, pinned, friendsOf, order = 'latest', limit = 20 } = {}) {
 	const Values = [viewer ?? null];
 	const Conditions = [];
 	function Where(Sql, Value) { Values.push(Value); Conditions.push(Sql.replace('?', `$${Values.length}`)); }
@@ -195,6 +195,7 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 	if (pinned === false) Conditions.push('v.pinned_at IS NULL');
 	if (author) Where('v.author_id = ?', Id(author));
 	if (following) Where('EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.following_id = v.author_id)', following);
+	if (friendsOf) Where('EXISTS (SELECT 1 FROM follows a JOIN follows b ON b.follower_id = a.following_id AND b.following_id = a.follower_id WHERE a.follower_id = ? AND a.following_id = v.author_id)', friendsOf);
 	if (likedBy) Where('EXISTS (SELECT 1 FROM likes l WHERE l.user_id = ? AND l.video_id = v.id)', likedBy);
 	if (savedBy) Where('EXISTS (SELECT 1 FROM favorites f WHERE f.user_id = ? AND f.video_id = v.id)', savedBy);
 	if (id) Where('v.id = ?', Id(id));

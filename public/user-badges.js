@@ -90,23 +90,24 @@
 	}
 	function AvatarOwner(Span) {
 		if (Span.closest('[data-e2e="edit-profile-avatar"], .KittokDecorationPreview')) return Instance.account?.username;
-		if (Span.closest('[data-e2e="user-avatar"]')) return Handle(location.pathname);
 		const Link = Span.closest('a[href*="/@"]');
 		const Url = Link && new URL(Link.getAttribute('href'), location.origin);
-		return Url?.origin === location.origin ? Handle(Url.pathname) : undefined;
+		if (Url) return Url.origin === location.origin ? Handle(Url.pathname) : undefined;
+		if (Span.closest('[data-e2e="user-avatar"]')) return Handle(location.pathname);
 	}
 	function Avatars() {
 		const Found = new Map();
 		if (!Decorated) return Found;
 		for (const Image of document.querySelectorAll('[data-e2e="user-avatar"] img, [data-e2e="edit-profile-avatar"] img, a[href*="/@"] img')) {
 			if (Image.classList.contains('KittokDecoration') || Image.offsetWidth < 20) continue;
-			let Span = Image;
+			let Span = Image, Round = false;
 			for (let Depth = 0; Span && Depth < 4; Depth++, Span = Span.parentElement) {
-				if (Span !== Image && Span.offsetWidth > Image.offsetWidth + 2) { Span = null; break; }
+				if (Span !== Image && Span.offsetWidth > Image.offsetWidth + 2) break;
 				const Style = getComputedStyle(Span);
 				const Radius = parseFloat(Style.borderRadius);
-				if (Style.overflow !== 'visible' && (Style.borderRadius.endsWith('%') ? Radius >= 50 : Radius >= Span.offsetWidth / 2 - 1)) break;
+				if (Style.overflow !== 'visible' && (Style.borderRadius.endsWith('%') ? Radius >= 50 : Radius >= Span.offsetWidth / 2 - 1)) { Round = true; break; }
 			}
+			if (!Round) continue;
 			while (Span?.parentElement && Span.parentElement.offsetWidth === Span.offsetWidth && getComputedStyle(Span.parentElement).overflow !== 'visible') Span = Span.parentElement;
 			const Username = Span && Span.tagName !== 'A' && AvatarOwner(Span);
 			if (Username) Found.set(Span, Username);

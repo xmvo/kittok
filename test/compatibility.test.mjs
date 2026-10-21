@@ -1726,6 +1726,38 @@ test('password reset by email, the sign-up code switch, and pinning from the vid
 	assert.deepEqual(await (await Pin({ pinned: false })).json(), { pinned: false });
 });
 
+test('friends feed, suggested accounts, music pages, stories, search suggestions, and quiet telemetry answers', async () => {
+	const Friendly = await Login(Pool, 'friend', Password);
+	const AsFriend = { cookie: `kittok_session=${Friendly.Token}` };
+	assert.equal((await fetch(`${Origin}/friends`)).status, 200);
+	const Friends = async Headers => (await (await Call('/api/friends/item_list/?count=9', 'GET', undefined, Headers)).json()).itemList.map(Item => Item.id);
+	assert.deepEqual(await Friends({}), []);
+	await Pool.query('DELETE FROM follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)', [Owner.id, Friend.id]);
+	await Pool.query('INSERT INTO follows(follower_id, following_id) VALUES ($1, $2)', [Friend.id, Owner.id]);
+	assert.deepEqual(await Friends(AsFriend), []);
+	const Suggested = await (await Call('/api/discover/user/?count=20&offset=0&needItemList=true', 'GET', undefined, AsFriend)).json();
+	assert.equal(Suggested.userInfoList.find(Entry => Entry.user.uniqueId === 'owner')?.itemList.length, 1);
+	await Pool.query('INSERT INTO follows(follower_id, following_id) VALUES ($1, $2)', [Owner.id, Friend.id]);
+	assert.ok((await Friends(AsFriend)).includes(VideoId));
+	const Following = await (await Call('/api/discover/user/?count=20&offset=0', 'GET', undefined, AsFriend)).json();
+	assert.deepEqual(Following.userInfoList.map(Entry => Entry.user.uniqueId), ['owner']); assert.deepEqual(Following.userInfoList[0].itemList, []);
+	await Pool.query('DELETE FROM follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)', [Owner.id, Friend.id]);
+	const Music = await (await Call(`/api/music/detail/?musicId=${VideoId}`)).json();
+	assert.equal(Music.statusCode, 0); assert.equal(Music.musicInfo.music.id, VideoId); assert.match(Music.musicInfo.music.playUrl, /\/media\//); assert.equal(Music.musicInfo.author.uniqueId, 'owner');
+	assert.equal((await (await Call('/api/music/detail/?musicId=1')).json()).statusCode, 10219);
+	assert.equal((await (await Call('/api/music/detail/?musicId=nope')).json()).statusCode, 10219);
+	assert.deepEqual((await (await Call(`/api/music/item_list/?musicID=${VideoId}&cursor=0`)).json()).itemList.map(Item => Item.id), [VideoId]);
+	assert.deepEqual((await (await Call('/api/story/user_list/')).json()).storyUsers, []);
+	assert.deepEqual((await (await Call('/api/user/playlist/?secUid=1')).json()).playList, []);
+	const Suggest = async Keyword => (await (await Call(`/api/search/general/preview/?keyword=${encodeURIComponent(Keyword)}`)).json()).sug_list.map(Item => Item.content);
+	assert.ok((await Suggest('kit')).includes('kittok'));
+	assert.ok((await Suggest('#KIT')).includes('kittok'));
+	assert.ok((await Suggest('own')).includes('owner'));
+	assert.deepEqual(await Suggest('%'), []); assert.deepEqual(await Suggest(''), []);
+	assert.deepEqual(Object.keys((await (await Call('/api/search/general/preview/?keyword=kit')).json()).sug_list[0]).sort(), ['content', 'extra_info', 'pos', 'word_record']);
+	for (const Quiet of ['/tiktok/v1/screen_time/upload/', '/api/feedback/v1/newest_reply/', '/passport/token/beat/web/']) assert.equal((await (await Call(Quiet, 'POST')).json()).status_code, 0);
+});
+
 test('misc switches turn Kittok features off and back on without a restart', async () => {
 	const Settings = await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json();
 	assert.ok(Object.values(Settings.misc).every(Boolean));

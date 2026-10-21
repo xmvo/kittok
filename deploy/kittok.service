@@ -1,0 +1,18 @@
+# Runs Kittok as a systemd user service so it survives logouts and reboots (with lingering on).
+# Install: cp deploy/kittok.service ~/.config/systemd/user/ && systemctl --user enable --now kittok
+# Edit WorkingDirectory and the environment lines for your setup; secrets stay in .env.
+[Unit]
+Description=Kittok
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/chatgptworkspcae/Kittok
+ExecStartPre=-/usr/bin/podman start kittok-postgres
+ExecStart=/usr/bin/node --env-file-if-exists=.env src/server.mjs
+Environment=PORT=3000 HOST=127.0.0.1 PUBLIC_ORIGIN=https://cats.example.org IP_HEADER=cf-connecting-ip COUNTRY_HEADER=cf-ipcountry
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

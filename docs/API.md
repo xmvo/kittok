@@ -9,6 +9,9 @@ All routes are on the instance's configured public origin. Responses are JSON. I
 | POST | `/passport/web/email/send_code/` | Native sign-up: form `email` (hex, XOR 5 when `mix_mode=1`). Emails a 6-digit code; 1023 if the address is registered |
 | POST | `/passport/web/email/register_verify_login/` | Native sign-up: `email`, `password`, `code` (mixed), `birthday`. Checks the invite (cookie `kittok_invite`, set by the form's Invite code field) and code, creates `user#########`, signs in, and sets `passport_csrf_token` for the next step |
 | POST | `/passport/web/email/password/reset_and_login/` | Forgot password: mixed `email`, `code` (sent by `email/send_code/` with `type=31`), and new `password`. Signs out every session, then signs in. Codes only go to existing accounts, but the reply is the same either way |
+| GET | `/api/music/detail/`, `/api/music/item_list/` | Every video is its own Original sound, so `musicId` is a video id: the sound (playing the video's audio), its author, and that one video. 10219 when missing |
+| GET | `/api/discover/user/` | Accounts with a preview video each (`needItemList=true`): who you follow, or suggested accounts for guests and anyone who follows no one, which fills the Friends page's empty state |
+| GET | `/api/search/general/preview/`, `/api/search/user/preview/` | Suggestions while typing: public hashtags by use, then usernames, starting with the keyword |
 | POST | `/api/v1/videos/ID/pin` | JSON `{pinned}` on your own video; 409 `PinLimit` past three. Used by the Pin to profile item Kittok adds to the native video menu |
 | POST | `/passport/web/account/set/` | Create username step: mixed `username`, with `x-tt-passport-csrf-token`. A placeholder nickname follows the new name |
 | POST | `/api/v1/users` | Register with `username`, `displayName`, `password`, optional `invite` and `prideFlag` (default `""`, no flag). Cannot choose verification, community badges, or roles |

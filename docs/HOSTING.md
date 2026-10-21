@@ -41,6 +41,16 @@ The admin panel records each sign-up and login with its IP address, country, lan
 
 After editing Compose environment settings, run `docker compose up -d` to recreate the app. Do not change the stored database password by merely editing `.env`; an existing PostgreSQL volume keeps its current database credentials.
 
+## Running from source as a service
+
+`deploy/kittok.service` runs a source install as a systemd user service: it starts the Postgres container first, restarts Kittok if it exits, and comes back after reboots when lingering is on (`loginctl enable-linger $USER`, once, as root). Adjust `WorkingDirectory` and the `Environment` line, then:
+
+```bash
+cp deploy/kittok.service ~/.config/systemd/user/ && systemctl --user enable --now kittok
+```
+
+`journalctl --user -u kittok -f` follows its log; `systemctl --user restart kittok` picks up new code.
+
 ## Registration and owner commands
 
 Create accounts as the operator even while registration is closed:
