@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Native sign-up: the client's own email form with real emailed codes over SMTP, its age gate and Create username step, an Invite code field on invite-only instances, and email logins.
 - Fit the admin console to phone screens and add a script that preloads every decoration image.
 - Run the admin console inside the real client: its sidebar lists the admin sections, and pages use the client's own buttons, switches, tags, tabs and colors. Show the real verified check, put account actions in plain buttons instead of a three-dot menu, and hide community badges for now.
 - Move pride flag editing into the native Edit profile dialog and drop the separate Profile badges button and the profile's three-dot menu.

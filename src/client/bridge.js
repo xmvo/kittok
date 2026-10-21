@@ -57,13 +57,26 @@
 		if (LoginTitle?.textContent === 'Log in to TikTok' && LoginTitle.firstChild?.nodeType === 3) LoginTitle.firstChild.nodeValue = `Log in to ${Instance.name}`;
 		for (const Logo of document.querySelectorAll('a[data-e2e="tiktok-logo"]')) Logo.setAttribute('aria-label', `Go to ${Instance.name} feed`);
 		for (const Channel of document.querySelectorAll('[data-e2e="channel-item"]')) {
-			const Google = Channel.querySelector('path[fill="#4285F4"]');
-			if (Google) { Channel.setAttribute('data-kittok-google', ''); Channel.setAttribute('aria-label', 'Continue with Google'); }
-			if (Google || /^(Continue with |Use QR code)/.test(Channel.textContent.trim())) {
-				Channel.setAttribute('data-kittok-unavailable', ''); Channel.setAttribute('aria-disabled', 'true');
-				Channel.title = 'This sign-in method is not configured for this instance.';
+			const Google = Boolean(Channel.querySelector('path[fill="#4285F4"]'));
+			const Unavailable = Google || /^(Continue with |Use QR code)/.test(Channel.textContent.trim());
+			if (Channel.hasAttribute('data-kittok-google') !== Google) {
+				Channel.toggleAttribute('data-kittok-google', Google);
+				if (Google) Channel.setAttribute('aria-label', 'Continue with Google'); else Channel.removeAttribute('aria-label');
+			}
+			if (Channel.hasAttribute('data-kittok-unavailable') !== Unavailable) {
+				Channel.toggleAttribute('data-kittok-unavailable', Unavailable);
+				if (Unavailable) { Channel.setAttribute('aria-disabled', 'true'); Channel.title = 'This sign-in method is not configured for this instance.'; }
+				else { Channel.removeAttribute('aria-disabled'); Channel.removeAttribute('title'); }
 			}
 		}
+		if (location.pathname === '/signup/phone-or-email/phone') document.querySelector('a[href="/signup/phone-or-email/email"]')?.click();
+		const SendCode = !Instance.mail && location.pathname.startsWith('/signup') && document.querySelector('[data-e2e="send-code-button"]');
+		const CodeInput = SendCode && SendCode.parentElement.querySelector('input');
+		if (CodeInput) {
+			SendCode.parentElement.style.display = 'none';
+			if (CodeInput.value !== '000000') { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(CodeInput, '000000'); CodeInput.dispatchEvent(new Event('input', { bubbles: true })); }
+		}
+		if (Instance.registration === 'invite' && location.pathname.startsWith('/signup')) InviteField();
 		if (Instance.account?.role === 'admin') SyncAdmin();
 		for (const Logo of document.querySelectorAll('a[data-e2e="tiktok-logo"]:not([data-kittok-sized])')) { Logo.setAttribute('data-kittok-sized', ''); LogoSize.observe(Logo); }
 		for (const Item of document.querySelectorAll('[data-e2e="notice-list-item"]')) {
@@ -72,6 +85,27 @@
 		if (document.body && !document.getElementById('kittok-source')) {
 			const Source = document.createElement('a'); Source.id = 'kittok-source'; Source.href = '/about'; Source.textContent = 'Kittok · Source'; document.body.append(Source);
 		}
+	}
+	const LinkInvite = /[?&]invite=([^&#]*)/.exec(location.search ?? '')?.[1];
+	if (LinkInvite) try { sessionStorage.setItem('kittok-invite', decodeURIComponent(LinkInvite).trim().slice(0, 200)); } catch {}
+	function SaveInvite(Value) {
+		try { sessionStorage.setItem('kittok-invite', Value); } catch {}
+		document.cookie = `kittok_invite=${encodeURIComponent(Value)}; Path=/; SameSite=Lax; Max-Age=86400${location.protocol === 'https:' ? '; Secure' : ''}`;
+	}
+	function InviteField() {
+		const Password = document.querySelector('form input[type="password"]');
+		const Next = Password?.closest('form')?.querySelector('button[type="submit"]');
+		if (!Next || Next.parentElement.querySelector('[data-kittok-invite]')) return;
+		const Label = [...Next.parentElement.children].find(Child => /^Email/.test(Child.textContent.trim()));
+		const Title = document.createElement('div'); Title.className = Label?.className ?? ''; Title.textContent = 'Invite code'; Title.setAttribute('data-kittok-invite', '');
+		const Box = document.createElement('div'); Box.className = Password.parentElement.parentElement.className; Box.setAttribute('data-kittok-invite', '');
+		const Wrap = document.createElement('div'); Wrap.className = Password.parentElement.className;
+		const Input = document.createElement('input'); Input.className = Password.className; Input.type = 'text'; Input.placeholder = 'Invite code'; Input.autocomplete = 'off'; Input.spellcheck = false; Input.setAttribute('aria-label', 'Invite code');
+		let Saved = ''; try { Saved = sessionStorage.getItem('kittok-invite') ?? ''; } catch {}
+		Input.value = Saved; if (Saved) SaveInvite(Saved);
+		Input.addEventListener('input', () => SaveInvite(Input.value.trim()));
+		Wrap.append(Input); Box.append(Wrap);
+		Next.before(Title, Box);
 	}
 	new MutationObserver(Brand).observe(document.documentElement, { childList: true, subtree: true });
 	const NativeFetch = window.fetch.bind(window);
@@ -116,7 +150,7 @@
 		}
 		const Href = Target.getAttribute('href');
 		const Path = Href ? new URL(Href, location.origin).pathname : '';
-		if (/^\/signup(?:\/|$)/.test(Path)) { Event.preventDefault(); Event.stopImmediatePropagation(); location.href = '/account?register=1'; return; }
+		if (/^\/signup(?:\/|$)/.test(Path) && !document.getElementById('SIGI_STATE')) { Event.preventDefault(); Event.stopImmediatePropagation(); location.href = Href; return; }
 		if (Path === '/@') { Event.preventDefault(); Event.stopImmediatePropagation(); location.href = Instance.account ? '/@' + Instance.account.username : '/login'; return; }
 		if (Target.id === 'header-login-button' || Target.id === 'top-right-action-bar-login-button' || Target.matches('button[class*="SquareTUXButton"][aria-label="Log in"]') || Path === '/login') {
 			Event.preventDefault(); Event.stopImmediatePropagation(); location.href = Instance.account ? '/account' : '/login'; return;

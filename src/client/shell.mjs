@@ -18,7 +18,11 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	const Legacy = Raw.includes('id="SIGI_STATE"') ? ReadJsonScript(Raw, 'SIGI_STATE') : null;
 	const App = Scope['webapp.app-context'];
 	const LoginCopy = Scope['webapp.i18n-translation']?.Webapp;
-	if (LoginCopy) LoginCopy.common_login_panel_title = `Log in to ${Config?.Name ?? 'Kittok'}`;
+	for (const Copy of [LoginCopy, Scope['webapp.i18n-translation']?.WebApp_Login]) {
+		if (!Copy) continue;
+		Copy.common_login_panel_title = `Log in to ${Config?.Name ?? 'Kittok'}`;
+		Copy.common_registration_panel_title = `Sign up for ${Config?.Name ?? 'Kittok'}`;
+	}
 	Object.assign(App, { host: new URL(Origin).host, wid: '1000000000000000000', odinId: '1000000000000000000',
 		encryptedWebid: '', csrfToken: User?.csrf_token ?? '', nonce: '', requestId: 'local', botType: 'others' });
 	if (User) {
@@ -45,6 +49,7 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 		Biz.geo = [];
 		Biz.geoCity = {};
 		Biz.config.signUpOpen = Config?.Registration !== 'closed';
+		Biz.deviceLimitRegisterExpired = false;
 	}
 	const Domains = ReadJsonScript(Raw, 'api-domains');
 	for (const Key of ['rootApi', 'mTApi', 'imApi', 'webcastApi', 'webcastRootApi', 'locationApi', 'starling', 'tea', 'libraWebSDK', 'secSDK']) Domains[Key] = Origin;
@@ -66,7 +71,7 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	Html = Html.replace(/<link\b[^>]*\brel="(?:preconnect|dns-prefetch|canonical|alternate|manifest)"[^>]*>/g, '');
 	Html = Html.replace(/\s+(?:integrity|nonce)="[^"]*"/g, '');
 	Html = RewriteAssets(Html, Origin);
-	const Instance = { name: Config?.Name ?? 'Kittok', account: User ? { username: User.username, displayName: User.display_name, role: User.role } : null, csrfToken: User?.csrf_token ?? null, misc: { ...Misc }, announcement: Config?.Announcement?.text ? Config.Announcement : null };
+	const Instance = { name: Config?.Name ?? 'Kittok', account: User ? { username: User.username, displayName: User.display_name, role: User.role } : null, csrfToken: User?.csrf_token ?? null, misc: { ...Misc }, registration: Config?.Registration ?? 'closed', mail: Boolean(Config?.SmtpUrl && Config?.MailFrom), announcement: Config?.Announcement?.text ? Config.Announcement : null };
 	const Hidden = Object.entries(Config?.Features ?? {}).filter(([, On]) => !On).flatMap(([Name]) => FeatureSelectors[Name] ?? []);
 	Html = Html.replace(/<title>[\s\S]*?<\/title>/, `<title>${Instance.name.replace(/[<&]/g, '')}</title>`);
 	return Html.replace('<head>', `<head><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="${Public('brand.css')}"><link rel="stylesheet" href="${Public('user-badges.css')}"><link rel="stylesheet" href="${Public('responsive.css')}"><script src="${Public('user-badges.js')}" defer></script><script src="${Public('message-actions.js')}" defer></script>${Hidden.length ? `<style>${Hidden.join(',')}{display:none!important}</style>` : ''}<script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);

@@ -40,8 +40,10 @@ export async function RecordEvent(Pool, UserId, Kind, Info = {}, Detail = '') {
 	await Pool.query('INSERT INTO user_events(user_id, kind, ip, country, language, user_agent, detail) VALUES ($1, $2, $3, $4, $5, $6, $7)', [UserId, Kind, Info.ip ?? null, Info.country ?? null, Info.language ?? null, Info.userAgent ?? null, Detail.slice(0, 500)]);
 }
 
-export async function CreateUser(Pool, { username, displayName, password, role = 'member', invite, prideFlag = '' }, Registration = 'closed', Operator = false, Info = {}) {
+export async function CreateUser(Pool, { username, displayName, password, role = 'member', invite, prideFlag = '', email = null }, Registration = 'closed', Operator = false, Info = {}) {
 	const Username = String(username ?? '').trim().toLowerCase();
+	const Email = email === null ? null : String(email).trim().toLowerCase();
+	if (Email !== null && (Email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(Email))) throw new HttpError(400, 'InvalidEmail');
 	const DisplayName = String(displayName ?? Username).trim();
 	if (!/^[a-z0-9_]{3,24}$/.test(Username)) throw new HttpError(400, 'InvalidUsername');
 	if (DisplayName.length < 1 || DisplayName.length > 50) throw new HttpError(400, 'InvalidDisplayName');
@@ -54,19 +56,20 @@ export async function CreateUser(Pool, { username, displayName, password, role =
 				const Used = await Client.query('UPDATE invites SET uses = uses + 1 WHERE token_hash = $1 AND uses < max_uses AND expires_at > now() RETURNING token_hash', [Hash(String(invite ?? ''))]);
 				if (!Used.rowCount) throw new HttpError(403, 'InvalidInvite');
 			}
-			const Result = await Client.query('INSERT INTO users(username, display_name, password_hash, role, pride_flag) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, display_name, role, pride_flag, user_badges', [Username, DisplayName, Encoded, Operator ? role : 'member', Flag]);
+			const Result = await Client.query('INSERT INTO users(username, display_name, password_hash, role, pride_flag, email) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, username, display_name, role, pride_flag, user_badges', [Username, DisplayName, Encoded, Operator ? role : 'member', Flag, Email]);
 			await RecordEvent(Client, Result.rows[0].id, 'signup', Info, Operator ? 'Created by an operator' : '');
 			return Result.rows[0];
 		});
 	} catch (Error) {
-		if (Error.code === '23505') throw new HttpError(409, 'UsernameTaken');
+		if (Error.code === '23505') throw new HttpError(409, Error.constraint === 'users_email' ? 'EmailTaken' : 'UsernameTaken');
 		throw Error;
 	}
 }
 
 let Dummy;
 export async function Login(Pool, Username, Password, Info = {}) {
-	const Result = await Pool.query('SELECT * FROM users WHERE username = $1', [String(Username ?? '').toLowerCase().trim().slice(0, 24)]);
+	const Name = String(Username ?? '').toLowerCase().trim().slice(0, 254);
+	const Result = await Pool.query(`SELECT * FROM users WHERE ${Name.includes('@') ? 'lower(email)' : 'username'} = $1`, [Name]);
 	Dummy ??= PasswordHash(Token());
 	const User = Result.rows[0];
 	const Valid = await PasswordMatches(Password, User?.password_hash ?? await Dummy);

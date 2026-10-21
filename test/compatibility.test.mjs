@@ -15,6 +15,7 @@ import { runInNewContext } from 'node:vm';
 import { DecodePassportValue } from '../src/routes/passport.mjs';
 import { Proto } from '../src/routes/im.mjs';
 import { request as HttpRequest } from 'node:http';
+import { createServer } from 'node:net';
 
 const Origin = 'http://127.0.0.1:13210';
 const Password = 'test-only-password-123456';
@@ -38,6 +39,24 @@ function Auth(Extra = {}) { return { cookie: Cookie, 'x-csrf-token': Session.csr
 async function Call(Path, Method = 'GET', Body, Headers = {}) {
 	return fetch(Origin + Path, { method: Method, headers: { ...Headers, ...(Body ? { 'content-type': 'application/json' } : {}) }, body: Body ? JSON.stringify(Body) : undefined });
 }
+const Mailbox = [];
+const MailSink = createServer(Socket => {
+	let Buffered = '', Data = false, Message = '';
+	Socket.write('220 sink\r\n');
+	Socket.on('data', Chunk => {
+		Buffered += Chunk;
+		let Index;
+		while ((Index = Buffered.indexOf('\r\n')) >= 0) {
+			const Line = Buffered.slice(0, Index); Buffered = Buffered.slice(Index + 2);
+			if (Data) { if (Line === '.') { Data = false; Mailbox.push(Message); Message = ''; Socket.write('250 ok\r\n'); } else Message += Line + '\n'; continue; }
+			Socket.write(/^EHLO/i.test(Line) ? '250 sink\r\n' : /^DATA/i.test(Line) ? (Data = true, '354 go\r\n') : /^QUIT/i.test(Line) ? '221 bye\r\n' : '250 ok\r\n');
+		}
+	});
+});
+await new Promise(Resolve => MailSink.listen(0, '127.0.0.1', Resolve));
+MailSink.unref();
+process.env.SMTP_URL = `smtp://127.0.0.1:${MailSink.address().port}`; process.env.MAIL_FROM = 'Kittok <no-reply@example.com>';
+
 before(async () => {
 	Directory = await mkdtemp(join(tmpdir(), 'kittok-media-test-'));
 	Config = { ...LoadConfig(), MediaDir: Directory };
@@ -1169,7 +1188,8 @@ test('pride flags are optional at signup, public, editable by their owner, and c
 	assert.equal((await Call(`/_kittok/admin/users/${Owner.id}/badges`, 'POST', { prideFlag: '', userBadges: [] }, Auth())).status, 200);
 	const GuestSignup = await (await Call('/account?register=1')).text();
 	assert.ok(GuestSignup.includes('None / prefer not to say') && GuestSignup.includes('Shown publicly beside your name'));
-	assert.equal((await fetch(Origin + '/signup', { redirect: 'manual' })).headers.get('location'), '/account?register=1');
+	const NativeSignup = await fetch(Origin + '/signup', { redirect: 'manual' });
+	assert.equal(NativeSignup.status, 200); assert.ok((await NativeSignup.text()).includes('Sign up for Kittok'));
 	await assert.rejects(CreateUser(Pool, { username: 'bad_flag', password: Password, prideFlag: 'fake' }, 'closed', true), /InvalidPrideFlag/);
 });
 
@@ -1599,6 +1619,40 @@ test('avatar decorations come from the Discord catalog, are owner-editable, and 
 	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: Settings }, Auth())).status, 200);
 	assert.equal((await Update({ decoration: '' })).status, 200);
 	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).decorations, {});
+});
+
+test('native email sign-up checks age, sends real codes, needs an invite here, and lets the person pick a username', async () => {
+	const Mix = Value => Buffer.from(Value).map(Byte => Byte ^ 5).toString('hex');
+	const Form = (Path, Fields, Headers = {}) => fetch(Origin + Path, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', ...Headers }, body: new URLSearchParams(Fields) });
+	const Age = async Birthday => (await (await Form('/api/v3/register/verification/age/', { birthday: Birthday })).json()).is_eligible;
+	assert.equal(await Age('1999-03-14'), true); assert.equal(await Age(`${new Date().getUTCFullYear() - 10}-01-01`), false); assert.equal(await Age('bad'), false);
+	const Email = 'native.signup@example.com';
+	const Sent = await (await Form('/passport/web/email/send_code/', { mix_mode: '1', email: Mix(Email), type: '34' })).json();
+	assert.equal(Sent.message, 'success');
+	const Mail = Mailbox.at(-1); const Code = /Subject: (\d{6}) is your/.exec(Mail)?.[1];
+	assert.ok(Code && Mail.includes(`To: <${Email}>`));
+	const Again = await (await Form('/passport/web/email/send_code/', { mix_mode: '1', email: Mix(Email) })).json();
+	assert.equal(Again.message, 'error'); assert.match(Again.data.description, /Wait a minute/);
+	const Register = (Fields, Headers) => Form('/passport/web/email/register_verify_login/', { mix_mode: '1', email: Mix(Email), password: Mix(Password), code: Mix(Code), birthday: '1999-03-14', ...Fields }, Headers).then(Response => Response.json());
+	assert.equal((await Register({})).data.description, 'Enter your invite code.');
+	assert.match((await Register({}, { cookie: 'kittok_invite=nope' })).data.description, /isn’t valid/);
+	const Invite = Token(); await Pool.query("INSERT INTO invites(token_hash, created_by, expires_at) VALUES ($1,$2,now()+interval '1 day')", [Hash(Invite), Owner.id]);
+	assert.equal((await Register({ code: Mix('000000') }, { cookie: `kittok_invite=${Invite}` })).data.description, 'Verification code is incorrect.');
+	assert.equal((await Register({ birthday: '2020-01-01' }, { cookie: `kittok_invite=${Invite}` })).data.description, 'Sorry, looks like you’re not eligible to sign up.');
+	const Created = await Form('/passport/web/email/register_verify_login/', { mix_mode: '1', email: Mix(Email), password: Mix(Password), code: Mix(Code), birthday: '1999-03-14' }, { cookie: `kittok_invite=${encodeURIComponent(Invite)}` });
+	const Body = await Created.json();
+	assert.equal(Body.message, 'success'); assert.equal(Body.data.is_new_user, true); assert.match(Body.data.username, /^user\d{9}$/);
+	const Cookies = Created.headers.getSetCookie();
+	const SessionValue = Cookies.find(Value => Value.startsWith('kittok_session=')).split(';')[0];
+	const Csrf = Cookies.find(Value => Value.startsWith('passport_csrf_token=')).split(';')[0].split('=')[1];
+	assert.match((await Register({}, { cookie: `kittok_invite=${Invite}` })).data.description, /isn’t valid/);
+	assert.equal((await Form('/passport/web/account/set/', { mix_mode: '1', username: Mix('native_pick') }, { cookie: SessionValue })).status, 403);
+	const Picked = await (await Form('/passport/web/account/set/', { mix_mode: '1', username: Mix('native_pick') }, { cookie: SessionValue, 'x-tt-passport-csrf-token': Csrf })).json();
+	assert.equal(Picked.data.username, 'native_pick');
+	assert.deepEqual((await Pool.query('SELECT display_name, lower(email) AS email FROM users WHERE username = $1', ['native_pick'])).rows[0], { display_name: 'native_pick', email: Email });
+	assert.equal((await (await Form('/passport/web/user/login/', { mix_mode: '1', username: Mix(Email.toUpperCase()), password: Mix(Password) })).json()).data.username, 'native_pick');
+	const Taken = await (await Form('/passport/web/email/send_code/', { mix_mode: '1', email: Mix(Email) })).json();
+	assert.equal(Taken.data.error_code, 1023);
 });
 
 test('misc switches turn Kittok features off and back on without a restart', async () => {

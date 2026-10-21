@@ -54,7 +54,7 @@ const Server = createServer(async (Request, Response) => {
 			if (Request.headers['sec-fetch-site'] === 'cross-site') throw new HttpError(403, 'InvalidOrigin');
 		}
 		const Path = Url.pathname;
-		if (/^\/signup(?:\/|$)/.test(Path)) { RequireMethod(Request, ['GET', 'HEAD']); Response.writeHead(303, { location: '/account?register=1' }); return Response.end(); }
+		if (/^\/signup(?:\/|$)/.test(Path) && Config.Registration === 'closed') { RequireMethod(Request, ['GET', 'HEAD']); Response.writeHead(303, { location: '/login' }); return Response.end(); }
 		if (Path === '/foryou') { RequireMethod(Request, ['GET', 'HEAD']); Response.writeHead(303, { location: '/' + Url.search }); return Response.end(); }
 		if (Path === '/health/live') return Json(Response, { status: 'Alive' });
 		if (Path === '/health/ready') { await Pool.query('SELECT 1'); return Json(Response, { status: 'Ready' }); }
