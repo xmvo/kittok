@@ -18,6 +18,7 @@ import { BackfillCategories, Category, GuessCategory } from '../src/categories.m
 import { DeleteExpiredAccounts } from '../src/accounts.mjs';
 import { request as HttpRequest } from 'node:http';
 import { createServer } from 'node:net';
+import { inflateRawSync } from 'node:zlib';
 
 const Origin = 'http://127.0.0.1:13210';
 const Password = 'test-only-password-123456';
@@ -1852,6 +1853,51 @@ test('deactivating hides an account until its owner logs back in, and deletion r
 	await Pool.query('UPDATE users SET deactivated_at = now(), suspended_at = now() WHERE id = $1', [Banned.id]);
 	assert.equal((await Call(`/_kittok/admin/users/${Banned.id}/suspend`, 'POST', { category: 'spam', reason: 'Banned while deactivated' }, Auth())).status, 200);
 	await assert.rejects(Login(Pool, 'banned_leaver', Password), /AccountSuspended/);
+});
+
+test('download your data builds a TXT or JSON archive with your own videos after a password check', async () => {
+	const Saver = await CreateUser(Pool, { username: 'saver', password: Password }, 'closed', true);
+	const Signed = await Login(Pool, 'saver', Password);
+	const As = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	await Pool.query('INSERT INTO likes(user_id, video_id) VALUES ($1, $2)', [Saver.id, VideoId]);
+	const Html = await (await fetch(`${Origin}/ppp?lang=en&isDark=false&_pia_=1`, { headers: { cookie: As.cookie } })).text();
+	assert.ok(Html.includes('Download your data') && Html.includes('No files yet'));
+	const Ask = Body => Call('/api/v1/account/data', 'POST', Body, As);
+	assert.equal((await Ask({ format: 'pdf' })).status, 400);
+	assert.equal((await Ask({ format: 'json', sections: ['nope'] })).status, 400);
+	const Json = await (await Ask({ format: 'json', sections: ['profile', 'activity'] })).json();
+	const Txt = await (await Ask({ format: 'txt' })).json();
+	assert.ok((await (await fetch(`${Origin}/ppp?tab=download`, { headers: { cookie: As.cookie } })).text()).includes(`data-download="${Txt.id}"`));
+	const Fetch = (Id, Secret) => fetch(`${Origin}/api/v1/account/data/download`, { method: 'POST', redirect: 'manual', headers: { cookie: As.cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ id: Id, csrf: Signed.Csrf, password: Secret, isDark: 'false' }) });
+	assert.match((await Fetch(Json.id, 'wrong-password-here')).headers.get('location'), /error=InvalidPassword/);
+	assert.match((await Fetch('999999999', Password)).headers.get('location'), /error=ExportExpired/);
+	const Unzip = Bytes => {
+		const Files = {}; let At = Bytes.readUInt32LE(Bytes.length - 6);
+		while (Bytes.readUInt32LE(At) === 0x02014b50) {
+			const [Method, Packed, NameLength, ExtraLength, CommentLength, Local] = [Bytes.readUInt16LE(At + 10), Bytes.readUInt32LE(At + 20), Bytes.readUInt16LE(At + 28), Bytes.readUInt16LE(At + 30), Bytes.readUInt16LE(At + 32), Bytes.readUInt32LE(At + 42)];
+			const Start = Local + 30 + Bytes.readUInt16LE(Local + 26) + Bytes.readUInt16LE(Local + 28), Data = Bytes.subarray(Start, Start + Packed);
+			Files[Bytes.toString('utf8', At + 46, At + 46 + NameLength)] = Method === 8 ? inflateRawSync(Data) : Data;
+			At += 46 + NameLength + ExtraLength + CommentLength;
+		}
+		return Files;
+	};
+	const Got = await Fetch(Json.id, Password);
+	assert.equal(Got.headers.get('content-type'), 'application/zip'); assert.match(Got.headers.get('content-disposition'), /attachment; filename="Kittok_Data_\d+\.zip"/);
+	const Data = JSON.parse(Unzip(Buffer.from(await Got.arrayBuffer()))['user_data.json']);
+	assert.deepEqual(Object.keys(Data), ['Profile', 'Activity']);
+	assert.equal(Data.Profile['Profile Information'].ProfileMap.userName, 'saver');
+	assert.equal(Data.Activity['Like List'].ItemFavoriteList[0].Link, `${Origin}/@owner/video/${VideoId}`);
+	const Mine = await (await Call(`/api/user/detail/?uniqueId=owner`)).json();
+	const AsOwner = { cookie: Cookie };
+	const OwnerExport = await (await Call('/api/v1/account/data', 'POST', { format: 'txt', sections: ['video', 'settings'] }, Auth())).json();
+	const OwnerZip = await fetch(`${Origin}/api/v1/account/data/download`, { method: 'POST', headers: { ...AsOwner, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ id: OwnerExport.id, csrf: Session.csrfToken, password: Password }) });
+	const Files = Unzip(Buffer.from(await OwnerZip.arrayBuffer()));
+	assert.ok(Mine.userInfo.user.uniqueId === 'owner' && Files['Video/Videos.txt'].toString().includes(`Link: ${Origin}/@owner/video/${VideoId}`));
+	assert.ok(Files[`Video/Videos/${VideoId}.mp4`].length > 1000 && Files['App Settings/Settings.txt'].toString().includes('Private Account: '));
+	assert.deepEqual((await Pool.query("SELECT kind FROM user_events WHERE user_id = $1 AND kind LIKE 'data_%' ORDER BY id", [Saver.id])).rows.map(Row => Row.kind), ['data_requested', 'data_requested', 'data_downloaded']);
+	for (let Index = 0; Index < 3; Index++) await Ask({ format: 'txt' });
+	assert.equal((await Pool.query('SELECT count(*)::int AS kept FROM data_exports WHERE user_id = $1', [Saver.id])).rows[0].kept, 3);
+	assert.equal((await Ask({ format: 'txt' })).status, 429);
 });
 
 test('misc switches turn Kittok features off and back on without a restart', async () => {

@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Download your data from Settings: pick everything or just some of it, TXT or JSON, and get a ZIP laid out like TikTok's export that also has your own videos. Downloading asks for your password, and files expire after 4 days.
 - Deactivate or delete your account from the native Settings page, with TikTok's 30-day window to change your mind by logging back in. Deleting someone who made invites no longer fails, and banned or deactivated accounts stay out of user search.
 - Emoji reactions on direct messages through the client's own reaction picker, pushed live to the other person, and replies that keep their quoted message.
 - The Friends page, music pages, and search suggestions work; stories and playlists show their empty states; and the client's telemetry calls get quiet answers. Add a systemd user service for source installs.
