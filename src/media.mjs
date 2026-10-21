@@ -11,12 +11,12 @@ import { HttpError } from './http.mjs';
 export const Mime = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.mp4': 'video/mp4', '.json': 'application/json', '.ico': 'image/x-icon' };
 const SafeName = /^[a-zA-Z0-9_-]+\.(?:mp4|jpg|png|svg)$/;
 
-function Run(Executable, Args, Failure = 'InvalidVideo') {
+function Run(Executable, Args, Failure = 'InvalidVideo', Timeout = 180000) {
 	return new Promise((Resolve, Reject) => {
 		const Process = spawn(Executable, Args, { stdio: ['ignore', 'pipe', 'pipe'] });
 		const Chunks = [];
 		let Size = 0;
-		const Timer = setTimeout(() => { Process.kill('SIGKILL'); Reject(new HttpError(422, 'VideoProcessingTimeout')); }, 180000).unref();
+		const Timer = setTimeout(() => { Process.kill('SIGKILL'); Reject(new HttpError(422, 'VideoProcessingTimeout')); }, Timeout).unref();
 		Process.stdout.on('data', Chunk => { Size += Chunk.length; if (Size < 1024 * 1024) Chunks.push(Chunk); });
 		Process.stderr.resume();
 		Process.once('error', () => { clearTimeout(Timer); Reject(new HttpError(503, 'VideoToolsUnavailable')); });
@@ -43,10 +43,15 @@ export async function ImportVideo(Pool, Config, UserId, Input, Description = '',
 	const CoverName = `${Key}.jpg`;
 	const Video = join(Config.MediaDir, VideoName);
 	const Cover = join(Config.MediaDir, CoverName);
+	const Input_ = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov,matroska,webm', '-i', Input, '-map', '0:v:0', '-map', '0:a:0?', '-map_metadata', '-1'];
+	const Output = ['-movflags', '+faststart', '-t', String(Config.MaxVideoSeconds), '-n', Video];
+	const Audio = Probe.streams.find(Track => Track.codec_type === 'audio');
+	const Playable = Track.codec_name === 'h264' && Track.pix_fmt === 'yuv420p' && Track.width <= 1080 && (!Audio || Audio.codec_name === 'aac');
+	const Encode = () => Run(Config.FFmpeg, [...Input_, '-vf', "scale='min(1080,iw)':-2", '-c:v', 'libx264', '-preset', 'veryfast',
+		'-crf', '25', '-pix_fmt', 'yuv420p', '-threads', '2', '-c:a', 'aac', '-b:a', '128k', ...Output], 'InvalidVideo', Math.max(180000, Duration * 1500));
 	try {
-		await Run(Config.FFmpeg, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov,matroska,webm', '-i', Input,
-			'-map', '0:v:0', '-map', '0:a:0?', '-vf', "scale='min(1080,iw)':-2", '-c:v', 'libx264', '-preset', 'veryfast',
-			'-crf', '25', '-pix_fmt', 'yuv420p', '-threads', '2', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-t', String(Config.MaxVideoSeconds), '-n', Video]);
+		if (Playable) await Run(Config.FFmpeg, [...Input_, '-c', 'copy', ...Output]).catch(async () => { await rm(Video, { force: true }); await Encode(); });
+		else await Encode();
 		await Run(Config.FFmpeg, ['-hide_banner', '-loglevel', 'error', '-nostdin', '-i', Video, '-frames:v', '1', '-threads', '1', '-n', Cover]);
 		const OutputProbe = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', '-show_streams', '-of', 'json', Video]));
 		const OutputTrack = OutputProbe.streams.find(Track => Track.codec_type === 'video');
