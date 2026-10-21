@@ -184,7 +184,7 @@ export async function UserStats(Pool, UserId) {
 	return { ...Result.rows[0], heart: Result.rows[0].heartCount };
 }
 
-export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, repostedBy, collection, id, exclude, tag, viewer, query, forYou, limit = 20 } = {}) {
+export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, repostedBy, collection, id, exclude, tag, viewer, query, forYou, category, limit = 20 } = {}) {
 	const Values = [viewer ?? null];
 	const Conditions = [];
 	function Where(Sql, Value) { Values.push(Value); Conditions.push(Sql.replace('?', `$${Values.length}`)); }
@@ -198,6 +198,7 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 	if (collection) Where('EXISTS (SELECT 1 FROM collection_items c WHERE c.collection_id = ? AND c.video_id = v.id)', collection);
 	if (repostedBy) Where('EXISTS (SELECT 1 FROM reposts r WHERE r.user_id = ? AND r.video_id = v.id)', repostedBy);
 	if (tag) Where(TagSql('v.description'), String(tag).toLowerCase());
+	if (category) Where('v.category = ?', category);
 	if (query) Where("v.description ILIKE ? ESCAPE '\\'", `%${String(query).slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`);
 	Conditions.push(`NOT ${BlockedBetween('$1', 'v.author_id')}`);
 	Conditions.push(VideoVisibleSql('$1::bigint'));

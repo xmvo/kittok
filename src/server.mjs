@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { BackfillCategories } from './categories.mjs';
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
@@ -24,6 +25,7 @@ import { LoadSettings } from './settings.mjs';
 const Config = LoadConfig();
 const Pool = Database(Config.DatabaseUrl);
 await Migrate(Pool);
+await BackfillCategories(Pool);
 await LoadSettings(Pool, Config);
 const Raw = await readFile(join(ClientDir, 'index.html'), 'utf8').catch(() => { throw new Error('Run npm run capture first'); });
 const Unknown = new Map();

@@ -1,4 +1,5 @@
 import { Escape, HttpError, Id, ReadBody, RequireMethod } from '../http.mjs';
+import { Categories, Category, GuessCategory } from '../categories.mjs';
 import { RequireCsrf } from '../auth.mjs';
 import { Page } from './account.mjs';
 import { AvatarUrl } from '../store.mjs';
@@ -7,6 +8,7 @@ import { Public } from '../client/shell.mjs';
 
 const Visibility = (Private, Current = 'public') => [['public', Private ? 'Followers (approved)' : 'Everyone'], ['followers', 'Followers'], ['friends', 'Friends (followers you follow back)'], ['only_me', 'Only you']].filter(([Value]) => !Private || Value !== (Current === 'followers' ? 'public' : 'followers'));
 const Comments = [['default', 'Use account settings'], ['everyone', 'Everyone'], ['followers', 'Followers'], ['friends', 'Friends'], ['none', 'No one']];
+const CategoryOptions = [['', 'Automatic from hashtags'], ...Categories.map(([Type, Label]) => [String(Type), Label]), ['0', 'None']];
 const Select = (Name, Title, Options, Value) => `<label>${Title}<select name="${Name}">${Options.map(([Key, Text]) => `<option value="${Key}"${Key === Value ? ' selected' : ''}>${Text}</option>`).join('')}</select></label>`;
 const Csrf = User => `<input type="hidden" name="csrf" value="${Escape(User.csrf_token)}">`;
 const Redirect = (Response, To) => { Response.writeHead(303, { location: To }); Response.end(); return true; };
@@ -22,7 +24,7 @@ export async function Studio({ Request, Response, Url, Pool, Config, User }) {
 		Title = 'Upload video';
 		Content = `<div class="studio-heading"><div><h1>Upload video</h1><p>Post a video to your account</p></div><a href="/account/posts">Manage posts</a></div>
 		<form id="upload" class="upload-layout"><section class="upload-file"><label id="drop-zone" tabindex="0"><span class="upload-symbol" aria-hidden="true">↑</span><strong>Select video to upload</strong><span>Or drag and drop a file</span><span class="file-help">MP4 or WebM · Up to ${Math.round(Config.MaxVideoBytes / 1024 / 1024)} MB · ${Config.MaxVideoSeconds} seconds</span><input required name="video" type="file" accept="video/mp4,video/webm,video/quicktime"><span class="choose-file">Select video</span></label><video id="video-preview" controls playsinline hidden></video><button id="change-video" class="secondary" type="button" hidden>Change video</button><p id="file-name"></p></section>
-		<section class="upload-details"><label>Caption<textarea name="description" maxlength="2200" rows="5" placeholder="Describe your video"></textarea><span id="caption-count">0 / 2200</span></label>${Select('visibility', 'Who can view this video', Visibility(User.private_account), 'public')}${Select('comments', 'Who can comment', Comments, 'default')}<p class="field-help">Your account’s privacy and comment settings also apply.</p><div class="upload-actions"><button type="reset" class="secondary">Discard</button><button type="submit">Post</button></div><progress id="upload-progress" max="100" value="0" hidden></progress><p id="status" role="status" aria-live="polite"></p><a id="posted-link" hidden>View video</a></section></form><script id="upload-config" type="application/json">${JSON.stringify({ csrf: User.csrf_token, maxBytes: Config.MaxVideoBytes, username: User.username }).replaceAll('<', '\\u003c')}</script><script src="${Public('upload.js')}"></script>`;
+		<section class="upload-details"><label>Caption<textarea name="description" maxlength="2200" rows="5" placeholder="Describe your video"></textarea><span id="caption-count">0 / 2200</span></label>${Select('visibility', 'Who can view this video', Visibility(User.private_account), 'public')}${Select('comments', 'Who can comment', Comments, 'default')}${Select('category', 'Explore category', CategoryOptions, '')}<p class="field-help">Your account’s privacy and comment settings also apply.</p><div class="upload-actions"><button type="reset" class="secondary">Discard</button><button type="submit">Post</button></div><progress id="upload-progress" max="100" value="0" hidden></progress><p id="status" role="status" aria-live="polite"></p><a id="posted-link" hidden>View video</a></section></form><script id="upload-config" type="application/json">${JSON.stringify({ csrf: User.csrf_token, maxBytes: Config.MaxVideoBytes, username: User.username }).replaceAll('<', '\\u003c')}</script><script src="${Public('upload.js')}"></script>`;
 	} else if (Path === '/account/privacy') {
 		if (Request.method === 'POST') {
 			const Body = await ReadBody(Request); RequireCsrf(Request, User, Body.csrf);
@@ -49,11 +51,12 @@ export async function Studio({ Request, Response, Url, Pool, Config, User }) {
 		if (Request.method === 'POST') {
 			const Body = await ReadBody(Request); RequireCsrf(Request, User, Body.csrf);
 			const Settings = PostSettings(Body.visibility, Body.comments);
-			await Pool.query('UPDATE videos SET visibility = $3, comment_permission = $4 WHERE id = $1 AND author_id = $2', [Row.id, User.id, Settings.visibility, Settings.comment_permission]);
+			const Chosen = Category(Body.category) ?? GuessCategory(Row.description);
+			await Pool.query('UPDATE videos SET visibility = $3, comment_permission = $4, category = $5 WHERE id = $1 AND author_id = $2', [Row.id, User.id, Settings.visibility, Settings.comment_permission, Chosen]);
 			return Redirect(Response, Path + '?saved=1');
 		}
 		RequireMethod(Request, ['GET']); Title = 'Post settings';
-		Content = `<h1>Post settings</h1>${Url.searchParams.has('saved') ? '<p role="status">Settings saved.</p>' : ''}<div class="post-editor"><a href="/@${User.username}/video/${Row.id}"><img class="post-cover" src="/media/${Row.cover_name}" alt="Video cover"></a><div><p>${Escape(Row.description || 'Untitled video')}</p><form method="post">${Csrf(User)}${Select('visibility', 'Who can view this video', Visibility(User.private_account, Row.visibility), Row.visibility)}${Select('comments', 'Who can comment', Comments, Row.comment_permission)}<p class="field-help">Your account’s privacy and comment settings also apply.</p><button>Save</button></form></div></div><p><a href="/account/posts">Back to posts</a></p>`;
+		Content = `<h1>Post settings</h1>${Url.searchParams.has('saved') ? '<p role="status">Settings saved.</p>' : ''}<div class="post-editor"><a href="/@${User.username}/video/${Row.id}"><img class="post-cover" src="/media/${Row.cover_name}" alt="Video cover"></a><div><p>${Escape(Row.description || 'Untitled video')}</p><form method="post">${Csrf(User)}${Select('visibility', 'Who can view this video', Visibility(User.private_account, Row.visibility), Row.visibility)}${Select('comments', 'Who can comment', Comments, Row.comment_permission)}${Select('category', 'Explore category', CategoryOptions, Row.category >= 0 ? String(Row.category) : '')}<p class="field-help">Your account’s privacy and comment settings also apply.</p><button>Save</button></form></div></div><p><a href="/account/posts">Back to posts</a></p>`;
 	} else {
 		RequireMethod(Request, ['GET']); Title = 'Your posts';
 		const Before = Url.searchParams.has('before') ? Id(Url.searchParams.get('before')) : null;

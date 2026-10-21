@@ -14,6 +14,7 @@ import { ImportVideo } from '../src/media.mjs';
 import { runInNewContext } from 'node:vm';
 import { DecodePassportValue } from '../src/routes/passport.mjs';
 import { Proto } from '../src/routes/im.mjs';
+import { BackfillCategories, Category, GuessCategory } from '../src/categories.mjs';
 import { request as HttpRequest } from 'node:http';
 import { createServer } from 'node:net';
 
@@ -1653,6 +1654,21 @@ test('native email sign-up checks age, sends real codes, needs an invite here, a
 	assert.equal((await (await Form('/passport/web/user/login/', { mix_mode: '1', username: Mix(Email.toUpperCase()), password: Mix(Password) })).json()).data.username, 'native_pick');
 	const Taken = await (await Form('/passport/web/email/send_code/', { mix_mode: '1', email: Mix(Email) })).json();
 	assert.equal(Taken.data.error_code, 1023);
+});
+
+test('explore categories come from the upload choice or the caption and filter the native tabs', async () => {
+	assert.equal(GuessCategory('my cat being silly #catsoftiktok'), 113);
+	assert.equal(GuessCategory('#minecraft build with a dog'), 103);
+	assert.equal(GuessCategory('nothing to see here'), 0);
+	assert.equal(GuessCategory('#minecraft #fyp #storytime'), 103);
+	assert.throws(() => Category('999'), /InvalidCategory/); assert.equal(Category(''), null); assert.equal(Category('104'), 104);
+	const Explore = async Type => (await (await Call(`/api/explore/item_list/?categoryType=${Type}&count=30`)).json()).itemList.map(Item => Item.id);
+	await Pool.query('UPDATE videos SET category = 104 WHERE id = $1', [VideoId]);
+	assert.ok((await Explore(104)).includes(VideoId)); assert.ok(!(await Explore(113)).includes(VideoId)); assert.ok((await Explore(120)).includes(VideoId));
+	assert.deepEqual(await Explore(5), []);
+	await Pool.query('UPDATE videos SET category = -1 WHERE id = $1', [VideoId]);
+	await BackfillCategories(Pool);
+	assert.equal((await Pool.query('SELECT category FROM videos WHERE id = $1', [VideoId])).rows[0].category, GuessCategory((await Pool.query('SELECT description FROM videos WHERE id = $1', [VideoId])).rows[0].description));
 });
 
 test('misc switches turn Kittok features off and back on without a restart', async () => {

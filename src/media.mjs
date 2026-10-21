@@ -6,6 +6,7 @@ import { Transform } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import { join, extname } from 'node:path';
 import { PostSettings } from './privacy.mjs';
+import { GuessCategory } from './categories.mjs';
 import { HttpError } from './http.mjs';
 
 export const Mime = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.mp4': 'video/mp4', '.json': 'application/json', '.ico': 'image/x-icon' };
@@ -56,7 +57,7 @@ export async function ImportVideo(Pool, Config, UserId, Input, Description = '',
 		const OutputProbe = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', '-show_streams', '-of', 'json', Video]));
 		const OutputTrack = OutputProbe.streams.find(Track => Track.codec_type === 'video');
 		const Info = await stat(Video);
-		const Result = await Pool.query('INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes, visibility, comment_permission) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id', [UserId, Description, VideoName, CoverName, OutputTrack.width, OutputTrack.height, Duration, Info.size, Settings.visibility, Settings.comment_permission]);
+		const Result = await Pool.query('INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes, visibility, comment_permission, category) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id', [UserId, Description, VideoName, CoverName, OutputTrack.width, OutputTrack.height, Duration, Info.size, Settings.visibility, Settings.comment_permission, Settings.category ?? GuessCategory(Description)]);
 		return Result.rows[0].id;
 	} catch (Error) {
 		await Promise.allSettled([rm(Video, { force: true }), rm(Cover, { force: true })]);

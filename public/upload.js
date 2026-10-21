@@ -34,7 +34,7 @@
 		const File = Selected ?? Input.files[0]; if (!File) { Status.textContent = 'Select a video first.'; return; }
 		Busy = true; const Controls = [...Form.querySelectorAll('button,input,textarea,select')]; Controls.forEach(Control => { Control.disabled = true; });
 		Status.textContent = 'Uploading…'; if (Progress) { Progress.hidden = false; Progress.value = 0; }
-		const Query = new URLSearchParams({ description: Form.elements.description.value, visibility: Form.elements.visibility?.value ?? 'public', comments: Form.elements.comments?.value ?? 'default' });
+		const Query = new URLSearchParams({ description: Form.elements.description.value, visibility: Form.elements.visibility?.value ?? 'public', comments: Form.elements.comments?.value ?? 'default', category: Form.elements.category?.value ?? '' });
 		const Request = new XMLHttpRequest(); Request.open('POST', '/api/v1/videos?' + Query);
 		Request.setRequestHeader('content-type', File.type || 'video/mp4'); Request.setRequestHeader('x-csrf-token', Config.csrf);
 		Request.upload.onprogress = Event => { if (Event.lengthComputable && Progress) Progress.value = Event.loaded / Event.total * 100; if (Event.loaded === Event.total) Status.textContent = 'Processing video…'; };

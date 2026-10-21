@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Fill the Explore category tabs: uploads pick a category or get one guessed from their hashtags.
 - Native sign-up: the client's own email form with real emailed codes over SMTP, its age gate and Create username step, an Invite code field on invite-only instances, and email logins.
 - Fit the admin console to phone screens and add a script that preloads every decoration image.
 - Run the admin console inside the real client: its sidebar lists the admin sections, and pages use the client's own buttons, switches, tags, tabs and colors. Show the real verified check, put account actions in plain buttons instead of a three-dot menu, and hide community badges for now.

@@ -8,6 +8,7 @@ import { AssertAllowed, RemovedSql } from '../moderation.mjs';
 import { BadgeCatalog, BadgeSvg, PrideFlag, PublicBadges } from '../badges.mjs';
 import { AvatarDecoration, DecorationCatalog, DecorationImage, PublicDecoration } from '../decorations.mjs';
 import { Misc } from '../settings.mjs';
+import { Category } from '../categories.mjs';
 import { UnsendMessage } from './im.mjs';
 
 export async function Api(Context) {
@@ -111,7 +112,7 @@ export async function Api(Context) {
 		if (!Request.headers['content-type']?.startsWith('video/')) throw new HttpError(415, 'ExpectedVideoBody');
 		if (Number(Request.headers['content-length']) > Config.MaxVideoBytes) throw new HttpError(413, 'VideoTooLarge');
 		if (Context.Uploading.value >= 2) throw new HttpError(503, 'UploadsBusy');
-		const Settings = PostSettings(Url.searchParams.get('visibility') ?? 'public', Url.searchParams.get('comments') ?? 'default');
+		const Settings = { ...PostSettings(Url.searchParams.get('visibility') ?? 'public', Url.searchParams.get('comments') ?? 'default'), category: Category(Url.searchParams.get('category')) };
 		Context.Uploading.value++;
 		let File;
 		try {

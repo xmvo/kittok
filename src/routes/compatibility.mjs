@@ -7,6 +7,7 @@ import { ActiveRestriction, RestrictionText, RemovedSql, ModerationNotices, Unre
 import { AcceptRequest } from './im.mjs';
 import { AssertVideoVisible, VideoVisibleSql, SetPrivateAccount, DecideFollowRequest, FollowRequests } from '../privacy.mjs';
 import { PublicBadges } from '../badges.mjs';
+import { Categories } from '../categories.mjs';
 import { Misc } from '../settings.mjs';
 import { FindUser, UserShape, UserStats, Videos, SetRelation, TagId, TagName, TagSql, MentionedUsers, CommentExtra, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
@@ -99,7 +100,11 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET', 'POST']);
 		const Filter = { viewer: User?.id, forYou: ['/api/preload/item_list/', '/api/recommend/item_list/', '/api/related/item_list/', '/api/explore/item_list/'].includes(Path), before: Params.get('cursor') === '0' ? undefined : Params.get('cursor'), limit: Params.get('count') };
 		const Empty = () => Json(Response, { statusCode: 0, status_code: 0, itemList: [], cursor: '0', hasMore: false, extra: { logid: 'kittok' } });
-		if (Path.includes('/explore/') && (Params.get('categoryType') ?? '120') !== '120') { Empty(); return true; }
+		if (Path.includes('/explore/') && (Params.get('categoryType') ?? '120') !== '120') {
+			const Type = Number(Params.get('categoryType'));
+			if (!Categories.some(([Known]) => Known === Type)) { Empty(); return true; }
+			Filter.category = Type;
+		}
 		if (Path.includes('/repost/') && !Misc.reposts) { Empty(); return true; }
 		if (Path.includes('/challenge/') && !Misc.hashtags) { Empty(); return true; }
 		if (Path.startsWith('/api/collection/') && !Misc.collections) { Empty(); return true; }
