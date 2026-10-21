@@ -58,6 +58,16 @@ export async function Api(Context) {
 		Response.writeHead(200, { 'content-type': 'image/png', 'content-length': Data.length, 'cache-control': 'public, max-age=31536000, immutable' });
 		Response.end(Request.method === 'HEAD' ? undefined : Data); return true;
 	}
+	const PinMatch = /^\/api\/v1\/videos\/(\d+)\/pin$/.exec(Path);
+	if (PinMatch) {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Pinned = (await ReadBody(Request)).pinned === true;
+		const Row = (await Pool.query('SELECT pinned_at FROM videos WHERE id = $1 AND author_id = $2', [Id(PinMatch[1]), User.id])).rows[0];
+		if (!Row) throw new HttpError(404, 'VideoNotFound');
+		if (Pinned && !Row.pinned_at && (await Pool.query('SELECT count(*)::int AS pinned FROM videos WHERE author_id = $1 AND pinned_at IS NOT NULL', [User.id])).rows[0].pinned >= 3) throw new HttpError(409, 'PinLimit');
+		await Pool.query('UPDATE videos SET pinned_at = CASE WHEN $3 THEN coalesce(pinned_at, now()) END WHERE id = $1 AND author_id = $2', [Id(PinMatch[1]), User.id, Pinned]);
+		Json(Response, { pinned: Pinned }); return true;
+	}
 	if (Path === '/api/v1/profile/decoration') {
 		RequireMethod(Request, ['PATCH']); RequireCsrf(Request, User);
 		if (!Misc.avatarDecorations) throw new HttpError(403, 'AvatarDecorationsDisabled');

@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
-import { CreateUser, Hash, Login, RequireCsrf, SessionCookie, ClientInfo, RecordEvent } from '../auth.mjs';
-import { MailConfigured, SendMail } from '../mail.mjs';
+import { CreateUser, Hash, Login, PasswordHash, RequireCsrf, SessionCookie, ClientInfo, RecordEvent } from '../auth.mjs';
+import { MailConfigured, SendMail, SignupCodes } from '../mail.mjs';
 import { Escape, HttpError, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { AvatarUrl } from '../store.mjs';
 import { ActiveRestriction, RestrictionText, BanTicket } from '../moderation.mjs';
@@ -38,12 +38,12 @@ async function SendCode({ Pool, Config }, Email, Purpose) {
 	const Code = String(randomInt(0, 1e6)).padStart(6, '0');
 	await Pool.query(`INSERT INTO email_codes(email, purpose, code_hash, expires_at) VALUES ($1, $2, $3, now() + interval '10 minutes')
 		ON CONFLICT (email, purpose) DO UPDATE SET code_hash = $3, attempts = 0, sent_at = now(), expires_at = now() + interval '10 minutes'`, [Email, Purpose, Hash(Code)]);
-	const Name = Config.Name;
+	const Name = Config.Name, Action = Purpose === 'reset' ? 'ask to reset your password' : 'try to sign up';
 	try {
 		await SendMail(Config, {
 			To: Email, Subject: `${Code} is your ${Name} verification code`,
-			Text: `Your ${Name} verification code is ${Code}.\n\nIt expires in 10 minutes. If you didn't try to sign up, you can ignore this email.\n\n${Config.Origin}`,
-			Html: `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#161823"><h2 style="margin:0 0 16px">${Escape(Name)}</h2><p style="margin:0 0 16px">Use this code to finish signing up:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px;margin:0 0 16px">${Code}</p><p style="margin:0;color:#757575;font-size:13px">It expires in 10 minutes. If you didn\u2019t try to sign up, you can ignore this email.</p></div>`,
+			Text: `Your ${Name} verification code is ${Code}.\n\nIt expires in 10 minutes. If you didn't ${Action}, you can ignore this email.\n\n${Config.Origin}`,
+			Html: `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#161823"><h2 style="margin:0 0 16px">${Escape(Name)}</h2><p style="margin:0 0 16px">Use this code to ${Action === 'try to sign up' ? 'finish signing up' : 'reset your password'}:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px;margin:0 0 16px">${Code}</p><p style="margin:0;color:#757575;font-size:13px">It expires in 10 minutes. If you didn\u2019t ${Action}, you can ignore this email.</p></div>`,
 		});
 	} catch (Error) {
 		await Pool.query('DELETE FROM email_codes WHERE email = $1 AND purpose = $2', [Email, Purpose]);
@@ -132,12 +132,15 @@ export async function Passport(Context) {
 	if (Path === '/passport/web/email/send_code/') {
 		RequireMethod(Request, ['POST']);
 		try {
-			if (Config.Registration === 'closed') throw new HttpError(403, 'RegistrationClosed');
-			Limiter.Hit(`mailcode:${Request.socket.remoteAddress}`, 5, 600000);
 			const Body = await ReadBody(Request);
+			const Reset = String(Body.type) === '31';
+			if (!Reset && Config.Registration === 'closed') throw new HttpError(403, 'RegistrationClosed');
+			if (Reset ? !MailConfigured(Config) : !SignupCodes(Config)) throw new HttpError(503, 'MailNotConfigured');
+			Limiter.Hit(`mailcode:${Request.socket.remoteAddress}`, 10, 600000);
 			const Email = NormalEmail(DecodePassportValue(Body.email, String(Body.mix_mode) === '1'));
-			if ((await Pool.query('SELECT 1 FROM users WHERE lower(email) = $1', [Email])).rowCount) throw new HttpError(409, 'EmailTaken');
-			await SendCode(Context, Email, 'signup');
+			const Exists = (await Pool.query('SELECT 1 FROM users WHERE lower(email) = $1 AND suspended_at IS NULL', [Email])).rowCount > 0;
+			if (!Reset && Exists) throw new HttpError(409, 'EmailTaken');
+			if (!Reset || Exists) await SendCode(Context, Email, Reset ? 'reset' : 'signup');
 			Json(Response, { message: 'success', data: { email: Email, retry_time: 60 } });
 		} catch (Error) { if (!Error.status) throw Error; SignupError(Response, Error); }
 		return true;
@@ -153,7 +156,7 @@ export async function Passport(Context) {
 			let Invite = /(?:^|;\s*)kittok_invite=([^;]*)/.exec(Request.headers.cookie ?? '')?.[1] ?? '';
 			try { Invite = decodeURIComponent(Invite).trim().slice(0, 200); } catch { Invite = ''; }
 			if (Config.Registration === 'invite' && !(await Pool.query('SELECT 1 FROM invites WHERE token_hash = $1 AND uses < max_uses AND expires_at > now()', [Hash(Invite)])).rowCount) throw new HttpError(403, Invite ? 'InvalidInvite' : 'InviteNeeded');
-			if (MailConfigured(Config)) await CheckCode(Pool, NormalEmail(Email), 'signup', Code);
+			if (SignupCodes(Config)) await CheckCode(Pool, NormalEmail(Email), 'signup', Code);
 			let Created;
 			for (let Attempt = 0; !Created; Attempt++) {
 				try { Created = await CreateUser(Pool, { username: 'user' + randomInt(1e8, 1e9), password: Password, email: Email, invite: Invite }, Config.Registration, false, ClientInfo(Request, Config)); }
@@ -164,6 +167,29 @@ export async function Passport(Context) {
 			Response.setHeader('set-cookie', [SessionCookie(Config, Session.Token), `kittok_invite=; SameSite=Lax; Path=/; Max-Age=0${Secure}`, `passport_csrf_token=${Session.Csrf}; SameSite=Lax; Path=/; Max-Age=3600${Secure}`]);
 			Json(Response, { message: 'success', data: { ...PassportUser(Session.User, Config), is_new_user: true, has_email: true } });
 		} catch (Error) { if (!Error.status) throw Error; SignupError(Response, Error); }
+		return true;
+	}
+	if (Path === '/passport/web/email/password/reset_and_login/') {
+		RequireMethod(Request, ['POST']);
+		try {
+			Limiter.Hit(`reset:${Request.socket.remoteAddress}`, 10);
+			const Body = await ReadBody(Request);
+			const Mixed = String(Body.mix_mode) === '1';
+			const Email = NormalEmail(DecodePassportValue(Body.email, Mixed)), Password = DecodePassportValue(Body.password, Mixed), Code = DecodePassportValue(Body.code ?? '', Mixed);
+			const Encoded = await PasswordHash(Password);
+			await CheckCode(Pool, Email, 'reset', Code);
+			const Account = (await Pool.query('UPDATE users SET password_hash = $2 WHERE lower(email) = $1 RETURNING id, username', [Email, Encoded])).rows[0];
+			if (!Account) throw new HttpError(400, 'CodeExpired');
+			await Pool.query('DELETE FROM sessions WHERE user_id = $1', [Account.id]);
+			await RecordEvent(Pool, Account.id, 'password_reset', ClientInfo(Request, Config));
+			const Session = await Login(Pool, Account.username, Password, ClientInfo(Request, Config));
+			Response.setHeader('set-cookie', SessionCookie(Config, Session.Token));
+			Json(Response, { message: 'success', data: PassportUser(Session.User, Config) });
+		} catch (Error) {
+			if (!Error.status) throw Error;
+			if (Error.UserId) { Json(Response, { message: 'error', data: { error_code: 1091, description: 'This account was permanently banned.', user_id_str: Error.UserId, verify_ticket: BanTicket(Error.UserId) } }); return true; }
+			SignupError(Response, Error);
+		}
 		return true;
 	}
 	if (Path === '/passport/web/logout/') {

@@ -8,6 +8,8 @@ All routes are on the instance's configured public origin. Responses are JSON. I
 | POST | `/api/v3/register/verification/age/` | Form `birthday` (`YYYY-MM-DD`): `{is_eligible}`; under 13 is not eligible |
 | POST | `/passport/web/email/send_code/` | Native sign-up: form `email` (hex, XOR 5 when `mix_mode=1`). Emails a 6-digit code; 1023 if the address is registered |
 | POST | `/passport/web/email/register_verify_login/` | Native sign-up: `email`, `password`, `code` (mixed), `birthday`. Checks the invite (cookie `kittok_invite`, set by the form's Invite code field) and code, creates `user#########`, signs in, and sets `passport_csrf_token` for the next step |
+| POST | `/passport/web/email/password/reset_and_login/` | Forgot password: mixed `email`, `code` (sent by `email/send_code/` with `type=31`), and new `password`. Signs out every session, then signs in. Codes only go to existing accounts, but the reply is the same either way |
+| POST | `/api/v1/videos/ID/pin` | JSON `{pinned}` on your own video; 409 `PinLimit` past three. Used by the Pin to profile item Kittok adds to the native video menu |
 | POST | `/passport/web/account/set/` | Create username step: mixed `username`, with `x-tt-passport-csrf-token`. A placeholder nickname follows the new name |
 | POST | `/api/v1/users` | Register with `username`, `displayName`, `password`, optional `invite` and `prideFlag` (default `""`, no flag). Cannot choose verification, community badges, or roles |
 | POST | `/api/v1/session` | Log in with `username` and `password`; sets a host-only HttpOnly session cookie, returns `user` and `csrfToken` |

@@ -7,6 +7,10 @@ export function MailConfigured(Config) {
 	return Boolean(Config.SmtpUrl && Config.MailFrom);
 }
 
+export function SignupCodes(Config) {
+	return MailConfigured(Config) && Config.MailCodes !== false;
+}
+
 function Session(Socket) {
 	let Buffered = '', Pending = null, Failure = null;
 	const Lines = [];

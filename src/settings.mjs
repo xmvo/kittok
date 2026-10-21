@@ -59,6 +59,10 @@ function Validate(Key, Value) {
 		if (!Whole(Result.strikeDays, 7, 365) || !Whole(Result.feature, 2, 50) || !Whole(Result.total, 2, 100) || !Object.values(Policy).every(Count => Whole(Count, 1, 50))) throw new HttpError(400, 'InvalidModerationSettings');
 		return Result;
 	}
+	if (Key === 'mailcodes') {
+		if (typeof Value !== 'boolean') throw new HttpError(400, 'InvalidMailCodes');
+		return Value;
+	}
 	if (Key === 'brand') return Value;
 	throw new HttpError(404, 'UnknownSetting');
 }
@@ -73,6 +77,7 @@ function Apply(Config, Key, Value) {
 	if (Key === 'rules') Config.Rules = Value;
 	if (Key === 'brand') Config.Brand = Value;
 	if (Key === 'moderation') Config.Moderation = Value;
+	if (Key === 'mailcodes') Config.MailCodes = Value;
 }
 
 export async function LoadSettings(Pool, Config) {
@@ -83,6 +88,7 @@ export async function LoadSettings(Pool, Config) {
 	Config.Rules = '';
 	Config.Brand = {};
 	Config.Moderation = DefaultThresholds;
+	Config.MailCodes = true;
 	for (const Row of (await Pool.query('SELECT key, value FROM settings')).rows) Apply(Config, Row.key, Row.value);
 }
 
@@ -99,6 +105,7 @@ export function Settings(Config) {
 		registration: Config.Registration, name: Config.Name, features: Config.Features, misc: { ...Misc },
 		limits: { videoMB: Math.round(Config.MaxVideoBytes / 1024 / 1024), videoSeconds: Config.MaxVideoSeconds },
 		announcement: Config.Announcement, rules: Config.Rules, moderation: Config.Moderation,
+		mailCodes: Config.MailCodes !== false, mailReady: Boolean(Config.SmtpUrl && Config.MailFrom),
 		brand: Object.fromEntries(Object.keys(BrandSlots).map(Slot => [Slot, { url: `/brand/${Slot}`, custom: Boolean(Config.Brand?.[Slot]) }])),
 	};
 }

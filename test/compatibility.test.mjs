@@ -1693,6 +1693,39 @@ test('pinned videos lead the native Latest tab, Popular and Oldest sort for real
 	await Pool.query('DELETE FROM videos WHERE id = ANY($1::bigint[])', [Extra]);
 });
 
+test('password reset by email, the sign-up code switch, and pinning from the video menu', async () => {
+	const Mix = Value => Buffer.from(Value).map(Byte => Byte ^ 5).toString('hex');
+	const Form = (Path, Fields, Headers = {}) => fetch(Origin + Path, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', ...Headers }, body: new URLSearchParams(Fields) });
+	await CreateUser(Pool, { username: 'reset_me', password: Password, email: 'reset.me@example.com' }, 'closed', true);
+	const Old = await Login(Pool, 'reset_me', Password);
+	const Before = Mailbox.length;
+	assert.equal((await (await Form('/passport/web/email/send_code/', { mix_mode: '1', email: Mix('nobody.here@example.com'), type: '31' })).json()).message, 'success');
+	assert.equal(Mailbox.length, Before);
+	assert.equal((await (await Form('/passport/web/email/send_code/', { mix_mode: '1', email: Mix('reset.me@example.com'), type: '31' })).json()).message, 'success');
+	const Code = /Subject: (\d{6}) is your/.exec(Mailbox.at(-1))?.[1];
+	assert.match(Buffer.from(/base64\n\n([A-Za-z0-9+/=\n]+)\n--/.exec(Mailbox.at(-1))[1].replaceAll('\n', ''), 'base64').toString(), /reset your password/);
+	const Reset = Fields => Form('/passport/web/email/password/reset_and_login/', { mix_mode: '1', email: Mix('reset.me@example.com'), password: Mix('brand-new-password-1'), code: Mix(Code), ...Fields }).then(Response => Response.json());
+	assert.equal((await Reset({ password: Mix('short') })).data.description, 'Use at least 12 characters for your password.');
+	assert.equal((await Reset({ code: Mix('000000') })).data.description, 'Verification code is incorrect.');
+	assert.equal((await Reset({})).data.username, 'reset_me');
+	assert.equal((await Call('/api/v1/session', 'GET', undefined, { cookie: `kittok_session=${Old.Token}` }).then(Response => Response.json())).user, null);
+	await assert.rejects(Login(Pool, 'reset_me', Password), /InvalidLogin/);
+	assert.ok((await Login(Pool, 'reset.me@example.com', 'brand-new-password-1')).Token);
+	assert.equal((await Call('/_kittok/admin/settings/mailcodes', 'POST', { value: 'yes' }, Auth())).status, 400);
+	assert.equal((await Call('/_kittok/admin/settings/mailcodes', 'POST', { value: false }, Auth())).status, 200);
+	assert.equal((await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json()).mailCodes, false);
+	assert.match((await (await Form('/passport/web/email/send_code/', { mix_mode: '1', email: Mix('fresh.person@example.com') })).json()).data.description, /can’t send email/);
+	assert.equal((await (await Form('/passport/web/email/send_code/', { mix_mode: '1', email: Mix('reset.me@example.com'), type: '31' })).json()).message, 'success');
+	assert.equal((await Call('/_kittok/admin/settings/mailcodes', 'POST', { value: true }, Auth())).status, 200);
+	const Pin = (Body, Headers = Auth()) => Call(`/api/v1/videos/${VideoId}/pin`, 'POST', Body, Headers);
+	assert.equal((await Pin({ pinned: true }, { cookie: Cookie })).status, 403);
+	assert.deepEqual(await (await Pin({ pinned: true })).json(), { pinned: true });
+	assert.equal((await (await Call(`/api/item/detail/?itemId=${VideoId}`)).json()).itemInfo.itemStruct.isPinnedItem, true);
+	const Stranger = await Login(Pool, 'reset_me', 'brand-new-password-1');
+	assert.equal((await Pin({ pinned: false }, { cookie: `kittok_session=${Stranger.Token}`, 'x-csrf-token': Stranger.Csrf })).status, 404);
+	assert.deepEqual(await (await Pin({ pinned: false })).json(), { pinned: false });
+});
+
 test('misc switches turn Kittok features off and back on without a restart', async () => {
 	const Settings = await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json();
 	assert.ok(Object.values(Settings.misc).every(Boolean));

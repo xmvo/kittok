@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Forgot password works through the native reset screen, admins can turn off the sign-up email code, and your own videos' menu gets Pin to profile, Post settings, and Manage posts.
 - Pin up to three videos to the top of your profile, and make the profile's Popular and Oldest sorting work.
 - Fill the Explore category tabs: uploads pick a category or get one guessed from their hashtags.
 - Native sign-up: the client's own email form with real emailed codes over SMTP, its age gate and Create username step, an Invite code field on invite-only instances, and email logins.
