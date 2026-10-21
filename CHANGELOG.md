@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Fit the admin console to phone screens and add a script that preloads every decoration image.
 - Run the admin console inside the real client: its sidebar lists the admin sections, and pages use the client's own buttons, switches, tags, tabs and colors. Show the real verified check, put account actions in plain buttons instead of a three-dot menu, and hide community badges for now.
 - Move pride flag editing into the native Edit profile dialog and drop the separate Profile badges button and the profile's three-dot menu.
 - Add avatar decorations: all 644 of Discord's presets, picked from a searchable Edit avatar panel in Edit profile and drawn animated around avatars. Images are cached locally after the first request.

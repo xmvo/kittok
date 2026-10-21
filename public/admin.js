@@ -782,10 +782,15 @@
 		if (Root.isConnected && IsAdminPath() && location.pathname + location.search !== Routed) Route();
 		else if (Routed && Root.isConnected !== IsAdminPath()) location.reload();
 	}, 150);
+	let Restored = false;
+	const Restore = () => {
+		if (Restored || !document.querySelector('#app > *')) return;
+		Restored = true; history.replaceState(null, '', window.__KittokAdminPath ?? '/admin');
+	};
 	const Start = () => {
+		Restore();
 		if (!Mount()) return false;
-		history.replaceState(null, '', window.__KittokAdminPath ?? '/admin');
-		Route();
+		Restore(); Route();
 		return true;
 	};
 	if (!Start()) {

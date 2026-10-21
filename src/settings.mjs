@@ -4,7 +4,7 @@ import { DefaultThresholds, PolicyCategories } from './moderation.mjs';
 export const Features = { shop: 'Shop', explore: 'Explore', following: 'Following feed', shortDrama: 'Short dramas', live: 'LIVE', search: 'Search', upload: 'Uploads', comments: 'Comments', messages: 'Direct messages' };
 export const MiscFeatures = {
 	verifiedBadges: ['Verified badges', 'Blue checks on accounts admins verify'],
-	profileBadges: ['Profile badges', 'Pride flags and community badges beside names'],
+	profileBadges: ['Profile badges', 'Pride flags beside names'],
 	avatarDecorations: ['Avatar decorations', 'Animated frames around avatars, picked from the profile photo editor'],
 	reposts: ['Reposts', 'Repost in the share sheet and the profile Reposts tab'],
 	collections: ['Collections', 'Named collections of favorites'],
