@@ -1,6 +1,6 @@
 (() => {
 	const Instance = JSON.parse(document.getElementById('kittok-instance')?.textContent ?? '{}');
-	if (!Instance.account) return;
+	if (!Instance.account || Instance.misc?.unsend === false) return;
 	let MessageId, Scheduled = false;
 	const Seen = new WeakMap();
 	function Track(Event) {

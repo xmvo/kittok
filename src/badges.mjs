@@ -1,4 +1,5 @@
 import { HttpError } from './http.mjs';
+import { Misc } from './settings.mjs';
 
 export const PrideFlags = [
 	['rainbow', 'LGBTQ+ pride', ['#E40303', '#FF8C00', '#FFED00', '#008026', '#24408E', '#732982']],
@@ -39,6 +40,7 @@ export function UserBadges(Value) {
 }
 
 export function PublicBadges(User) {
+	if (!Misc.profileBadges) return [];
 	return [...BadgeCatalog.pride.filter(Badge => Badge.id === User.pride_flag), ...BadgeCatalog.community.filter(Badge => User.user_badges?.includes(Badge.id))];
 }
 

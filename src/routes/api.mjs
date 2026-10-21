@@ -6,6 +6,7 @@ import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment, SetBlo
 import { ImportVideo, ReceiveVideo } from '../media.mjs';
 import { AssertAllowed, RemovedSql } from '../moderation.mjs';
 import { BadgeCatalog, BadgeSvg, PrideFlag, PublicBadges } from '../badges.mjs';
+import { Misc } from '../settings.mjs';
 import { UnsendMessage } from './im.mjs';
 
 export async function Api(Context) {
@@ -40,11 +41,12 @@ export async function Api(Context) {
 		RequireMethod(Request, ['GET']);
 		const Names = [...new Set((Url.searchParams.get('users') ?? '').split(','))];
 		if (Names.length > 50 || Names.some(Name => !/^[a-z0-9_]{3,24}$/.test(Name))) throw new HttpError(400, 'InvalidUsernames');
-		const Rows = (await Pool.query('SELECT username, pride_flag, user_badges FROM users WHERE username = ANY($1::text[]) AND suspended_at IS NULL', [Names])).rows;
-		Json(Response, { users: Object.fromEntries(Rows.map(Row => [Row.username, PublicBadges(Row)])) }); return true;
+		const Rows = (await Pool.query('SELECT username, pride_flag, user_badges, verified FROM users WHERE username = ANY($1::text[]) AND suspended_at IS NULL', [Names])).rows;
+		Json(Response, { users: Object.fromEntries(Rows.map(Row => [Row.username, PublicBadges(Row)])), verified: Misc.verifiedBadges ? Rows.filter(Row => Row.verified).map(Row => Row.username) : [] }); return true;
 	}
 	if (Path === '/api/v1/profile/badges') {
 		RequireMethod(Request, ['PATCH']); RequireCsrf(Request, User);
+		if (!Misc.profileBadges) throw new HttpError(403, 'ProfileBadgesDisabled');
 		await AssertAllowed(Pool, User, 'profile');
 		const Flag = PrideFlag((await ReadBody(Request)).prideFlag);
 		await Pool.query('UPDATE users SET pride_flag=$2 WHERE id=$1', [User.id, Flag]);

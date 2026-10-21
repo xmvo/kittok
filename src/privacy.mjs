@@ -64,7 +64,7 @@ export async function DecideFollowRequest(Pool, Viewer, Follower, Accept) {
 		await LockPair(Client, Viewer, Follower);
 		const Deleted = await Client.query('DELETE FROM follow_requests WHERE following_id = $1 AND follower_id = $2 RETURNING follower_id', [Viewer, Follower]);
 		if (!Deleted.rowCount) throw new HttpError(404, 'FollowRequestNotFound');
-		if (Accept) await Client.query(`INSERT INTO follows(follower_id, following_id) SELECT $2, $1 WHERE NOT ${PairBlockedSql('$1', '$2')} AND EXISTS (SELECT 1 FROM users WHERE id = $2 AND suspended_at IS NULL) ON CONFLICT DO NOTHING`, [Viewer, Follower]);
+		if (Accept) await Client.query(`INSERT INTO follows(follower_id, following_id, approved_at) SELECT $2, $1, now() WHERE NOT ${PairBlockedSql('$1', '$2')} AND EXISTS (SELECT 1 FROM users WHERE id = $2 AND suspended_at IS NULL) ON CONFLICT DO NOTHING`, [Viewer, Follower]);
 	});
 }
 

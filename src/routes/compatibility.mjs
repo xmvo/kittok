@@ -7,6 +7,7 @@ import { ActiveRestriction, RestrictionText, RemovedSql, ModerationNotices, Unre
 import { AcceptRequest } from './im.mjs';
 import { AssertVideoVisible, VideoVisibleSql, SetPrivateAccount, DecideFollowRequest, FollowRequests } from '../privacy.mjs';
 import { PublicBadges } from '../badges.mjs';
+import { Misc } from '../settings.mjs';
 import { FindUser, UserShape, UserStats, Videos, SetRelation, TagId, TagName, TagSql, MentionedUsers, CommentExtra, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
@@ -23,7 +24,7 @@ const CommentLabel = Row => Row.author_id === Row.video_author ? 1 : Row.relatio
 
 function CommentShape(Row, Origin, Mentioned) {
 	return {
-		cid: Row.id, aweme_id: Row.video_id, text: Row.body, text_extra: CommentExtra(Row.body, Mentioned), label_type: CommentLabel(Row), is_author_digged: Boolean(Row.author_digged), create_time: Math.floor(new Date(Row.created_at).getTime() / 1000),
+		cid: Row.id, aweme_id: Row.video_id, text: Row.body, text_extra: CommentExtra(Row.body, Mentioned), label_type: Misc.commentLabels ? CommentLabel(Row) : 0, is_author_digged: Misc.commentLabels && Boolean(Row.author_digged), create_time: Math.floor(new Date(Row.created_at).getTime() / 1000),
 		digg_count: Row.likes ?? 0, reply_comment_total: Row.replies ?? 0, user_digged: Row.liked ? 1 : 0, reply_id: Row.parent_id ?? '0', reply_to_reply_id: '0',
 		user: ApiUser({ ...Row, id: Row.author_id }, Origin),
 	};
@@ -31,20 +32,22 @@ function CommentShape(Row, Origin, Mentioned) {
 
 function ApiUser(Row, Origin) {
 	const Avatar = { url_list: [AvatarUrl(Row, Origin)] };
-	return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio ?? '', avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, is_block: Row.relation === 4, kittokBadges: PublicBadges(Row), ...(Row.verified ? { custom_verify: 'Verified account', enterprise_verify_reason: '', verification_type: 1 } : {}) };
+	return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio ?? '', avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, is_block: Row.relation === 4, kittokBadges: PublicBadges(Row), ...(Row.verified && Misc.verifiedBadges ? { custom_verify: 'Verified account', enterprise_verify_reason: '', verification_type: 1 } : {}) };
 }
 
-const NoticeKinds = { 500: ['like', 'comment_like', 'comment', 'follow', 'mention'], 3: ['like', 'comment_like'], 505: ['like', 'comment_like'], 2: ['comment'], 6: ['mention'], 7: ['follow'] };
+const MentionsOn = Kinds => Kinds.filter(Kind => Kind !== 'mention' || Misc.hashtags);
+const NoticeKinds = { 500: ['like', 'comment_like', 'comment', 'follow', 'mention', 'approved'], 3: ['like', 'comment_like'], 505: ['like', 'comment_like'], 2: ['comment'], 6: ['mention'], 7: ['follow', 'approved'] };
 
 function NoticeShape(Row, Viewer, Origin) {
-	const Code = { like: 1, comment_like: 2, comment: 3, follow: 4, mention: 5 }[Row.kind];
-	const Merged = ['like', 'comment_like'].includes(Row.kind);
+	const Code = { like: 1, comment_like: 2, comment: 3, follow: 4, mention: 5, approved: 6 }[Row.kind];
+	const Merged = Misc.groupedLikes && ['like', 'comment_like'].includes(Row.kind);
 	const Nid = `${Code}${Row.video_id ?? 0}${Row.comment_id ?? 0}${Merged ? '' : Row.id}`;
 	const Notice = { nid: Nid, nid_str: Nid, create_time: Math.floor(Row.epoch), has_read: Row.read, user_id: Viewer };
 	const From = ApiUser(Row, Origin);
 	const Aweme = Row.video_id && { aweme_id: Row.video_id, aweme_type: 0, desc: Row.description, author: { uid: Row.video_author }, status: { private_status: 0 }, video: { cover: { url_list: [`${Origin}/media/${Row.cover_name}`] } } };
 	if (Row.kind === 'mention') return { ...Notice, type: 45, at: { sub_type: Row.comment_id ? 2 : 1, content: Row.comment_id ? Row.body : Row.description, aweme: Aweme, user_info: From,
 		...(Row.comment_id ? { comment: { cid: Row.comment_id, text: Row.body, text_extra: CommentExtra(Row.body), reply_id: Row.parent_id ?? '0', user: From } } : {}) } };
+	if (Row.kind === 'approved') return { ...Notice, type: 23, follow_request_approve: { from_user: From } };
 	if (Row.kind === 'follow') return { ...Notice, type: 33, follow: { from_user: From, follow_button_type: Row.relation === 2 ? 0 : 1 } };
 	if (Row.kind === 'comment') {
 		const Reply = Row.parent_author === Viewer;
@@ -97,6 +100,9 @@ export async function Compatibility(Context) {
 		const Filter = { viewer: User?.id, forYou: ['/api/preload/item_list/', '/api/recommend/item_list/', '/api/related/item_list/', '/api/explore/item_list/'].includes(Path), before: Params.get('cursor') === '0' ? undefined : Params.get('cursor'), limit: Params.get('count') };
 		const Empty = () => Json(Response, { statusCode: 0, status_code: 0, itemList: [], cursor: '0', hasMore: false, extra: { logid: 'kittok' } });
 		if (Path.includes('/explore/') && (Params.get('categoryType') ?? '120') !== '120') { Empty(); return true; }
+		if (Path.includes('/repost/') && !Misc.reposts) { Empty(); return true; }
+		if (Path.includes('/challenge/') && !Misc.hashtags) { Empty(); return true; }
+		if (Path.startsWith('/api/collection/') && !Misc.collections) { Empty(); return true; }
 		if (Path.includes('/repost/')) {
 			const Reposter = await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'));
 			if (Reposter.private_account && Reposter.id !== User?.id && !(await Pool.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [User?.id ?? null, Reposter.id])).rowCount) { Empty(); return true; }
@@ -142,7 +148,7 @@ export async function Compatibility(Context) {
 	if (Path === '/api/challenge/detail/') {
 		RequireMethod(Request, ['GET']);
 		const Name = Params.get('challengeName') ? String(Params.get('challengeName')).replace(/^#/, '').toLowerCase() : await TagName(Pool, String(Params.get('challengeId') ?? ''));
-		if (!Name || !/^[\p{L}\p{N}_]{1,100}$/u.test(Name)) { Json(Response, { statusCode: 10205, status_code: 10205, statusMsg: 'HashtagNotFound' }); return true; }
+		if (!Misc.hashtags || !Name || !/^[\p{L}\p{N}_]{1,100}$/u.test(Name)) { Json(Response, { statusCode: 10205, status_code: 10205, statusMsg: 'HashtagNotFound' }); return true; }
 		const Stats = (await Pool.query(`SELECT count(*)::int AS videos, coalesce(sum(v.view_count), 0)::bigint AS views FROM videos v JOIN users u ON u.id = v.author_id
 			WHERE ${TagSql('v.description').replace('?', '$2')} AND ${VideoVisibleSql('$1::bigint')} AND NOT ${BlockedBetween('$1', 'v.author_id')}`, [User?.id ?? null, Name])).rows[0];
 		const Counts = { videoCount: Stats.videos, viewCount: Number(Stats.views) };
@@ -154,6 +160,7 @@ export async function Compatibility(Context) {
 	if (Path === '/tiktok/v1/upvote/publish' || Path === '/tiktok/v1/upvote/delete') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		if (!Misc.reposts && Path.endsWith('/publish')) throw new HttpError(403, 'RepostsDisabled');
 		await SetRelation(Pool, 'reposts', ['user_id', 'video_id'], [User.id, Id(Body.item_id)], Path.endsWith('/publish'));
 		Json(Response, { status_code: 0, status_msg: '' }); return true;
 	}
@@ -303,7 +310,7 @@ export async function Compatibility(Context) {
 			const Avatar = { url_list: [AvatarUrl(Row, Config.Origin)] };
 			return { im_user_profile: { user_id: Row.id, unique_id: Row.username, nick_name: Row.display_name, avatars: { avatar_medium: Avatar, avatar_small: Avatar },
 				follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, block_info: { block: Row.relation === 4 },
-				user_verify_reason: Row.verified ? 'Verified account' : '', enterprise_verify_reason: '' } };
+				user_verify_reason: Row.verified && Misc.verifiedBadges ? 'Verified account' : '', enterprise_verify_reason: '' } };
 		}) }); return true;
 	}
 	if (Path === '/_kittok/view') {
@@ -316,7 +323,7 @@ export async function Compatibility(Context) {
 	}
 	if (Path === '/api/share/settings/') {
 		RequireMethod(Request, ['GET']);
-		const Platforms = ['repost', ...(Config.Features?.messages !== false ? ['message'] : []), 'copy', 'embed', 'whatsapp', 'facebook', 'twitter', 'sms', 'reddit', 'pinterest'];
+		const Platforms = [...(Misc.reposts ? ['repost'] : []), ...(Config.Features?.messages !== false ? ['message'] : []), 'copy', 'embed', 'whatsapp', 'facebook', 'twitter', 'sms', 'reddit', 'pinterest'];
 		Json(Response, { status_code: 0, status_msg: '', share_platforms: Platforms.map(Platform => ({ platform_id: Platform })) }); return true;
 	}
 	if (Path === '/api/im/stranger/unlimit' || Path === '/api/im/stranger/unlimit/') {
@@ -363,7 +370,7 @@ export async function Compatibility(Context) {
 		const Unread = User ? await UnreadActivity(Pool, User.id) : {};
 		const Count = Kinds => Kinds.reduce((Sum, Kind) => Sum + (Unread[Kind] ?? 0), 0);
 		const System = User ? await UnreadModerationNotices(Pool, User.id) : 0;
-		Json(Response, { status_code: 0, notice_count: [500, 3, 505, 2, 6, 7, 661].map(Group => ({ group: Group, count: Group === 661 ? System : Count(NoticeKinds[Group] ?? []) })) }); return true;
+		Json(Response, { status_code: 0, notice_count: [500, 3, 505, 2, 6, 7, 661].map(Group => ({ group: Group, count: Group === 661 ? System : Count(MentionsOn(NoticeKinds[Group] ?? [])) })) }); return true;
 	}
 	if (Path === '/api/notice/multi/' || Path === '/api/inbox/notice_list/') {
 		RequireMethod(Request, ['GET']);
@@ -382,7 +389,7 @@ export async function Compatibility(Context) {
 				notice_list: Page.map(Row => ({ nid: Row.id, nid_str: Row.id, type: 47, create_time: Math.floor(Epoch(Row)), has_read: Row.read, user_id: User.id, template_notice: { notice: { title: { title: 'Account updates' }, content: Row.text } } })) }] }); return true;
 		}
 		if (User && Number(Entry?.is_mark_read) === 1) await MarkActivityRead(Pool, User.id);
-		const Rows = User && NoticeKinds[Group] ? await Activity(Pool, User.id, NoticeKinds[Group], Window, Limit + 1) : [];
+		const Rows = User && NoticeKinds[Group] ? await Activity(Pool, User.id, MentionsOn(NoticeKinds[Group]), Window, Limit + 1) : [];
 		const Page = Rows.slice(0, Limit);
 		Json(Response, { status_code: 0, notice_lists: [{ group: Group, has_more: Rows.length > Limit ? 1 : 0, max_time: Page[0]?.epoch ?? 0, min_time: Page.at(-1)?.epoch ?? 0, notice_list: Page.map(Row => NoticeShape(Row, User.id, Config.Origin)) }] }); return true;
 	}
@@ -426,7 +433,7 @@ export async function Compatibility(Context) {
 	}
 	if (Path === '/api/user/collection_list/') {
 		RequireMethod(Request, ['GET']);
-		const Owner = await FindUser(Pool, Params.get('secUid') || User?.id, true).catch(() => null);
+		const Owner = Misc.collections ? await FindUser(Pool, Params.get('secUid') || User?.id, true).catch(() => null) : null;
 		if (!Owner) { Json(Response, { statusCode: 0, status_code: 0, collectionList: [], cursor: '0', hasMore: false, total: '0' }); return true; }
 		const Start = Offset(Params.get('cursor')), Limit = PageSize(Params.get('count'), 30);
 		const Rows = (await Pool.query(`SELECT c.id, c.user_id, c.name, c.public, count(*) OVER ()::int AS all_count,
@@ -438,6 +445,7 @@ export async function Compatibility(Context) {
 	if (Path === '/api/collection/create/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		if (!Misc.collections) throw new HttpError(403, 'CollectionsDisabled');
 		const Name = String(Body.collectionName ?? '').trim();
 		if (!Name || Name.length > 30) throw new HttpError(400, 'InvalidCollectionName');
 		const Created = (await Pool.query('INSERT INTO collections(user_id, name, public) VALUES ($1, $2, $3) RETURNING id', [User.id, Name, String(Body.collectionStatus) === '3'])).rows[0];
@@ -446,6 +454,7 @@ export async function Compatibility(Context) {
 	if (['/api/collection/modify_items/', '/api/collection/move_items/', '/api/collection/modify_info/', '/api/collection/delete/'].includes(Path.replace(/\/?$/, '/'))) {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		if (!Misc.collections) throw new HttpError(403, 'CollectionsDisabled');
 		const Ids = Value => String(Value ?? '').split(',').filter(Boolean).slice(0, 200).map(Id);
 		const Own = async Value => {
 			const Found = (await Pool.query('SELECT id FROM collections WHERE id = $1 AND user_id = $2', [Id(Value), User.id])).rows[0];
@@ -475,7 +484,7 @@ export async function Compatibility(Context) {
 		const Row = (await Pool.query(`SELECT c.id, c.user_id, c.name, c.public, (SELECT count(*)::int FROM collection_items i WHERE i.collection_id = c.id) AS total,
 			(SELECT v.cover_name FROM collection_items i JOIN videos v ON v.id = i.video_id WHERE i.collection_id = c.id ORDER BY i.added_at DESC LIMIT 1) AS cover_name
 			FROM collections c WHERE c.id = $1 AND (c.public OR c.user_id = $2::bigint)`, [Id(Params.get('collectionId')), User?.id ?? null])).rows[0];
-		if (!Row) { Json(Response, { statusCode: 10201, status_code: 10201, statusMsg: 'CollectionNotFound' }); return true; }
+		if (!Row || !Misc.collections) { Json(Response, { statusCode: 10201, status_code: 10201, statusMsg: 'CollectionNotFound' }); return true; }
 		const Owner = await FindUser(Pool, Row.user_id, true);
 		Json(Response, { statusCode: 0, status_code: 0, collectionInfo: { ...CollectionShape(Row, Owner, Config.Origin), cover: { urlList: Row.cover_name ? [`${Config.Origin}/media/${Row.cover_name}`] : [] } }, userInfo: { user: UserShape(Owner, Config.Origin) } }); return true;
 	}

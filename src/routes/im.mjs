@@ -1,5 +1,6 @@
 import { HttpError, ReadRaw } from '../http.mjs';
 import { Transaction } from '../db.mjs';
+import { Misc } from '../settings.mjs';
 import { BlockedBetween } from '../store.mjs';
 import { Codec } from '../im/protobuf.mjs';
 import { Schema } from '../im/schema.mjs';
@@ -40,22 +41,22 @@ const RequestVisible = `EXISTS (SELECT 1 FROM messages visible_message WHERE vis
 
 async function Disclosures(Pool, Viewer, Room) {
 	const Result = await Pool.query(`SELECT me.user_id, peer.user_id AS other, me.request OR peer.request AS pending,
-		me_user.dm_read_status AND peer_user.dm_read_status AS read_status,
+		$3::boolean AND me_user.dm_read_status AND peer_user.dm_read_status AS read_status,
 		${BlockedBetween('me.user_id', 'peer.user_id')} OR peer_user.suspended_at IS NOT NULL AS blocked
 		FROM conversation_members me JOIN users me_user ON me_user.id=me.user_id
 		JOIN conversation_members peer ON peer.conversation_id=me.conversation_id AND peer.user_id<>me.user_id JOIN users peer_user ON peer_user.id=peer.user_id
-		WHERE me.conversation_id=$1 AND me.user_id=$2`, [Room.id, Viewer]);
+		WHERE me.conversation_id=$1 AND me.user_id=$2`, [Room.id, Viewer, Misc.readReceipts]);
 	return Result.rows;
 }
 
 async function ReadIndexes(Pool, Viewer, Rooms) {
 	const Result = await Pool.query(`SELECT member.conversation_id::text, member.user_id::text,
-		CASE WHEN member.user_id=$2 OR (viewer.dm_read_status AND subject.dm_read_status AND NOT me.request AND NOT member.request AND NOT ${BlockedBetween('me.user_id', 'member.user_id')} AND subject.suspended_at IS NULL)
+		CASE WHEN member.user_id=$2 OR ($3::boolean AND viewer.dm_read_status AND subject.dm_read_status AND NOT me.request AND NOT member.request AND NOT ${BlockedBetween('me.user_id', 'member.user_id')} AND subject.suspended_at IS NULL)
 		THEN member.read_index ELSE 0 END AS read_index,
 		CASE WHEN member.user_id=$2 THEN member.min_index ELSE 0 END AS min_index
 		FROM conversation_members member JOIN users subject ON subject.id=member.user_id
 		JOIN conversation_members me ON me.conversation_id=member.conversation_id AND me.user_id=$2 JOIN users viewer ON viewer.id=me.user_id
-		WHERE member.conversation_id=ANY($1::bigint[])`, [Rooms, Viewer]);
+		WHERE member.conversation_id=ANY($1::bigint[])`, [Rooms, Viewer, Misc.readReceipts]);
 	return Result.rows;
 }
 
@@ -65,7 +66,7 @@ async function Conversations(Pool, Viewer, Where, Values, Requests = false) {
 		(SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id AND m.index_in_conversation > greatest(me.read_index, me.min_index) AND m.sender_id <> $1 AND m.recalled_at IS NULL AND ${Visible}) AS unread,
 		(SELECT json_agg(json_build_object('user_id', p.user_id::text, 'joined_at', p.joined_at, 'request', p.request) ORDER BY p.joined_at) FROM conversation_members p WHERE p.conversation_id = c.id) AS members
 		FROM conversations c JOIN conversation_members me ON me.conversation_id = c.id AND me.user_id = $1
-		WHERE ${Requests === null ? '' : `me.request = ${Requests} AND `}${Where} ORDER BY (SELECT max(m.id) FROM messages m WHERE m.conversation_id = c.id) DESC NULLS LAST, c.id DESC`, [Viewer, ...Values]);
+		WHERE ${Requests === null ? '' : `me.request = ${Requests} AND `}EXISTS (SELECT 1 FROM conversation_members peer WHERE peer.conversation_id = c.id AND peer.user_id <> $1) AND ${Where} ORDER BY (SELECT max(m.id) FROM messages m WHERE m.conversation_id = c.id) DESC NULLS LAST, c.id DESC`, [Viewer, ...Values]);
 	return Result.rows;
 }
 
@@ -116,7 +117,8 @@ async function Audience(Pool, Sender, Recipient) {
 		WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2) AND EXISTS (SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) THEN dm_friends
 		WHEN EXISTS (SELECT 1 FROM follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)) THEN dm_potential
 		ELSE dm_others END AS audience FROM users WHERE id = $2`, [Sender, Recipient]);
-	return Result.rows[0]?.audience ?? 3;
+	const Delivery = Result.rows[0]?.audience ?? 3;
+	return Delivery === 2 && !Misc.messageRequests ? 1 : Delivery;
 }
 
 async function CreateDirect(Pool, Viewer, Participants) {
@@ -220,6 +222,7 @@ const Handlers = {
 		return null;
 	},
 	async [Cmd.RecallMessage]({ Pool, User }, Body) {
+		if (!Misc.unsend) throw new ImError(Status.InvalidRequest, 'UnsendDisabled');
 		const Room = await Conversation(Pool, User.id, Body);
 		const Updated = await Pool.query(`UPDATE messages SET recalled_at = COALESCE(recalled_at, now()) WHERE id = $1 AND conversation_id = $2 AND sender_id = $3 AND (recalled_at IS NOT NULL OR created_at >= now() - interval '3 minutes') RETURNING *`, [Body.server_message_id ?? '0', Room.id, User.id]);
 		if (!Updated.rowCount) throw new ImError(Status.InvalidRequest, 'CannotUnsendMessage');

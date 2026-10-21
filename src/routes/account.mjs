@@ -3,6 +3,7 @@ import { CreateUser, Login, RequireCsrf, SessionCookie, ClientInfo } from '../au
 import { DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 import { Standing, Appeal, RestrictableFeatures, ViolationFeatures, Until, AssertAllowed } from '../moderation.mjs';
 import { BadgeCatalog, PrideFlag, PublicBadges } from '../badges.mjs';
+import { Misc } from '../settings.mjs';
 
 export function Page(Config, Title, Content) {
 	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${Escape(Title)} · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="/public/account.css"><body><main><a class="brand" href="/"><img src="/brand/icon" alt="">${Escape(Config.Name)}</a>${Content}</main></body></html>`;
@@ -17,6 +18,7 @@ function PrideField(Value = '') {
 }
 
 function BadgeForm(User) {
+	if (!Misc.profileBadges) return '';
 	const Badges = PublicBadges(User);
 	return `<section id="badges"><h2>Profile badges</h2>${Badges.length ? `<div class="badge-preview">${Badges.map(Badge => `<span><img src="${Badge.icon}" alt="">${Badge.label}</span>`).join('')}</div>` : ''}<form action="/account/badges" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}">${PrideField(User.pride_flag)}<button class="secondary">Save pride flag</button></form></section>`;
 }
@@ -71,6 +73,7 @@ export async function Account(Context) {
 		RequireMethod(Request, ['POST']);
 		const Body = await ReadBody(Request);
 		RequireCsrf(Request, User, Body.csrf);
+		if (!Misc.profileBadges) throw new HttpError(403, 'ProfileBadgesDisabled');
 		await AssertAllowed(Pool, User, 'profile');
 		await Pool.query('UPDATE users SET pride_flag=$2 WHERE id=$1', [User.id, PrideFlag(Body.prideFlag)]);
 		Response.writeHead(303, { location: '/account?badges=saved#badges' }); Response.end(); return true;

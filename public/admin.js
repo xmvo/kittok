@@ -29,7 +29,7 @@
 		InvalidModerationSettings: 'Strike expiry is 7–365 days, limits are 2–100, and each policy is 1–50.', InvalidInvite: 'Invites need 1–100 uses and 1–90 days.', InvalidInstanceName: 'Names are 1–60 characters.',
 		InvalidLimits: 'Videos can be 1–2,048 MB and 1–3,600 seconds.', AnnouncementTooLong: 'Announcements are up to 500 characters.', InvalidAnnouncementLink: 'Links start with https:// or /.',
 		RulesTooLong: 'Rules are up to 10,000 characters.', InvalidImage: 'Use a PNG, JPEG, or WebP image up to 4096 px.', BodyTooLarge: 'Images are up to 2 MB.', SessionNotFound: 'That session already ended.',
-		InvalidVerification: 'Choose whether this account is verified.',
+		InvalidVerification: 'Choose whether this account is verified.', InvalidMisc: 'Choose which features are on.',
 		InvalidPrideFlag: 'Choose a pride flag from the list, or None.', InvalidUserBadges: 'Choose badges from the list.',
 	};
 	const Icons = {
@@ -37,7 +37,7 @@
 		accounts: 'M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 20v-1a4 4 0 0 0-3-3.9M15.5 4.2a3.5 3.5 0 0 1 0 6.6',
 		content: 'M4 4h16v16H4zM8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4', log: 'M10 6h10M10 12h10M10 18h10M4 6l1.2 1.2L7.5 5M4 12l1.2 1.2L7.5 11M4 18l1.2 1.2L7.5 17',
 		policies: 'M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3zM9 12l2 2 4-4', instance: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4', invites: 'M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4V7zM14 7v10',
-		audit: 'M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4M12 8v4l3 2', search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4', back: 'M19 12H5M11 6l-6 6 6 6',
+		audit: 'M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4M12 8v4l3 2', misc: 'M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4L12 3zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15zM5 15l.6 1.4L7 17l-1.4.6L5 19l-.6-1.4L3 17l1.4-.6L5 15z', search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4', back: 'M19 12H5M11 6l-6 6 6 6',
 		theme: 'M12 3a9 9 0 1 0 0 18V3z', collapse: 'M4 4h16v16H4zM9 4v16', done: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0zM8 12l3 3 5-6', video: 'M5 4h14v16H5zM10 9l5 3-5 3V9z',
 		comment: 'M4 5h16v11H9l-5 4V5z', message: 'M21 3L10 14M21 3l-7 18-4-7-7-4 18-7z', user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0', open: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6', keys: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10',
 	};
@@ -306,7 +306,7 @@
 	const Nav = [
 		['Moderation'], ['/admin', 'Queue', 'queue', 'tickets'], ['/admin/appeals', 'Appeals', 'appeals', 'appeals'], ['/admin/log', 'Enforcement log', 'log'],
 		['Community'], ['/admin/accounts', 'Accounts', 'accounts'], ['/admin/content', 'Content', 'content'],
-		['Configure'], ['/admin/policies', 'Policies', 'policies'], ['/admin/instance', 'Instance', 'instance'], ['/admin/invites', 'Invites', 'invites'], ['/admin/audit', 'Audit log', 'audit'],
+		['Configure'], ['/admin/policies', 'Policies', 'policies'], ['/admin/instance', 'Instance', 'instance'], ['/admin/misc', 'Misc', 'misc'], ['/admin/invites', 'Invites', 'invites'], ['/admin/audit', 'Audit log', 'audit'],
 	];
 	const Frame = El('div', { class: `App${localStorage.getItem('kittok-admin-rail') === 'collapsed' ? ' Collapsed' : ''}` });
 	const Rail = El('nav', { class: 'Rail', 'aria-label': 'Admin' });
@@ -369,6 +369,7 @@
 			else if (Path === '/admin/content') await ContentPage(Params);
 			else if (Path === '/admin/policies') await PoliciesPage();
 			else if (Path === '/admin/instance') await InstancePage();
+			else if (Path === '/admin/misc') await MiscPage();
 			else if (Path === '/admin/invites') await InvitesPage();
 			else if (Path === '/admin/audit') await AuditPage();
 			else { SetTitle(['Not found']); Fill(Body, El('div', { class: 'Empty' }, El('strong', {}, 'This page doesn’t exist'), Link('/admin', { class: 'Btn' }, 'Go to the queue'))); }
@@ -685,6 +686,22 @@
 				const Picker = El('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', hidden: true, onchange: async Event => { const File = Event.target.files[0]; if (!File) return; const Form = new FormData(); Form.append('file', File); try { await Api(`brand/${Slot}`, Form); Toast(`${Label} updated`); Navigate(location.pathname, true); } catch (Error) { Fail(Error); } } });
 				return El('div', { class: 'Card' }, El('div', { style: `display:grid;place-items:center;height:96px;background:${Slot === 'wordmarkLight' ? '#fff' : '#111'}` }, El('img', { src: `${S.brand[Slot].url}?v=${Date.now()}`, alt: '', style: 'max-width:80%;max-height:64px;width:auto;aspect-ratio:auto;background:none' })),
 					El('div', { class: 'Meta Row' }, El('span', { class: 'Grow' }, Label), S.brand[Slot].custom && Chip('Custom', 'Info')), El('div', { class: 'Actions' }, Picker, Btn('Upload', () => Picker.click(), 'Small'), S.brand[Slot].custom && Btn('Reset', async () => { try { await Api(`brand/${Slot}/reset`, {}); Toast(`${Label} reset`); Navigate(location.pathname, true); } catch (Error) { Fail(Error); } }, 'Small Ghost')));
+			}))))));
+	}
+
+	async function MiscPage() {
+		SetTitle(['Misc']);
+		const S = await Api('settings');
+		const Names = Boot.misc;
+		const State = Object.fromEntries(Object.keys(Names).map(Key => [Key, S.misc[Key] !== false]));
+		const Save = async (Key, Input) => {
+			State[Key] = Input.checked;
+			try { await Api('settings/misc', { value: State }); Toast(`${Names[Key][0]} ${Input.checked ? 'on' : 'off'}`); } catch (Error) { State[Key] = Input.checked = !Input.checked; Fail(Error); }
+		};
+		Fill(Body, El('div', { class: 'Page Stack', style: 'max-width:980px' },
+			El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Kittok features', El('span', { class: 'Faint' }, 'Changes apply on the next page load')), El('div', { class: 'PanelBody' }, El('div', { class: 'Toggles MiscToggles' }, Object.entries(Names).map(([Key, [Label, Hint]]) => {
+				const Input = El('input', { type: 'checkbox', checked: State[Key], onchange: () => Save(Key, Input) });
+				return El('label', { class: 'ToggleRow' }, El('span', { class: 'Switch' }, Input, El('span')), El('span', { class: 'Stack', style: 'gap:2px' }, El('span', {}, Label), El('span', { class: 'Faint', style: 'font-size:12px' }, Hint)));
 			}))))));
 	}
 

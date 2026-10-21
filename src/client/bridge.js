@@ -96,7 +96,12 @@
 		const Url = LocalUrl(IsRequest ? Input.url : String(Input));
 		const RequestHeaders = new Headers(Options?.headers ?? (IsRequest ? Input.headers : undefined));
 		if (Instance.csrfToken) RequestHeaders.set('x-csrf-token', Instance.csrfToken);
-		return NativeFetch(IsRequest ? new Request(Url, Input) : Url, { ...Options, headers: RequestHeaders });
+		const Sent = NativeFetch(IsRequest ? new Request(Url, Input) : Url, { ...Options, headers: RequestHeaders });
+		if (new URL(Url).pathname === '/api/related/item_list/') {
+			delete document.documentElement.dataset.kittokRelatedEmpty;
+			Sent.then(Response => Response.clone().json()).then(Data => { if (!Data.itemList?.length && !Data.hasMore) document.documentElement.dataset.kittokRelatedEmpty = ''; }).catch(() => {});
+		}
+		return Sent;
 	};
 	XMLHttpRequest.prototype.open = function(Method, Url, ...Args) {
 		const Result = NativeOpen.call(this, Method, LocalUrl(String(Url)), ...Args);

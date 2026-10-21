@@ -5,7 +5,7 @@ import { Hash, RequireCsrf, Token } from '../auth.mjs';
 import { RemoveMedia, SaveBrandImage } from '../media.mjs';
 import { AvatarUrl, UserStats } from '../store.mjs';
 import { Asset, ClientDir, LocalAsset, Root } from '../client/archive.mjs';
-import { BrandSlots, Features, SaveSetting, Settings } from '../settings.mjs';
+import { BrandSlots, Features, MiscFeatures, SaveSetting, Settings } from '../settings.mjs';
 import { Page } from './account.mjs';
 import { Enforce, DecideReport, ReverseDecision, LiftRestriction, MessageText, ReviewAppeal, Standing } from '../moderation.mjs';
 import { Transaction } from '../db.mjs';
@@ -77,7 +77,7 @@ export async function Admin(Context) {
 		if (!User) { Response.writeHead(303, { location: '/login' }); Response.end(); return true; }
 		if (User.role !== 'admin') throw new HttpError(404, 'NotFound');
 		const Links = (await TikTokStyles().catch(() => [])).map(Href => `<link rel="stylesheet" href="${Escape(Href)}">`).join('');
-		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, categories: Categories, badges: BadgeCatalog };
+		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, misc: MiscFeatures, categories: Categories, badges: BadgeCatalog };
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
 		Response.end(`<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon">
 <script>try{const T=localStorage.getItem('kittok-admin-theme');document.documentElement.dataset.theme=T||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')}catch{}</script>

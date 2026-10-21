@@ -1565,5 +1565,30 @@ test('the native inbox lists follow requests and approves them with from_user_id
 	assert.equal((await (await Call(`/api/commit/follow/request/approve/?from_user_id=${Asker}&from=33`, 'POST', undefined, Auth())).json()).status_code, 0);
 	assert.equal((await Pool.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [Asker, Owner.id])).rowCount, 1);
 	assert.equal((await (await Call('/api/user/following/request/list/?count=20&max_time=0', 'GET', undefined, Auth())).json()).total, 0);
+	const Approved = (await (await Call('/api/notice/multi/?group_list=' + encodeURIComponent(JSON.stringify([{ count: 20, is_mark_read: 0, group: 7, max_time: 0, min_time: 0 }])), 'GET', undefined, AsAsker)).json()).notice_lists[0].notice_list;
+	assert.deepEqual(Approved.map(Notice => [Notice.type, Notice.follow_request_approve?.from_user.unique_id]), [[23, 'owner']]);
 	await Pool.query('UPDATE users SET private_account = false WHERE id = $1', [Owner.id]);
+});
+
+test('misc switches turn Kittok features off and back on without a restart', async () => {
+	const Settings = await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json();
+	assert.ok(Object.values(Settings.misc).every(Boolean));
+	const Set = Value => Call('/_kittok/admin/settings/misc', 'POST', { value: { ...Settings.misc, ...Value } }, Auth());
+	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: 'nope' }, Auth())).status, 400);
+	await Pool.query('UPDATE users SET verified = true WHERE id = $1', [Owner.id]);
+	assert.equal((await Set({ verifiedBadges: false, reposts: false, hashtags: false, collections: false, commentLabels: false })).status, 200);
+	const Get = async Path => (await Call(Path, 'GET', undefined, Auth())).json();
+	assert.equal((await Get('/api/user/detail/?uniqueId=owner')).userInfo.user.verified, false);
+	assert.deepEqual((await Get('/_kittok/badges?users=owner')).verified, []);
+	assert.ok(!(await Get('/api/share/settings/')).share_platforms.some(Platform => Platform.platform_id === 'repost'));
+	assert.equal((await Call(`/tiktok/v1/upvote/publish?item_id=${VideoId}`, 'POST', undefined, Auth())).status, 403);
+	assert.equal((await Get('/api/challenge/detail/?challengeName=kittok')).statusCode, 10205);
+	const Item = (await Get(`/api/item/detail/?itemId=${VideoId}`)).itemInfo.itemStruct;
+	assert.deepEqual([Item.textExtra, Item.challenges], [[], []]);
+	assert.equal((await Call('/api/collection/create/?collectionName=Off&collectionStatus=1', 'POST', undefined, Auth())).status, 403);
+	assert.ok((await Get(`/api/comment/list/?aweme_id=${VideoId}&count=50&cursor=0`)).comments.every(Comment => Comment.label_type === 0));
+	assert.equal((await Set({})).status, 200);
+	assert.equal((await Get('/api/user/detail/?uniqueId=owner')).userInfo.user.verified, true);
+	assert.equal((await Get('/api/challenge/detail/?challengeName=kittok')).statusCode, 0);
+	await Pool.query('UPDATE users SET verified = false WHERE id = $1', [Owner.id]);
 });

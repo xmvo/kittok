@@ -2,6 +2,19 @@ import { HttpError } from './http.mjs';
 import { DefaultThresholds, PolicyCategories } from './moderation.mjs';
 
 export const Features = { shop: 'Shop', explore: 'Explore', following: 'Following feed', shortDrama: 'Short dramas', live: 'LIVE', search: 'Search', upload: 'Uploads', comments: 'Comments', messages: 'Direct messages' };
+export const MiscFeatures = {
+	verifiedBadges: ['Verified badges', 'Blue checks on accounts admins verify'],
+	profileBadges: ['Profile badges', 'Pride flags and community badges beside names'],
+	reposts: ['Reposts', 'Repost in the share sheet and the profile Reposts tab'],
+	collections: ['Collections', 'Named collections of favorites'],
+	hashtags: ['Hashtags and mentions', 'Linked #tags and @mentions, tag pages, and mention notices'],
+	groupedLikes: ['Grouped like notices', 'One notice per video or comment with the newest likers'],
+	commentLabels: ['Comment labels', 'Creator, Following and Friends labels and the creator-liked avatar'],
+	messageRequests: ['Message requests', 'Messages that recipients route to requests wait there; off delivers them to the inbox'],
+	readReceipts: ['Read receipts', 'Seen status when both people turn it on'],
+	unsend: ['Unsend messages', 'Senders can unsend within three minutes'],
+};
+export const Misc = Object.fromEntries(Object.keys(MiscFeatures).map(Name => [Name, true]));
 export const BrandSlots = { wordmarkDark: '/public/logo.svg', wordmarkLight: '/public/logo-light.svg', icon: '/public/avatar.svg', favicon: '/public/avatar.svg' };
 
 function Validate(Key, Value) {
@@ -17,6 +30,10 @@ function Validate(Key, Value) {
 	if (Key === 'features') {
 		if (!Value || typeof Value !== 'object') throw new HttpError(400, 'InvalidFeatures');
 		return Object.fromEntries(Object.keys(Features).map(Name => [Name, Value[Name] !== false]));
+	}
+	if (Key === 'misc') {
+		if (!Value || typeof Value !== 'object') throw new HttpError(400, 'InvalidMisc');
+		return Object.fromEntries(Object.keys(MiscFeatures).map(Name => [Name, Value[Name] !== false]));
 	}
 	if (Key === 'limits') {
 		const VideoMB = Number(Value?.videoMB), VideoSeconds = Number(Value?.videoSeconds);
@@ -49,6 +66,7 @@ function Apply(Config, Key, Value) {
 	if (Key === 'registration') Config.Registration = Value;
 	if (Key === 'name') Config.Name = Value;
 	if (Key === 'features') Config.Features = Value;
+	if (Key === 'misc') Object.assign(Misc, Value);
 	if (Key === 'limits') { Config.MaxVideoBytes = Value.videoMB * 1024 * 1024; Config.MaxVideoSeconds = Value.videoSeconds; }
 	if (Key === 'announcement') Config.Announcement = Value;
 	if (Key === 'rules') Config.Rules = Value;
@@ -58,6 +76,8 @@ function Apply(Config, Key, Value) {
 
 export async function LoadSettings(Pool, Config) {
 	Config.Features = Object.fromEntries(Object.keys(Features).map(Name => [Name, true]));
+	for (const Name of Object.keys(Misc)) Misc[Name] = true;
+	Config.Misc = Misc;
 	Config.Announcement = { text: '', link: '', version: 0 };
 	Config.Rules = '';
 	Config.Brand = {};
@@ -75,7 +95,7 @@ export async function SaveSetting(Pool, Config, Key, Raw) {
 
 export function Settings(Config) {
 	return {
-		registration: Config.Registration, name: Config.Name, features: Config.Features,
+		registration: Config.Registration, name: Config.Name, features: Config.Features, misc: { ...Misc },
 		limits: { videoMB: Math.round(Config.MaxVideoBytes / 1024 / 1024), videoSeconds: Config.MaxVideoSeconds },
 		announcement: Config.Announcement, rules: Config.Rules, moderation: Config.Moderation,
 		brand: Object.fromEntries(Object.keys(BrandSlots).map(Slot => [Slot, { url: `/brand/${Slot}`, custom: Boolean(Config.Brand?.[Slot]) }])),

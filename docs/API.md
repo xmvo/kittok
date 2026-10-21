@@ -69,7 +69,7 @@ Admins open `/admin` (also linked from the sidebar and `/account`). It is a stan
 | GET / POST | `/_kittok/admin/invites` | List open invites, or create one with JSON `{uses, days}` (1–100 uses, 1–90 days); the code is returned once |
 | POST | `/_kittok/admin/invites/HASH/delete` | Revokes an invite |
 | GET | `/_kittok/admin/settings` | Sign-up mode, instance name, features, upload limits, announcement, rules, and brand images |
-| POST | `/_kittok/admin/settings/KEY` | JSON `{value}` for `registration`, `name`, `features`, `limits`, `announcement`, `rules`, or `moderation` (`{strikeDays, feature, total, policy: {category: n}}`); applied immediately without a restart |
+| POST | `/_kittok/admin/settings/KEY` | JSON `{value}` for `registration`, `name`, `features`, `misc`, `limits`, `announcement`, `rules`, or `moderation` (`{strikeDays, feature, total, policy: {category: n}}`); applied immediately without a restart. `misc` takes booleans for Kittok's own additions: `verifiedBadges`, `profileBadges`, `reposts`, `collections`, `hashtags`, `groupedLikes`, `commentLabels`, `messageRequests`, `readReceipts`, and `unsend`; omitted keys stay on |
 | POST | `/_kittok/admin/brand/SLOT` | Multipart `file` (PNG, JPEG, or WebP, up to 2 MB) for `wordmarkDark`, `wordmarkLight`, `icon`, or `favicon`; re-encoded to PNG |
 | POST | `/_kittok/admin/brand/SLOT/reset` | Restores the shipped image |
 | GET | `/_kittok/admin/audit?before=ID` | Admin actions, newest first, 50 per page |

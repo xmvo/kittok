@@ -3,6 +3,7 @@ import { HttpError, Id } from './http.mjs';
 import { Transaction } from './db.mjs';
 import { RemovedSql, ForYouIneligibleSql } from './moderation.mjs';
 import { PublicBadges } from './badges.mjs';
+import { Misc } from './settings.mjs';
 import { VideoVisibleSql, CommentsAllowedSql, SetFollow, AssertVideoVisible } from './privacy.mjs';
 
 export const AvatarUrl = (User, Origin) => User.avatar_name ? `${Origin}/media/${User.avatar_name}` : `${Origin}/public/avatar.svg`;
@@ -11,7 +12,7 @@ export function UserShape(User, Origin) {
 	const Avatar = AvatarUrl(User, Origin);
 	return {
 		id: User.id, uniqueId: User.username, nickname: User.display_name, secUid: User.id,
-		signature: User.bio ?? '', verified: Boolean(User.verified), privateAccount: Boolean(User.private_account), secret: Boolean(User.private_account),
+		signature: User.bio ?? '', verified: Misc.verifiedBadges && Boolean(User.verified), privateAccount: Boolean(User.private_account), secret: Boolean(User.private_account),
 		prideFlag: User.pride_flag ?? '', kittokBadges: PublicBadges(User),
 		avatarThumb: Avatar, avatarMedium: Avatar, avatarLarger: Avatar,
 		following: 0, relation: User.relation ?? 0,
@@ -53,6 +54,7 @@ export async function MentionedUsers(Pool, Texts) {
 }
 
 export function CommentExtra(Text, Mentioned) {
+	if (!Misc.hashtags) return [];
 	return Entities(Text, Mentioned).filter(Entity => Entity.type === 0)
 		.map(Entity => ({ start: Entity.start, end: Entity.end, type: 0, user_id: Entity.user.id, sec_uid: Entity.user.username, hashtag_name: '', is_commerce: false }));
 }
@@ -124,10 +126,11 @@ const ActivitySql = `
 	UNION ALL SELECT 'comment_like', cl.created_at, cl.user_id, c.video_id, c.id FROM comment_likes cl JOIN comments c ON c.id = cl.comment_id WHERE c.author_id = $1 AND cl.user_id <> $1
 	UNION ALL SELECT 'comment', c.created_at, c.author_id, c.video_id, c.id FROM comments c JOIN videos v ON v.id = c.video_id LEFT JOIN comments p ON p.id = c.parent_id WHERE c.author_id <> $1 AND (v.author_id = $1 OR p.author_id = $1)
 	UNION ALL SELECT 'follow', f.created_at, f.follower_id, NULL, NULL FROM follows f WHERE f.following_id = $1
+	UNION ALL SELECT 'approved', f.approved_at, f.following_id, NULL, NULL FROM follows f WHERE f.follower_id = $1 AND f.approved_at IS NOT NULL
 	UNION ALL SELECT 'mention', c.created_at, c.author_id, c.video_id, c.id FROM comments c JOIN users m ON m.id = $1 WHERE c.author_id <> $1 AND c.body ~* ('(^|[^[:alnum:]_])@' || m.username || '([^[:alnum:]_]|$)')
 	UNION ALL SELECT 'mention', v.created_at, v.author_id, v.id, NULL FROM videos v JOIN users m ON m.id = $1 WHERE v.author_id <> $1 AND v.description ~* ('(^|[^[:alnum:]_])@' || m.username || '([^[:alnum:]_]|$)')`;
 const Merged = "a.kind IN ('like', 'comment_like')";
-const NoticeKey = `CASE WHEN ${Merged} THEN a.kind || ':' || a.video_id || ':' || coalesce(a.comment_id, 0) ELSE a.kind || ':' || a.actor || ':' || a.at || ':' || coalesce(a.comment_id, 0) END`;
+const NoticeKey = () => `CASE WHEN ${Misc.groupedLikes ? Merged : 'false'} THEN a.kind || ':' || a.video_id || ':' || coalesce(a.comment_id, 0) ELSE a.kind || ':' || a.actor || ':' || a.at || ':' || coalesce(a.comment_id, 0) END`;
 const VisibleActivity = `(a.video_id IS NULL OR EXISTS (SELECT 1 FROM videos pv JOIN users pu ON pu.id = pv.author_id WHERE pv.id = a.video_id AND ${VideoVisibleSql('$1', 'pv', 'pu')})) AND (a.comment_id IS NULL OR NOT ${RemovedSql('comment', 'a.comment_id')}) AND (a.video_id IS NULL OR NOT ${RemovedSql('video', 'a.video_id')})
 	AND NOT EXISTS (SELECT 1 FROM users banned WHERE banned.id = a.actor AND banned.suspended_at IS NOT NULL)`;
 
@@ -136,7 +139,7 @@ export async function Activity(Pool, UserId, Kinds, { Before = null, After = nul
 			SELECT a.kind, max(a.at) AS at, (array_agg(a.actor ORDER BY a.at DESC))[1] AS actor, (array_agg(a.actor ORDER BY a.at DESC))[2] AS second_actor,
 				count(*)::int AS merge_count, a.video_id, a.comment_id
 			FROM (${ActivitySql}) a WHERE a.kind = ANY($2) AND NOT ${BlockedBetween('$1', 'a.actor')} AND ${VisibleActivity}
-			GROUP BY ${NoticeKey}, a.kind, a.video_id, a.comment_id)
+			GROUP BY ${NoticeKey()}, a.kind, a.video_id, a.comment_id)
 		SELECT a.kind, a.at, extract(epoch FROM a.at)::float8 AS epoch, a.at <= me.notices_read_at AS read, a.merge_count,
 		u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, ${RelationSql('$1', 'u.id')} AS relation,
 		CASE WHEN s.id IS NOT NULL THEN json_build_object('id', s.id, 'username', s.username, 'display_name', s.display_name, 'bio', s.bio, 'avatar_name', s.avatar_name, 'verified', s.verified, 'pride_flag', s.pride_flag, 'user_badges', s.user_badges, 'relation', ${RelationSql('$1', 's.id')}) END AS second,
@@ -149,7 +152,7 @@ export async function Activity(Pool, UserId, Kinds, { Before = null, After = nul
 }
 
 export async function UnreadActivity(Pool, UserId) {
-	const Result = await Pool.query(`SELECT a.kind, count(DISTINCT ${NoticeKey})::int AS count FROM (${ActivitySql}) a JOIN users me ON me.id = $1 WHERE a.at > me.notices_read_at AND NOT ${BlockedBetween('$1', 'a.actor')} AND ${VisibleActivity} GROUP BY a.kind`, [UserId]);
+	const Result = await Pool.query(`SELECT a.kind, count(DISTINCT ${NoticeKey()})::int AS count FROM (${ActivitySql}) a JOIN users me ON me.id = $1 WHERE a.at > me.notices_read_at AND NOT ${BlockedBetween('$1', 'a.actor')} AND ${VisibleActivity} GROUP BY a.kind`, [UserId]);
 	return Object.fromEntries(Result.rows.map(Row => [Row.kind, Row.count]));
 }
 
@@ -219,8 +222,8 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 
 export function VideoShape(Row, Origin, Mentioned, Viewer) {
 	const Author = UserShape({ ...Row, id: Row.author_id }, Origin);
-	const Stats = { diggCount: Row.likes, commentCount: Row.comments, collectCount: Row.favorites, shareCount: 0, playCount: Number(Row.view_count ?? 0), repostCount: Row.reposts ?? 0 };
-	const Found = Entities(Row.description, Mentioned);
+	const Stats = { diggCount: Row.likes, commentCount: Row.comments, collectCount: Row.favorites, shareCount: 0, playCount: Number(Row.view_count ?? 0), repostCount: Misc.reposts ? Row.reposts ?? 0 : 0 };
+	const Found = Misc.hashtags ? Entities(Row.description, Mentioned) : [];
 	const TextExtra = Found.map(Entity => Entity.type === 1
 		? { awemeId: '', start: Entity.start, end: Entity.end, hashtagId: TagId(Entity.name), hashtagName: Entity.name, isCommerce: false, subType: 0, type: 1 }
 		: { awemeId: '', start: Entity.start, end: Entity.end, hashtagName: '', isCommerce: false, secUid: Entity.user.id, subType: 0, type: 0, userId: Entity.user.id, userUniqueId: Entity.user.username });
@@ -238,7 +241,7 @@ export function VideoShape(Row, Origin, Mentioned, Viewer) {
 		},
 		music: { id: Row.id, title: 'Original sound', authorName: Row.display_name, original: true, duration: Row.duration,
 			playUrl: '', coverThumb: Author.avatarThumb, coverMedium: Author.avatarMedium, coverLarge: Author.avatarLarger },
-		textExtra: TextExtra, challenges: Challenges, repostList: Row.reposted && Viewer ? [{ secUid: Viewer, uid: Viewer }] : [], digged: Row.liked, collected: Row.saved, itemCommentStatus: Row.can_comment === false ? 1 : 0,
+		textExtra: TextExtra, challenges: Challenges, repostList: Misc.reposts && Row.reposted && Viewer ? [{ secUid: Viewer, uid: Viewer }] : [], digged: Row.liked, collected: Row.saved, itemCommentStatus: Row.can_comment === false ? 1 : 0,
 		officalItem: false, secret: Row.visibility === 'only_me', privateItem: Row.visibility === 'only_me', shareEnabled: true, duetEnabled: false, stitchEnabled: false,
 		forFriend: Row.visibility === 'friends', originalItem: false, isAd: false, item_control: {}, contents: [{ desc: Row.description, textExtra: TextExtra }],
 	};
