@@ -30,8 +30,8 @@ async function Audit(Pool, User, Action, Target, Detail = '') {
 }
 
 async function DeleteVideos(Pool, Config, Where, Values) {
-	const Removed = await Pool.query(`DELETE FROM videos WHERE ${Where} RETURNING file_name, cover_name`, Values);
-	for (const Row of Removed.rows) await Promise.all([RemoveMedia(Config, Row.file_name), RemoveMedia(Config, Row.cover_name)]);
+	const Removed = await Pool.query(`DELETE FROM videos WHERE ${Where} RETURNING file_name, cover_name, download_name`, Values);
+	for (const Row of Removed.rows) await Promise.all([RemoveMedia(Config, Row.file_name), RemoveMedia(Config, Row.cover_name), Row.download_name && RemoveMedia(Config, Row.download_name)]);
 	return Removed.rowCount;
 }
 

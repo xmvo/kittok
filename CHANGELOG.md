@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Download video from the right-click menu or the share panel saves a copy with a Kittok watermark: the logo and @username move from the top-left to the bottom-right halfway through, then an end card shows the logo and username, like TikTok's. A Downloads switch in Settings > Privacy lets you turn it off for your videos.
 - Group chats with up to 32 friends: start one from the new button in Messages, then add people, rename it, remove people (owner), or leave from the group button in the chat. They use the client's own group inbox, names, and notices.
 - Admins see the photo or video in reported direct messages.
 - Send photos and short videos in direct messages with the native media button. They show up as TikTok's own photo and video cards, blurred for the recipient until tapped, and only people in the chat can open them. An admin switch turns it off.

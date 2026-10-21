@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { HttpError, Id, Json, ReadBody, RequireMethod } from '../http.mjs';
 import { CreateUser, Login, RequireCsrf, SessionCookie, ClientInfo } from '../auth.mjs';
 import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment, SetBlock } from '../store.mjs';
-import { ImportVideo, ReceiveVideo } from '../media.mjs';
+import { DownloadCopy, ImportVideo, ReceiveVideo, ServeMedia } from '../media.mjs';
 import { AssertAllowed, RemovedSql } from '../moderation.mjs';
 import { BadgeCatalog, BadgeSvg, PrideFlag, PublicBadges } from '../badges.mjs';
 import { AvatarDecoration, DecorationCatalog, DecorationImage, PublicDecoration } from '../decorations.mjs';
@@ -139,6 +139,19 @@ export async function Api(Context) {
 		await SetPrivateAccount(Pool, User.id, Body.privateAccount);
 		await Pool.query('UPDATE users SET comment_permission = $2 WHERE id = $1', [User.id, Body.comments]);
 		Json(Response, { ok: true }); return true;
+	}
+	const Download = Path.match(/^\/api\/v1\/videos\/(\d+)\/download$/);
+	if (Download) {
+		RequireMethod(Request, ['GET', 'HEAD']);
+		const VideoId = Id(Download[1]);
+		await AssertVideoVisible(Pool, VideoId, User?.id);
+		const Row = (await Pool.query('SELECT v.id, v.file_name, v.duration, v.download_name, v.author_id, u.username, u.private_account, u.allow_downloads FROM videos v JOIN users u ON u.id = v.author_id WHERE v.id = $1', [VideoId])).rows[0];
+		if (!Row) throw new HttpError(404, 'VideoNotFound');
+		if (Row.author_id !== User?.id && (Row.private_account || !Row.allow_downloads)) throw new HttpError(403, 'DownloadsOff');
+		Limiter.Hit(`download:${User?.id ?? Request.socket.remoteAddress}`, 30, 600000);
+		const Name = await DownloadCopy(Pool, Config, Row);
+		Response.setHeader('content-disposition', `attachment; filename="${Row.username}_${Row.id}.mp4"`);
+		await ServeMedia(Request, Response, Config, Name, true); return true;
 	}
 	const Post = Path.match(/^\/api\/v1\/videos\/(\d+)$/);
 	if (Post) {

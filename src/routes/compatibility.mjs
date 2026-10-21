@@ -258,14 +258,15 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']);
 		const Messages = User && Config.Features?.messages !== false;
 		const Choice = { show_type: 0, values: [{ value: 1, show_type: 0 }, { value: 2, show_type: 0 }, { value: 3, show_type: 0 }] };
-		const Account = { comment: { show_type: User ? 0 : 2, values: [0, 1, 2, 3].map(value => ({ value, show_type: 0 })) }, private_account: { show_type: User ? 0 : 2 }, ...(Messages ? { direct_message: { show_type: 0 }, message_read_status: { show_type: 0, values: [{ value: 0, show_type: 0 }, { value: 1, show_type: 0 }] }, ...Object.fromEntries(Object.keys(DmAudiences).map(Key => [Key, Choice])) } : {}) };
-		Json(Response, { status_code: 0, statusCode: 0, privacy_restriction: { account: Account }, privacy_settings: { private_account: User?.private_account ? 1 : 0, comment: ({everyone:0,friends:1,none:2,followers:3})[User?.comment_permission ?? 'everyone'], ...(Messages ? await DmSettings(Pool, User.id) : {}) } }); return true;
+		const Account = { comment: { show_type: User ? 0 : 2, values: [0, 1, 2, 3].map(value => ({ value, show_type: 0 })) }, private_account: { show_type: User ? 0 : 2 }, download: { show_type: User ? 0 : 2 }, ...(Messages ? { direct_message: { show_type: 0 }, message_read_status: { show_type: 0, values: [{ value: 0, show_type: 0 }, { value: 1, show_type: 0 }] }, ...Object.fromEntries(Object.keys(DmAudiences).map(Key => [Key, Choice])) } : {}) };
+		Json(Response, { status_code: 0, statusCode: 0, privacy_restriction: { account: Account }, privacy_settings: { private_account: User?.private_account ? 1 : 0, download: User?.allow_downloads === false ? 0 : 1, comment: ({everyone:0,friends:1,none:2,followers:3})[User?.comment_permission ?? 'everyone'], ...(Messages ? await DmSettings(Pool, User.id) : {}) } }); return true;
 	}
 	if (Path === '/api/privacy/unified_config/v1') {
 		RequireMethod(Request, ['GET']);
 		const Configs = {};
 		if (User) {
-			Configs.main = { page_tag: 'main', contents: [{ section_tag: 'interactions', section_header: 'Interactions', items: [{ item_type: 0, item_tag: 'comment_entrance', item_info: { item_title: 'Comments', restriction_key: 'comment', setting_key: 'comment' } }] }] };
+			Configs.main = { page_tag: 'main', contents: [{ section_tag: 'interactions', section_header: 'Interactions', items: [{ item_type: 0, item_tag: 'comment_entrance', item_info: { item_title: 'Comments', restriction_key: 'comment', setting_key: 'comment' } },
+				{ item_type: 1, item_tag: 'kittok_download', item_info: { item_title: 'Downloads', item_subtitle: 'Allow others to download your videos. You can always download your own.', restriction_key: 'download', setting_key: 'download', checked_value: 1, unchecked_value: 0 } }] }] };
 			Configs.main.contents.unshift({ section_tag: 'discoverability', section_header: 'Discoverability', items: [{ item_type: 1, item_tag: 'kittok_private_account', item_info: { item_title: 'Private account', item_subtitle: 'Only followers you approve can view your posts.', restriction_key: 'private_account', setting_key: 'private_account', checked_value: 1, unchecked_value: 0 } }] });
 			Configs.comment_permission = { page_tag: 'comment_permission', page_title: 'Comments', contents: [{ section_tag: 'comment_options', items: [{ item_type: 2, item_tag: 'comment_permission_item', item_info: { item_title: 'Who can comment on your posts', restriction_key: 'comment', setting_key: 'comment', options: [[0,'Everyone'],[3,'Followers'],[1,'Friends'],[2,'No one']].map(([Value,Title]) => ({option_value:Value,option_title:Title,option_tag:'options_comment_' + Value})) } }] }] };
 		}
@@ -288,7 +289,10 @@ export async function Compatibility(Context) {
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
 		try {
 			if (Body.field === 'private_account') await SetPrivateAccount(Pool, User.id, Body.value);
-			else if (Body.field === 'comment') {
+			else if (Body.field === 'download') {
+				if (!['0', '1'].includes(String(Body.value))) throw new HttpError(400, 'InvalidDownloadSetting');
+				await Pool.query('UPDATE users SET allow_downloads = $2 WHERE id = $1', [User.id, String(Body.value) === '1']);
+			} else if (Body.field === 'comment') {
 				const Permission = ({0:'everyone',1:'friends',2:'none',3:'followers'})[Body.value];
 				if (!Permission || !['number','string'].includes(typeof Body.value)) throw new HttpError(400, 'InvalidCommentPermission');
 				await Pool.query('UPDATE users SET comment_permission = $2 WHERE id = $1', [User.id, Permission]);
@@ -298,7 +302,7 @@ export async function Compatibility(Context) {
 			}
 		} catch (Error) { if (Error.status !== 400) throw Error; Json(Response, { status_code: 1, statusCode: 1, status_msg: 'This setting is not available on this instance.' }); return true; }
 		const Fresh = await FindUser(Pool, User.id, true);
-		Json(Response, { status_code: 0, statusCode: 0, privacy_settings: { ...await DmSettings(Pool, User.id), private_account: Fresh.private_account ? 1 : 0, comment: ({everyone:0,friends:1,none:2,followers:3})[Fresh.comment_permission] } }); return true;
+		Json(Response, { status_code: 0, statusCode: 0, privacy_settings: { ...await DmSettings(Pool, User.id), private_account: Fresh.private_account ? 1 : 0, download: Fresh.allow_downloads ? 1 : 0, comment: ({everyone:0,friends:1,none:2,followers:3})[Fresh.comment_permission] } }); return true;
 	}
 	if (Path === '/api/privacy/user/private_account/update/v1') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);

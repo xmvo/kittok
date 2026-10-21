@@ -17,3 +17,4 @@
 .KittokGroupChip{flex:none;padding:2px 8px;border-radius:10px;background:var(--ui-shape-neutral-4,rgba(128,128,128,.16));color:var(--ui-text-2,#aaa);font-size:12px}.KittokGroupList li button{flex:none;border:0;border-radius:6px;padding:6px 12px;background:var(--ui-shape-neutral-4,#333);color:inherit;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .KittokGroupEmpty{color:var(--ui-text-2,#aaa);font-size:14px}.KittokBadgeButtons .KittokGroupLeave{margin-inline-end:auto;background:transparent;color:#FE2C55}
 @media (max-width:600px){.KittokGroupDialog .KittokBadgeButtons{flex-wrap:wrap}}
+.KittokDownloadRow{display:flex;padding:0 12px;margin-bottom:.25rem}.KittokDownloadRow>*{flex:none;width:88px}

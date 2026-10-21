@@ -24,6 +24,7 @@ All routes are on the instance's configured public origin. Responses are JSON. I
 | POST | `/api/v1/im/groups/{id}/members` | JSON `{members}`: adds your friends; returns `{added, failed}` |
 | DELETE | `/api/v1/im/groups/{id}/members/{user}` | Removes someone (owner only, 403 `OnlyTheOwnerCanRemove`), or leaves when `{user}` is you |
 | POST | `/api/v1/videos/ID/pin` | JSON `{pinned}` on your own video; 409 `PinLimit` past three. Used by the Pin to profile item Kittok adds to the native video menu |
+| GET | `/api/v1/videos/ID/download` | The watermarked copy (MP4 with an end card, byte ranges supported) that "Download video" saves; made on the first request. 403 `DownloadsOff` when the author turned downloads off or is private, unless you are the author |
 | POST | `/passport/web/account/set/` | Create username step: mixed `username`, with `x-tt-passport-csrf-token`. A placeholder nickname follows the new name |
 | POST | `/api/v1/users` | Register with `username`, `displayName`, `password`, optional `invite` and `prideFlag` (default `""`, no flag). Cannot choose verification, community badges, or roles |
 | POST | `/api/v1/session` | Log in with `username` and `password`; sets a host-only HttpOnly session cookie, returns `user` and `csrfToken` |

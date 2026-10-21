@@ -853,7 +853,7 @@ test('direct messages honor recipient privacy, end with the session, and follow 
 	const Short = (await Pool.query('SELECT id FROM conversations WHERE conversation_key = $1', [`0:1:${Owner.id}:${Friend.id}`])).rows[0].id;
 	const Send = ClientId => Im(100, 'send_message_body', { conversation_short_id: Short, conversation_type: 1, message_type: 7, content: '{"aweType":0,"text":"Knock knock"}', client_message_id: ClientId });
 	const Restriction = await (await Call('/api/privacy/setting/restriction/v1/', 'GET', undefined, AsFriend)).json();
-	assert.deepEqual(Restriction.privacy_settings, { private_account: 0, comment: 0, dm_setting_friends: 1, dm_setting_potential_connection: 1, dm_setting_others: 1, message_read_status: 1 });
+	assert.deepEqual(Restriction.privacy_settings, { private_account: 0, download: 1, comment: 0, dm_setting_friends: 1, dm_setting_potential_connection: 1, dm_setting_others: 1, message_read_status: 1 });
 	assert.deepEqual(Restriction.privacy_restriction.account.dm_setting_others.values.map(Option => [Option.value, Option.show_type]), [[1, 0], [2, 0], [3, 0]]);
 	assert.equal(Restriction.privacy_restriction.account.comment.show_type, 0);
 	const Pages = JSON.parse((await (await Call('/api/privacy/unified_config/v1', 'GET', undefined, AsFriend)).json()).configs);
@@ -1984,9 +1984,20 @@ test('group chats are made of friends, live in the group inbox, and post native 
 	const Added = (await Im(As.grp_b, 650, 'conversation_add_participants_body', { ...Target, participants: [Users.grp_d.id, Users.grp_x.id] })).body.conversation_add_participants_body;
 	assert.deepEqual([Added.success_participants, Added.failed_participants], [[Users.grp_d.id], [Users.grp_x.id]]);
 	assert.ok((await Thread(As.grp_d)).some(Message => Message.server_message_id === Sent.server_message_id));
+	const Socket = new WebSocket(Origin.replace('http', 'ws') + '/ws/v2', { protocols: ['pbbp2'], headers: { ...As.grp_c, origin: Origin } });
+	Socket.binaryType = 'arraybuffer';
+	const Received = [];
+	Socket.onmessage = Event => Received.push(Event.data);
+	await new Promise((Resolve, Reject) => { Socket.onopen = Resolve; Socket.onerror = Reject; });
+	const Commands = () => Received.filter(Data => typeof Data !== 'string').map(Data => Proto.Decode('Response', Proto.Decode('Frame', new Uint8Array(Data)).payload))
+		.filter(Push => Push.cmd === 500 && Push.inbox_type === 1).map(Push => Push.body.has_new_message_notify.message).filter(Message => Message.message_type === 50001).map(Message => JSON.parse(Message.content));
 	assert.equal((await Im(As.grp_b, 651, 'conversation_remove_participants_body', { ...Target, participants: [Users.grp_c.id] })).status_code, 11);
 	assert.equal((await Im(As.grp_a, 651, 'conversation_remove_participants_body', { ...Target, participants: [Users.grp_c.id] })).status_code, 0);
 	assert.equal((await Im(As.grp_c, 301, 'messages_in_conversation_body', Target)).status_code, 1001);
+	await new Promise(Resolve => setTimeout(Resolve, 200));
+	assert.deepEqual(Commands().map(Command => Command.command_type), [7, 6]);
+	assert.deepEqual(Commands()[0].removed_participant, [Users.grp_c.id]); assert.ok(Commands()[1].group_version >= 3);
+	Socket.close();
 	assert.equal((await Im(As.grp_d, 902, 'set_conversation_core_info_body', { ...Target, name: 'Crew 2', is_name_set: true })).body.set_conversation_core_info_body.conversation_core_info.name, 'Crew 2');
 	assert.equal((await Im(As.grp_a, 652, 'leave_conversation_body', Target)).status_code, 0);
 	const Info = await (await Call(`/api/v1/im/groups/${Short}`, 'GET', undefined, As.grp_b)).json();
@@ -1997,6 +2008,29 @@ test('group chats are made of friends, live in the group inbox, and post native 
 	assert.deepEqual((await (await Call('/api/v1/im/groups', 'GET', undefined, As.grp_c)).json()).groups.map(Room => Room.title), ['Two']);
 	assert.deepEqual((await (await Call('/api/v1/im/groups/friends', 'GET', undefined, As.grp_x)).json()).friends, []);
 	assert.equal((await Call(`/api/v1/im/groups/${Short}/members/${Users.grp_d.id}`, 'DELETE', undefined, { cookie: As.grp_d.cookie })).status, 403);
+});
+
+test('download video saves a copy marked with the logo and @username plus an end card, kept for next time, and follows the Downloads switch', async () => {
+	const Detail = async Headers => (await (await Call(`/api/item/detail/?itemId=${VideoId}`, 'GET', undefined, Headers)).json()).itemInfo.itemStruct;
+	const Item = await Detail({});
+	assert.deepEqual([Item.video.downloadAddr, Item.downloadSetting, Item.authorPrivate, Item.author.downloadSetting], [`${Origin}/api/v1/videos/${VideoId}/download`, 0, false, 0]);
+	const First = await fetch(Item.video.downloadAddr);
+	assert.equal(First.status, 200); assert.equal(First.headers.get('content-type'), 'video/mp4'); assert.match(First.headers.get('content-disposition'), /attachment; filename="owner_\d+\.mp4"/);
+	const Saved = join(Directory, 'downloaded.mp4');
+	await writeFile(Saved, Buffer.from(await First.arrayBuffer()));
+	const Probe = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', Saved], { encoding: 'utf8' });
+	const Source = (await Pool.query('SELECT duration, download_name FROM videos WHERE id = $1', [VideoId])).rows[0];
+	assert.ok(Number(Probe.stdout) > Source.duration + 2.3, `duration ${Probe.stdout}`);
+	assert.match(Source.download_name, new RegExp(`^dl-${VideoId}-[0-9a-f]{16}\\.mp4$`));
+	assert.equal((await fetch(Item.video.downloadAddr, { headers: { range: 'bytes=0-15' } })).status, 206);
+	const Switch = Value => Call('/api/privacy/user/settings/update/v1', 'POST', { field: 'download', value: Value }, Auth());
+	assert.equal((await (await Switch(0)).json()).privacy_settings.download, 0);
+	assert.equal((await Detail({})).downloadSetting, 3);
+	assert.equal((await fetch(Item.video.downloadAddr)).status, 403);
+	assert.equal((await fetch(Item.video.downloadAddr, { headers: { cookie: Cookie } })).status, 200);
+	assert.equal((await (await Call('/api/privacy/setting/restriction/v1/', 'GET', undefined, Auth())).json()).privacy_settings.download, 0);
+	assert.equal((await (await Switch(1)).json()).privacy_settings.download, 1);
+	assert.equal((await fetch(`${Origin}/media/${Source.download_name}`)).status, 404);
 });
 
 test('misc switches turn Kittok features off and back on without a restart', async () => {

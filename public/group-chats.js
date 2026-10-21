@@ -33,7 +33,7 @@
 	const Act = (Status, Work) => async Event => {
 		const Button = Event.currentTarget;
 		Button.disabled = true; Status.textContent = '';
-		try { await Work(); location.reload(); } catch (Failure) { Status.textContent = Messages[Failure.message] ?? 'Something went wrong. Try again.'; Button.disabled = false; }
+		try { await Work(); Button.closest('dialog')?.close(); } catch (Failure) { Status.textContent = Messages[Failure.message] ?? 'Something went wrong. Try again.'; Button.disabled = false; }
 	};
 
 	async function Pick({ Title, Action, Named = false, Exclude = [], Minimum, Submit }) {

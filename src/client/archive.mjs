@@ -37,10 +37,12 @@ export async function MessageUploader(Original) {
 	return Buffer.from(`(self.${Match[1]}=self.${Match[1]}||[]).push([[${Match[2]}],{${Match[3]}:function(e){e.exports=${Shim.trim()}}}]);`);
 }
 
+export const AssetFile = Value => join(ClientDir, 'assets', createHash('sha256').update(AssetUrl(Value).href).digest('hex'));
+
 export async function Asset(Value, { Refresh = false } = {}) {
 	const Url = AssetUrl(Value);
 	const Key = createHash('sha256').update(Url.href).digest('hex');
-	const Path = join(ClientDir, 'assets', Key);
+	const Path = AssetFile(Value);
 	if (!Refresh) try { return await readFile(Path); } catch (Error) { if (Error.code !== 'ENOENT') throw Error; }
 	if (Pending.has(Key)) return Pending.get(Key);
 	const Work = (async () => {

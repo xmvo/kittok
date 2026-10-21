@@ -12,7 +12,7 @@ export function UserShape(User, Origin) {
 	const Avatar = AvatarUrl(User, Origin);
 	return {
 		id: User.id, uniqueId: User.username, nickname: User.display_name, secUid: User.id,
-		signature: User.bio ?? '', verified: Misc.verifiedBadges && Boolean(User.verified), privateAccount: Boolean(User.private_account), secret: Boolean(User.private_account),
+		signature: User.bio ?? '', verified: Misc.verifiedBadges && Boolean(User.verified), privateAccount: Boolean(User.private_account), secret: Boolean(User.private_account), downloadSetting: User.allow_downloads === false ? 3 : 0,
 		prideFlag: User.pride_flag ?? '', kittokBadges: PublicBadges(User),
 		avatarThumb: Avatar, avatarMedium: Avatar, avatarLarger: Avatar,
 		following: 0, relation: User.relation ?? 0,
@@ -169,7 +169,7 @@ export async function RecordView(Pool, VideoId, Viewer) {
 }
 
 export async function FindUser(Pool, Value, ById = false) {
-	const Result = await Pool.query(`SELECT id, username, display_name, bio, role, avatar_name, verified, pride_flag, user_badges, private_account, comment_permission FROM users WHERE ${ById ? 'id' : 'username'} = $1 AND deactivated_at IS NULL`, [ById ? Id(Value) : String(Value).toLowerCase()]);
+	const Result = await Pool.query(`SELECT id, username, display_name, bio, role, avatar_name, verified, pride_flag, user_badges, private_account, comment_permission, allow_downloads FROM users WHERE ${ById ? 'id' : 'username'} = $1 AND deactivated_at IS NULL`, [ById ? Id(Value) : String(Value).toLowerCase()]);
 	if (!Result.rowCount) throw new HttpError(404, 'UserNotFound');
 	return Result.rows[0];
 }
@@ -209,7 +209,7 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 	Conditions.push(VideoVisibleSql('$1::bigint'));
 	if (forYou) Conditions.push(`NOT ${ForYouIneligibleSql('v.id')}`);
 	Values.push(Math.min(Math.max(Number(limit) || 20, 1), 50) + 1);
-	const Result = await Pool.query(`SELECT v.*, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account,
+	const Result = await Pool.query(`SELECT v.*, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, u.allow_downloads,
 		(SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes,
 		(SELECT count(*)::int FROM comments c WHERE c.video_id = v.id AND NOT ${RemovedSql('comment', 'c.id')}) AS comments,
 		(SELECT count(*)::int FROM favorites f WHERE f.video_id = v.id) AS favorites,
@@ -240,7 +240,7 @@ export function VideoShape(Row, Origin, Mentioned, Viewer) {
 		author: Author, stats: Stats, statsV2: Object.fromEntries(Object.entries(Stats).map(([Key, Value]) => [Key, String(Value)])),
 		video: {
 			id: Row.id, width: Row.width, height: Row.height, duration: Row.duration, ratio: `${Row.height}p`,
-			playAddr: `${Origin}/media/${Row.file_name}`, downloadAddr: `${Origin}/media/${Row.file_name}`,
+			playAddr: `${Origin}/media/${Row.file_name}`, downloadAddr: `${Origin}/api/v1/videos/${Row.id}/download`,
 			cover: `${Origin}/media/${Row.cover_name}`, originCover: `${Origin}/media/${Row.cover_name}`, dynamicCover: `${Origin}/media/${Row.cover_name}`,
 			format: 'mp4', codecType: 'h264', bitrate: Math.round(Number(Row.bytes) * 8 / Row.duration), bitrateInfo: [],
 			encodeUserTag: '', videoQuality: 'normal', subtitleInfos: [], volumeInfo: { Loudness: -15, Peak: 0.8 },
@@ -249,6 +249,7 @@ export function VideoShape(Row, Origin, Mentioned, Viewer) {
 			playUrl: '', coverThumb: Author.avatarThumb, coverMedium: Author.avatarMedium, coverLarge: Author.avatarLarger },
 		textExtra: TextExtra, challenges: Challenges, repostList: Misc.reposts && Row.reposted && Viewer ? [{ secUid: Viewer, uid: Viewer }] : [], digged: Row.liked, collected: Row.saved, itemCommentStatus: Row.can_comment === false ? 1 : 0,
 		officalItem: false, secret: Row.visibility === 'only_me', privateItem: Row.visibility === 'only_me', shareEnabled: true, duetEnabled: false, stitchEnabled: false,
+		authorPrivate: Boolean(Row.private_account), downloadSetting: Row.allow_downloads === false ? 3 : 0, itemMute: false,
 		forFriend: Row.visibility === 'friends', originalItem: false, isAd: false, item_control: {}, contents: [{ desc: Row.description, textExtra: TextExtra }],
 	};
 }

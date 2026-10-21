@@ -94,7 +94,7 @@ export async function Login(Pool, Username, Password, Info = {}) {
 export async function Viewer(Pool, Request) {
 	const Cookie = Request.headers.cookie?.split(';').map(Value => Value.trim()).find(Value => Value.startsWith('kittok_session='))?.slice('kittok_session='.length);
 	if (!Cookie || !/^[a-f0-9]{64}$/.test(Cookie)) return null;
-	const Result = await Pool.query("SELECT u.id, u.username, u.display_name, u.bio, u.role, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, u.comment_permission, s.csrf_token, s.token_hash, s.last_seen_at < now() - interval '5 minutes' AS stale FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now() AND u.suspended_at IS NULL", [Hash(Cookie)]);
+	const Result = await Pool.query("SELECT u.id, u.username, u.display_name, u.bio, u.role, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, u.comment_permission, u.allow_downloads, s.csrf_token, s.token_hash, s.last_seen_at < now() - interval '5 minutes' AS stale FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now() AND u.suspended_at IS NULL", [Hash(Cookie)]);
 	const User = Result.rows[0];
 	if (User?.stale) Pool.query('UPDATE sessions SET last_seen_at = now() WHERE token_hash = $1', [User.token_hash]).catch(() => {});
 	return User ?? null;

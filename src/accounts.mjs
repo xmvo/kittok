@@ -6,10 +6,10 @@ export async function DeleteAccount(Pool, Config, UserId) {
 	const Account = (await Pool.query('SELECT avatar_name FROM users WHERE id = $1', [UserId])).rows[0];
 	if (!Account) return false;
 	await Pool.query('DELETE FROM invites WHERE created_by = $1', [UserId]);
-	const Videos = (await Pool.query('DELETE FROM videos WHERE author_id = $1 RETURNING file_name, cover_name', [UserId])).rows;
+	const Videos = (await Pool.query('DELETE FROM videos WHERE author_id = $1 RETURNING file_name, cover_name, download_name', [UserId])).rows;
 	Videos.push(...(await Pool.query('DELETE FROM message_media WHERE owner_id = $1 RETURNING file_name, cover_name', [UserId])).rows);
 	await Pool.query('DELETE FROM users WHERE id = $1', [UserId]);
-	for (const Row of Videos) await Promise.all([RemoveMedia(Config, Row.file_name), Row.cover_name && RemoveMedia(Config, Row.cover_name)]);
+	for (const Row of Videos) await Promise.all([RemoveMedia(Config, Row.file_name), Row.cover_name && RemoveMedia(Config, Row.cover_name), Row.download_name && RemoveMedia(Config, Row.download_name)]);
 	if (Account.avatar_name) await RemoveMedia(Config, Account.avatar_name);
 	return true;
 }

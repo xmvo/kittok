@@ -219,6 +219,17 @@ async function Deliver(Pool, Room, Row, Members = Room.members.map(Member => Mem
 	}
 }
 
+const Commands = { CoreInfoUpdate: 6, ParticipantUpdate: 7 };
+async function Announce(Pool, Room, Row, Recipients, Changes = {}) {
+	const Version = (await Pool.query('SELECT info_version FROM conversations WHERE id = $1', [Room.id])).rows[0]?.info_version ?? '1';
+	const Contents = [...(Changes.added_participant || Changes.removed_participant ? [{ command_type: Commands.ParticipantUpdate, ...Changes }] : []), { command_type: Commands.CoreInfoUpdate, group_version: Number(Version) }];
+	for (const UserId of Recipients) {
+		const Cursor = await UserCursor(Pool, UserId, null, false, Room.conversation_type);
+		for (const Content of Contents) PushTo([UserId], Envelope(Cmd.NewMessageNotify, { conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, previous_cursor: Cursor, next_cursor: Cursor,
+			message: { ...MessageShape({ ...Row, conversation_key: Room.conversation_key, conversation_type: Room.conversation_type, message_type: 50001, content: JSON.stringify(Content), client_message_id: `command:${Row.id}:${Content.command_type}` }), ext: { 's:server_message_id': Row.id } } }, InboxOf(Room)));
+	}
+}
+
 export async function CreateGroup(Pool, Viewer, Participants, Name = '') {
 	if (!Misc.groupChats) throw new ImError(Status.InvalidRequest, 'GroupChatsOff');
 	const Others = Ids(Participants).filter(Id => Id !== Viewer);
@@ -252,7 +263,9 @@ export async function AddMembers(Pool, Viewer, Body, Wanted) {
 			await Client.query('UPDATE conversations SET info_version = info_version + 1 WHERE id = $1', [Room.id]);
 			return Notice(Client, Room.id, Viewer, Notices.Added, Allowed);
 		});
-		await Deliver(Pool, (await Conversations(Pool, Viewer, 'c.id = $2', [Room.id], null))[0], Added);
+		const Grown = (await Conversations(Pool, Viewer, 'c.id = $2', [Room.id], null))[0];
+		await Deliver(Pool, Grown, Added);
+		await Announce(Pool, Grown, Added, Grown.members.map(Member => Member.user_id), { added_participant: Allowed });
 	}
 	return { Added: Allowed, Failed: Fresh.filter(Id => !Allowed.includes(Id)) };
 }
@@ -268,6 +281,7 @@ export async function RemoveMembers(Pool, Viewer, Body, Wanted) {
 		return Notice(Client, Room.id, Viewer, Notices.Removed, Leaving);
 	});
 	await Deliver(Pool, Room, Removed, Room.members.map(Member => Member.user_id).filter(Id => !Leaving.includes(Id)));
+	await Announce(Pool, Room, Removed, Room.members.map(Member => Member.user_id), { removed_participant: Leaving });
 	return Leaving;
 }
 
@@ -279,7 +293,10 @@ export async function LeaveGroup(Pool, Viewer, Body) {
 		await Client.query('UPDATE conversations SET info_version = info_version + 1, owner_id = CASE WHEN $2 THEN $3::bigint ELSE owner_id END WHERE id = $1', [Room.id, OwnerOf(Room) === Viewer, Rest[0] ?? null]);
 		return Rest.length ? Notice(Client, Room.id, Viewer, Notices.Left) : null;
 	});
-	if (Left) await Deliver(Pool, Room, Left, Rest);
+	if (Left) {
+		await Deliver(Pool, Room, Left, Rest);
+		await Announce(Pool, Room, Left, [...Rest, Viewer], { removed_participant: [Viewer] });
+	}
 }
 
 export async function RenameGroup(Pool, Viewer, Body, Name) {
@@ -291,6 +308,7 @@ export async function RenameGroup(Pool, Viewer, Body, Name) {
 		return Notice(Client, Room.id, Viewer, Notices.Renamed, [], { group_name: Clean });
 	});
 	await Deliver(Pool, Room, Renamed);
+	await Announce(Pool, Room, Renamed, Room.members.map(Member => Member.user_id));
 	return (await Conversations(Pool, Viewer, 'c.id = $2', [Room.id], null))[0];
 }
 
