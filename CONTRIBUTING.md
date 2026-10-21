@@ -59,9 +59,13 @@ Features Kittok adds on top of the client should get a switch on the admin **Mis
 - Database changes go in a new migration file.
 - Don't commit `.env`, `client/`, `media/` or `data/`.
 
+## Using AI
+
+AI tools are allowed. You're responsible for what you submit, though: read it, test it, and make sure it follows the steps above.
+
 ## Security
 
-Please don't open public issues for vulnerabilities. Contact the maintainer privately through GitHub instead.
+Please don't open public issues for vulnerabilities. Message me on Discord at **loadcharacter** instead.
 
 ## License
 
