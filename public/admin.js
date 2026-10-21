@@ -29,6 +29,8 @@
 		InvalidModerationSettings: 'Strike expiry is 7–365 days, limits are 2–100, and each policy is 1–50.', InvalidInvite: 'Invites need 1–100 uses and 1–90 days.', InvalidInstanceName: 'Names are 1–60 characters.',
 		InvalidLimits: 'Videos can be 1–2,048 MB and 1–3,600 seconds.', AnnouncementTooLong: 'Announcements are up to 500 characters.', InvalidAnnouncementLink: 'Links start with https:// or /.',
 		RulesTooLong: 'Rules are up to 10,000 characters.', InvalidImage: 'Use a PNG, JPEG, or WebP image up to 4096 px.', BodyTooLarge: 'Images are up to 2 MB.', SessionNotFound: 'That session already ended.',
+		InvalidVerification: 'Choose whether this account is verified.',
+		InvalidPrideFlag: 'Choose a pride flag from the list, or None.', InvalidUserBadges: 'Choose badges from the list.',
 	};
 	const Icons = {
 		queue: 'M3 13h4l2 3h6l2-3h4M5 5h14l2 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2-8z', appeals: 'M12 3v17M8 20h8M5 7h14M5 7l-3 7a3 3 0 0 0 6 0L5 7zM19 7l-3 7a3 3 0 0 0 6 0l-3-7z',
@@ -69,6 +71,45 @@
 	const Btn = (Label, OnClick, Class = '', Props = {}) => El('button', { type: 'button', class: `Btn ${Class}`, onclick: OnClick, ...Props }, Label);
 	const Chip = (Text, Class = '') => El('span', { class: `Chip ${Class}` }, Text);
 	const Spinner = () => El('div', { class: 'Loading' }, El('div', { class: 'Spinner' }));
+	function AccountBadges(User) {
+		const Badges = [...Boot.badges.pride.filter(Badge => Badge.id === User.pride_flag), ...Boot.badges.community.filter(Badge => User.user_badges?.includes(Badge.id))];
+		return Badges.length ? El('span', { class: 'AccountBadges', 'aria-label': 'Profile badges' }, Badges.map(Badge => El('img', { src: Badge.icon, alt: Badge.label, title: Badge.label, class: Badge.type }))) : null;
+	}
+	function ActionMenu(Items) {
+		const Trigger = Btn('•••', () => Toggle(), 'Icon', { 'aria-label': 'More account actions', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
+		const Popup = El('div', { class: 'ActionPopover', role: 'menu', 'aria-label': 'Account actions', hidden: true }, Items);
+		const Menu = El('div', { class: 'ActionMenu' }, Trigger, Popup);
+		const Entries = () => [...Popup.querySelectorAll('button,a')];
+		for (const Item of Entries()) { Item.setAttribute('role', 'menuitem'); Item.tabIndex = -1; }
+		function Close(Focus = false) { Popup.hidden = true; Trigger.setAttribute('aria-expanded', 'false'); if (Focus) Trigger.focus(); }
+		function Toggle() { if (!Popup.hidden) Close(); else { Popup.hidden = false; Trigger.setAttribute('aria-expanded', 'true'); Entries()[0]?.focus(); } }
+		const Outside = Event => { if (!Menu.contains(Event.target)) Close(); };
+		const FocusAway = Event => { if (!Menu.contains(Event.target)) Close(); };
+		document.addEventListener('pointerdown', Outside); document.addEventListener('focusin', FocusAway);
+		Teardown.push(() => { document.removeEventListener('pointerdown', Outside); document.removeEventListener('focusin', FocusAway); });
+		Popup.addEventListener('click', Event => { if (Event.target.closest('button,a')) Close(); });
+		Menu.addEventListener('keydown', Event => {
+			if (Event.key === 'Escape') { Event.preventDefault(); Event.stopPropagation(); Close(true); }
+			if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(Event.key)) return;
+			Event.preventDefault();
+			if (Popup.hidden) { Toggle(); if (Event.key === 'ArrowUp') Entries().at(-1)?.focus(); return; }
+			const Buttons = Entries(), Current = Buttons.indexOf(document.activeElement);
+			Buttons[Event.key === 'Home' ? 0 : Event.key === 'End' ? Buttons.length - 1 : (Current + (Event.key === 'ArrowDown' ? 1 : -1) + Buttons.length) % Buttons.length]?.focus();
+		});
+		return Menu;
+	}
+	function EditBadges(User, Refresh) {
+		const Flag = El('select', { class: 'Select', 'aria-label': 'Pride flag' }, El('option', { value: '' }, 'None / prefer not to say'), Boot.badges.pride.map(Badge => El('option', { value: Badge.id }, Badge.label)));
+		Flag.value = User.pride_flag;
+		const Choices = Boot.badges.community.map(Badge => El('label', { class: 'BadgeChoice' }, El('input', { type: 'checkbox', value: Badge.id, checked: User.user_badges.includes(Badge.id) }), El('img', { src: Badge.icon, alt: '' }), El('span', {}, Badge.label)));
+		const Preview = El('div', { class: 'BadgeEditorPreview' });
+		const Update = () => Fill(Preview, AccountBadges({ pride_flag: Flag.value, user_badges: Choices.filter(Choice => Choice.querySelector('input').checked).map(Choice => Choice.querySelector('input').value) }) ?? El('span', { class: 'Faint' }, 'No profile badges'));
+		Flag.addEventListener('change', Update); for (const Choice of Choices) Choice.addEventListener('change', Update); Update();
+		Modal({ Title: `Profile badges · @${User.username}`, Confirm: 'Save badges', Body: [Preview, El('label', { class: 'Field' }, El('span', {}, 'Pride flag'), Flag, El('small', {}, 'Public beside their name. Choose None to remove it.')), El('div', { class: 'Field' }, El('span', {}, 'Community badges'), El('div', { class: 'BadgeChoices' }, Choices)), El('p', { class: 'Faint', style: 'margin:0;font-size:12px' }, 'Community badges are assigned by admins and do not change account permissions.')], OnConfirm: async () => {
+			await Api(`users/${User.id}/badges`, { prideFlag: Flag.value, userBadges: Choices.filter(Choice => Choice.querySelector('input').checked).map(Choice => Choice.querySelector('input').value) });
+			Toast('Profile badges updated'); Refresh();
+		} });
+	}
 
 	async function Api(Path, Body, Method) {
 		const Options = { method: Method ?? (Body === undefined ? 'GET' : 'POST'), headers: { 'x-csrf-token': Boot.csrf } };
@@ -96,8 +137,16 @@
 	const Short = (Text, Length = 120) => !Text ? '' : Text.length > Length ? Text.slice(0, Length - 1) + '…' : Text;
 
 	function Modal({ Title, Body, Confirm = 'Confirm', Danger = false, OnConfirm }) {
-		const Close = () => { Shade.remove(); document.removeEventListener('keydown', Escape, true); };
-		const Escape = Event => { if (Event.key === 'Escape') { Event.stopPropagation(); Close(); } };
+		const Previous = document.activeElement?.closest('.ActionMenu')?.querySelector('[aria-haspopup]') ?? document.activeElement;
+		const Close = () => { Shade.remove(); document.removeEventListener('keydown', Escape, true); if (Previous?.isConnected) Previous.focus(); };
+		const Escape = Event => {
+			if (Event.key === 'Escape') { Event.stopPropagation(); Close(); }
+			if (Event.key === 'Tab') {
+				const Fields = [...Shade.querySelectorAll('button:not(:disabled),input,textarea,select,a[href]')];
+				if (Event.shiftKey && document.activeElement === Fields[0]) { Event.preventDefault(); Fields.at(-1).focus(); }
+				else if (!Event.shiftKey && document.activeElement === Fields.at(-1)) { Event.preventDefault(); Fields[0].focus(); }
+			}
+		};
 		const Action = Btn(Confirm, async () => { Action.disabled = true; try { await OnConfirm(); Close(); } catch (Error) { Fail(Error); Action.disabled = false; } }, Danger ? 'Danger' : 'Primary');
 		const Shade = El('div', { class: 'Modal', onclick: Event => { if (Event.target === Shade) Close(); } },
 			El('div', { class: 'Panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': Title }, El('div', { class: 'PanelHead' }, Title), El('div', { class: 'PanelBody' }, Body), El('div', { class: 'Foot' }, Btn('Cancel', Close, 'Ghost'), Action)));
@@ -499,7 +548,7 @@
 			El('div', { class: 'Toolbar' }, Field, Query && El('span', { class: 'Faint' }, `${Data.users.length}${Data.hasMore ? '+' : ''} matches`)),
 			El('div', { class: 'Panel', style: 'overflow-x:auto' }, Data.users.length ? El('table', { class: 'Table' }, El('thead', {}, El('tr', {}, ['Account', 'ID', 'Role', 'Joined', 'Videos', 'Followers', 'Strikes', 'Status'].map(Head => El('th', {}, Head)))),
 				El('tbody', {}, Data.users.map(Row => El('tr', { onclick: () => Navigate(`/admin/accounts/${Row.id}`) },
-					El('td', {}, El('div', { class: 'Row' }, El('img', { class: 'Avatar', src: Row.avatar, alt: '' }), El('div', {}, El('div', { style: 'font-weight:600' }, Row.display_name), El('div', { class: 'Faint' }, `@${Row.username}`)))),
+					El('td', {}, El('div', { class: 'Row' }, El('img', { class: 'Avatar', src: Row.avatar, alt: '' }), El('div', {}, El('div', { class: 'Row', style: 'font-weight:600' }, Row.display_name, Row.verified && Chip('Verified', 'Info'), AccountBadges(Row)), El('div', { class: 'Faint' }, `@${Row.username}`)))),
 					El('td', { class: 'Mono Faint' }, Row.id), El('td', {}, Row.role === 'admin' ? Chip('Admin', 'Info') : El('span', { class: 'Muted' }, 'Member')),
 					El('td', { class: 'Faint Num' }, Ago(Row.created_at)), El('td', { class: 'Num' }, Row.videos), El('td', { class: 'Num' }, Row.followers), El('td', { class: 'Num' }, Row.violations),
 					El('td', {}, Row.suspended_at ? Chip('Banned', 'Bad') : Chip('Active', 'Good'))))))
@@ -514,13 +563,20 @@
 		SetTitle([['Accounts', '/admin/accounts'], `@${U.username}`]);
 		const Refresh = () => Navigate(location.pathname + location.search, true);
 		const Owner = { id: U.id, username: U.username, standing: Data.standing };
-		const Actions = U.self ? [El('span', { class: 'Faint' }, 'This is you')] : [
-			U.role !== 'admin' && Btn('Take action', () => EnforceDrawer({ Type: 'user', Target: U.id, Owner, Title: `Act on @${U.username}`, OnDone: Refresh }), 'Primary'),
+		const Actions = U.self ? [] : [
 			U.role !== 'admin' && (U.suspended_at ? Btn('Unban', () => AskReason({ Title: `Unban @${U.username}?`, Text: 'Reverses every active ban on the account.', Confirm: 'Unban', OnConfirm: async Reason => { await Api(`users/${U.id}/unsuspend`, { reason: Reason }); Toast('Account unbanned'); Refresh(); } }))
 				: Btn('Ban', () => AskReason({ Title: `Ban @${U.username}?`, Text: 'Permanent until reversed or appealed. Signs the account out everywhere and hides its content.', Confirm: 'Ban', Danger: true, OnConfirm: async Reason => { await Api(`users/${U.id}/suspend`, { reason: Reason }); Toast('Account banned'); Refresh(); } }), 'Danger')),
 			Btn(U.role === 'admin' ? 'Remove admin' : 'Make admin', () => Modal({ Title: U.role === 'admin' ? `Remove admin from @${U.username}?` : `Make @${U.username} an admin?`, Body: El('p', { class: 'Muted', style: 'margin:0' }, U.role === 'admin' ? 'They lose access to this console.' : 'They get full access to this console and instance settings.'), OnConfirm: async () => { await Api(`users/${U.id}/role`, { role: U.role === 'admin' ? 'member' : 'admin' }); Toast('Role updated'); Refresh(); } })),
 			Btn('Delete', () => { const Confirm = El('input', { class: 'Input', placeholder: U.username }); Modal({ Title: `Delete @${U.username}?`, Danger: true, Confirm: 'Delete forever', Body: [El('p', { class: 'Muted', style: 'margin:0' }, 'Deletes the account, its videos and files, and its avatar. This can’t be undone. Type the username to confirm.'), Confirm], OnConfirm: async () => { await Api(`users/${U.id}/delete`, { confirm: Confirm.value }); Toast('Account deleted'); Navigate('/admin/accounts'); } }); }, 'Ghost Danger'),
 		];
+		Actions.unshift(Btn(U.verified ? 'Remove verification' : 'Verify account', () => Modal({
+			Title: U.verified ? `Remove verification from @${U.username}?` : `Verify @${U.username}?`,
+			Body: El('p', { class: 'Muted', style: 'margin:0' }, U.verified ? 'Removes the verified badge from this account.' : 'Adds the verified badge to this account on this instance.'),
+			Confirm: U.verified ? 'Remove verification' : 'Verify account',
+			OnConfirm: async () => { await Api(`users/${U.id}/verification`, { verified: !U.verified }); Toast(U.verified ? 'Verification removed' : 'Account verified'); Refresh(); },
+		})));
+		Actions.unshift(Btn('Edit profile badges', () => EditBadges(U, Refresh)));
+		Actions.unshift(El('a', { href: '/@' + U.username, target: '_blank', rel: 'noopener', class: 'Btn' }, 'View profile'));
 		const Panels = {
 			enforcement: () => El('div', { class: 'Columns' },
 				El('div', { class: 'Stack' }, El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Strikes', El('span', { class: 'Faint' }, `Expire after ${Data.standing.thresholds.strikeDays} days`)), El('div', { class: 'PanelBody' }, Meters(Data.standing))),
@@ -547,10 +603,10 @@
 		};
 		Fill(Body, El('div', { class: 'Page Stack' },
 			El('div', { class: 'Panel Profile' }, El('img', { class: 'Avatar Large', src: U.avatar, alt: '' }),
-				El('div', { class: 'Grow' }, El('div', { class: 'Row' }, El('h2', {}, U.display_name), StandingChip(Data.standing, U.suspended_at), U.role === 'admin' && Chip('Admin', 'Info')),
+				El('div', { class: 'Grow' }, El('div', { class: 'Row' }, El('h2', {}, U.display_name), U.verified && Chip('Verified', 'Info'), AccountBadges(U), StandingChip(Data.standing, U.suspended_at), U.role === 'admin' && Chip('Admin', 'Info')),
 					El('div', { class: 'Muted' }, `@${U.username}`), El('div', { class: 'Facts' }, El('span', { class: 'Mono' }, U.id), El('span', {}, `Joined ${new Date(U.created_at).toLocaleDateString()}`), El('span', {}, `${U.stats.followerCount} followers`), El('span', {}, `${U.stats.videoCount} videos`), El('span', {}, `${U.stats.heartCount} likes`)),
 					U.bio && El('p', { style: 'margin:8px 0 0;overflow-wrap:anywhere' }, U.bio)),
-				El('div', { class: 'Row', style: 'flex-wrap:wrap;justify-content:flex-end' }, Actions)),
+				El('div', { class: 'Row', style: 'flex-wrap:wrap;justify-content:flex-end' }, !U.self && U.role !== 'admin' && Btn('Take action', () => EnforceDrawer({ Type: 'user', Target: U.id, Owner, Title: `Act on @${U.username}`, OnDone: Refresh }), 'Primary'), ActionMenu(Actions))),
 			El('div', { class: 'Tabs' }, [['enforcement', 'Enforcement'], ['content', 'Content'], ['reports', 'Reports'], ['security', 'Security']].map(([Key, Label]) => Link(`/admin/accounts/${U.id}?tab=${Key}`, { class: `Tab${Tab === Key ? ' Active' : ''}` }, Label))),
 			Panels[Tab]()));
 	}

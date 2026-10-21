@@ -5,6 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import { join, extname } from 'node:path';
+import { PostSettings } from './privacy.mjs';
 import { HttpError } from './http.mjs';
 
 export const Mime = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.mp4': 'video/mp4', '.json': 'application/json', '.ico': 'image/x-icon' };
@@ -27,7 +28,8 @@ function Run(Executable, Args, Failure = 'InvalidVideo') {
 	});
 }
 
-export async function ImportVideo(Pool, Config, UserId, Input, Description = '') {
+export async function ImportVideo(Pool, Config, UserId, Input, Description = '', Settings = { visibility: 'public', comment_permission: 'default' }) {
+	PostSettings(Settings.visibility, Settings.comment_permission);
 	if (typeof Description !== 'string' || Description.length > 2200) throw new HttpError(400, 'DescriptionTooLong');
 	const InputInfo = await stat(Input);
 	if (!InputInfo.size || InputInfo.size > Config.MaxVideoBytes) throw new HttpError(413, 'VideoTooLarge');
@@ -49,7 +51,7 @@ export async function ImportVideo(Pool, Config, UserId, Input, Description = '')
 		const OutputProbe = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', '-show_streams', '-of', 'json', Video]));
 		const OutputTrack = OutputProbe.streams.find(Track => Track.codec_type === 'video');
 		const Info = await stat(Video);
-		const Result = await Pool.query('INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id', [UserId, Description, VideoName, CoverName, OutputTrack.width, OutputTrack.height, Duration, Info.size]);
+		const Result = await Pool.query('INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes, visibility, comment_permission) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id', [UserId, Description, VideoName, CoverName, OutputTrack.width, OutputTrack.height, Duration, Info.size, Settings.visibility, Settings.comment_permission]);
 		return Result.rows[0].id;
 	} catch (Error) {
 		await Promise.allSettled([rm(Video, { force: true }), rm(Cover, { force: true })]);
@@ -105,12 +107,12 @@ export async function ReceiveVideo(Request, Config) {
 	} catch (Error) { await rm(File, { force: true }); throw Error; }
 }
 
-export async function ServeMedia(Request, Response, Config, Name) {
+export async function ServeMedia(Request, Response, Config, Name, Protected = false) {
 	if (!SafeName.test(Name)) throw new HttpError(404, 'MediaNotFound');
 	const File = join(Config.MediaDir, Name);
 	const Info = await stat(File).catch(() => null);
 	if (!Info?.isFile()) throw new HttpError(404, 'MediaNotFound');
-	const Headers = { 'content-type': Mime[extname(Name)], 'accept-ranges': 'bytes', 'cache-control': 'public, max-age=86400' };
+	const Headers = { 'content-type': Mime[extname(Name)], 'accept-ranges': 'bytes', 'cache-control': Protected ? 'private, no-store' : 'public, max-age=86400', vary: 'Cookie' };
 	let Start = 0;
 	let End = Info.size - 1;
 	if (Request.headers.range) {

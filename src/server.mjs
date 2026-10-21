@@ -14,9 +14,11 @@ import { Api } from './routes/api.mjs';
 import { Compatibility } from './routes/compatibility.mjs';
 import { Account } from './routes/account.mjs';
 import { Passport } from './routes/passport.mjs';
+import { Studio } from './routes/studio.mjs';
 import { Admin } from './routes/admin.mjs';
 import { Im, HandleRequest, Proto } from './routes/im.mjs';
 import { Upgrade, Sweep } from './im/frontier.mjs';
+import { AssertVideoVisible } from './privacy.mjs';
 import { LoadSettings } from './settings.mjs';
 
 const Config = LoadConfig();
@@ -52,6 +54,7 @@ const Server = createServer(async (Request, Response) => {
 			if (Request.headers['sec-fetch-site'] === 'cross-site') throw new HttpError(403, 'InvalidOrigin');
 		}
 		const Path = Url.pathname;
+		if (/^\/signup(?:\/|$)/.test(Path)) { RequireMethod(Request, ['GET', 'HEAD']); Response.writeHead(303, { location: '/account?register=1' }); return Response.end(); }
 		if (Path === '/foryou') { RequireMethod(Request, ['GET', 'HEAD']); Response.writeHead(303, { location: '/' + Url.search }); return Response.end(); }
 		if (Path === '/health/live') return Json(Response, { status: 'Alive' });
 		if (Path === '/health/ready') { await Pool.query('SELECT 1'); return Json(Response, { status: 'Ready' }); }
@@ -79,7 +82,16 @@ const Server = createServer(async (Request, Response) => {
 			Response.setHeader('cache-control', 'no-cache');
 			return Response.end(Request.method === 'HEAD' ? undefined : Body);
 		}
-		if (Path.startsWith('/media/')) { RequireMethod(Request, ['GET', 'HEAD']); return await ServeMedia(Request, Response, Config, Path.slice('/media/'.length)); }
+		if (Path.startsWith('/media/')) {
+			RequireMethod(Request, ['GET', 'HEAD']);
+			const Name = Path.slice('/media/'.length);
+			const Video = (await Pool.query('SELECT id FROM videos WHERE file_name = $1 OR cover_name = $1', [Name])).rows[0];
+			if (Video) {
+				const Viewer_ = await Viewer(Pool, Request);
+				if (!(Url.searchParams.get('review') === '1' && Viewer_?.role === 'admin')) await AssertVideoVisible(Pool, Video.id, Viewer_?.id);
+			} else if (Name.endsWith('.mp4') || /^[a-f0-9-]{36}\.jpg$/.test(Name)) throw new HttpError(404, 'MediaNotFound');
+			return await ServeMedia(Request, Response, Config, Name, Boolean(Video));
+		}
 		if (Path === '/source') {
 			RequireMethod(Request, ['GET', 'HEAD']);
 			const File = join(Root, 'dist/kittok-0.1.0.tar.gz');
@@ -105,7 +117,7 @@ const Server = createServer(async (Request, Response) => {
 			if (Path === '/_debug/unknown') return Json(Response, Object.fromEntries(Unknown));
 			if (Path === '/_debug/blocked') return Json(Response, Object.fromEntries(Blocked));
 		}
-		if (await Admin(Context) || await Account(Context) || await Api(Context) || await Passport(Context) || await Im(Context) || await Compatibility(Context)) return;
+		if (await Admin(Context) || await Studio(Context) || await Account(Context) || await Api(Context) || await Passport(Context) || await Im(Context) || await Compatibility(Context)) return;
 		if (/^\/(?:api|passport|node-webapp|tiktok|tns-api|aweme|node|v[1-3])\//.test(Path)) {
 			const Key = `${Request.method} ${Path}`;
 			if (Unknown.size < 500) Unknown.set(Key, (Unknown.get(Key) ?? 0) + 1);
@@ -119,7 +131,7 @@ const Server = createServer(async (Request, Response) => {
 	} catch (Error) {
 		if (Error.status) {
 			if (Request.url?.startsWith('/account/') && Request.method === 'POST') {
-				Response.writeHead(303, { location: '/account?error=' + encodeURIComponent(Error.message) }); return Response.end();
+				Response.writeHead(303, { location: (Request.url.startsWith('/account/register') ? '/account?register=1&error=' : '/account?error=') + encodeURIComponent(Error.message) }); return Response.end();
 			}
 			if (!Response.headersSent) Json(Response, { error: Error.message, statusCode: Error.status, status_code: Error.status }, Error.status);
 			else Response.end();

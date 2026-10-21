@@ -1,6 +1,8 @@
 import { HttpError, Id } from './http.mjs';
 import { Transaction } from './db.mjs';
 import { RemovedSql, ForYouIneligibleSql } from './moderation.mjs';
+import { PublicBadges } from './badges.mjs';
+import { VideoVisibleSql, CommentsAllowedSql, SetFollow, AssertVideoVisible } from './privacy.mjs';
 
 export const AvatarUrl = (User, Origin) => User.avatar_name ? `${Origin}/media/${User.avatar_name}` : `${Origin}/public/avatar.svg`;
 
@@ -8,7 +10,8 @@ export function UserShape(User, Origin) {
 	const Avatar = AvatarUrl(User, Origin);
 	return {
 		id: User.id, uniqueId: User.username, nickname: User.display_name, secUid: User.id,
-		signature: User.bio ?? '', verified: false, privateAccount: false, secret: false,
+		signature: User.bio ?? '', verified: Boolean(User.verified), privateAccount: Boolean(User.private_account), secret: Boolean(User.private_account),
+		prideFlag: User.pride_flag ?? '', kittokBadges: PublicBadges(User),
 		avatarThumb: Avatar, avatarMedium: Avatar, avatarLarger: Avatar,
 		following: 0, relation: User.relation ?? 0,
 	};
@@ -21,14 +24,17 @@ export const RelationSql = (Viewer, Target) => `CASE
 	WHEN EXISTS (SELECT 1 FROM blocks WHERE blocker_id = ${Target} AND blocked_id = ${Viewer}) THEN 5
 	WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Viewer} AND following_id = ${Target})
 		THEN CASE WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Target} AND following_id = ${Viewer}) THEN 2 ELSE 1 END
+	WHEN EXISTS (SELECT 1 FROM follow_requests WHERE follower_id = ${Viewer} AND following_id = ${Target}) THEN 3
 	WHEN EXISTS (SELECT 1 FROM follows WHERE follower_id = ${Target} AND following_id = ${Viewer}) THEN 6 ELSE 0 END`;
 
 export async function SetBlock(Pool, Blocker, Blocked, On) {
 	if (Blocker === Blocked) throw new HttpError(400, 'CannotBlockYourself');
 	return Transaction(Pool, async Client => {
+		await Client.query('SELECT id FROM users WHERE id = ANY($1::bigint[]) ORDER BY id FOR NO KEY UPDATE', [[Blocker, Blocked]]);
 		if (!(await Client.query('SELECT 1 FROM users WHERE id = $1', [Blocked])).rowCount) throw new HttpError(404, 'UserNotFound');
 		if (On) {
 			await Client.query('INSERT INTO blocks(blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [Blocker, Blocked]);
+			await Client.query('DELETE FROM follow_requests WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)', [Blocker, Blocked]);
 			await Client.query('DELETE FROM follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)', [Blocker, Blocked]);
 		} else {
 			await Client.query('DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [Blocker, Blocked]);
@@ -37,7 +43,7 @@ export async function SetBlock(Pool, Blocker, Blocked, On) {
 }
 
 export async function BlockList(Pool, Viewer, Offset, Limit) {
-	const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, 4 AS relation, count(*) OVER ()::int AS total
+	const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, 4 AS relation, count(*) OVER ()::int AS total
 		FROM blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = $1 ORDER BY b.created_at DESC, u.id DESC OFFSET $2 LIMIT $3`, [Viewer, Offset, Limit]);
 	return { users: Result.rows, total: Result.rows[0]?.total ?? 0 };
 }
@@ -45,13 +51,14 @@ export async function BlockList(Pool, Viewer, Offset, Limit) {
 export const DmAudiences = { dm_setting_friends: 'dm_friends', dm_setting_potential_connection: 'dm_potential', dm_setting_others: 'dm_others' };
 
 export async function DmSettings(Pool, UserId) {
-	const Row = (await Pool.query('SELECT dm_friends, dm_potential, dm_others FROM users WHERE id = $1', [UserId])).rows[0];
-	return Object.fromEntries(Object.entries(DmAudiences).map(([Field, Column]) => [Field, Row[Column]]));
+	const Row = (await Pool.query('SELECT dm_friends, dm_potential, dm_others, dm_read_status FROM users WHERE id = $1', [UserId])).rows[0];
+	return { ...Object.fromEntries(Object.entries(DmAudiences).map(([Field, Column]) => [Field, Row[Column]])), message_read_status: Row.dm_read_status ? 1 : 0 };
 }
 
 export async function SetDmSetting(Pool, UserId, Field, Value) {
-	if (!DmAudiences[Field] || ![1, 2, 3].includes(Number(Value))) throw new HttpError(400, 'InvalidMessageSetting');
-	await Pool.query(`UPDATE users SET ${DmAudiences[Field]} = $2 WHERE id = $1`, [UserId, Number(Value)]);
+	const ReadStatus = Field === 'message_read_status';
+	if ((!ReadStatus && !DmAudiences[Field]) || !['number', 'string'].includes(typeof Value) || !String(Value).trim() || !(ReadStatus ? [0, 1] : [1, 2, 3]).includes(Number(Value))) throw new HttpError(400, 'InvalidMessageSetting');
+	await Pool.query(`UPDATE users SET ${ReadStatus ? 'dm_read_status' : DmAudiences[Field]} = $2 WHERE id = $1`, [UserId, ReadStatus ? Number(Value) === 1 : Number(Value)]);
 }
 
 export async function Relation(Pool, Viewer, Target) {
@@ -60,13 +67,14 @@ export async function Relation(Pool, Viewer, Target) {
 }
 
 export async function FollowList(Pool, Viewer, Target, Scene, Offset, Limit) {
+	if (Viewer !== Target && (await Pool.query('SELECT 1 FROM users u WHERE u.id = $2 AND u.private_account AND NOT EXISTS (SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2)', [Viewer ?? null, Target])).rowCount) return { users: [], total: 0 };
 	const From = {
 		following: 'follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = $2',
 		followers: 'follows f JOIN users u ON u.id = f.follower_id WHERE f.following_id = $2',
 		friends: 'follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = $2 AND EXISTS (SELECT 1 FROM follows b WHERE b.follower_id = u.id AND b.following_id = $2)',
 		suggested: 'users u WHERE u.id <> $2 AND NOT EXISTS (SELECT 1 FROM follows b WHERE b.follower_id = $2 AND b.following_id = u.id)',
 	}[Scene];
-	const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, ${RelationSql('$1::bigint', 'u.id')} AS relation, count(*) OVER ()::int AS total
+	const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, ${RelationSql('$1::bigint', 'u.id')} AS relation, count(*) OVER ()::int AS total
 		FROM ${From} AND u.suspended_at IS NULL AND NOT ${BlockedBetween('$1::bigint', 'u.id')} ORDER BY ${Scene === 'suggested' ? 'u.created_at' : 'f.created_at'} DESC, u.id DESC OFFSET $3 LIMIT $4`, [Viewer ?? null, Target, Offset, Limit]);
 	return { users: Result.rows, total: Result.rows[0]?.total ?? 0 };
 }
@@ -76,12 +84,12 @@ const ActivitySql = `
 	UNION ALL SELECT 'comment_like', cl.created_at, cl.user_id, c.video_id, c.id FROM comment_likes cl JOIN comments c ON c.id = cl.comment_id WHERE c.author_id = $1 AND cl.user_id <> $1
 	UNION ALL SELECT 'comment', c.created_at, c.author_id, c.video_id, c.id FROM comments c JOIN videos v ON v.id = c.video_id LEFT JOIN comments p ON p.id = c.parent_id WHERE c.author_id <> $1 AND (v.author_id = $1 OR p.author_id = $1)
 	UNION ALL SELECT 'follow', f.created_at, f.follower_id, NULL, NULL FROM follows f WHERE f.following_id = $1`;
-const VisibleActivity = `(a.comment_id IS NULL OR NOT ${RemovedSql('comment', 'a.comment_id')}) AND (a.video_id IS NULL OR NOT ${RemovedSql('video', 'a.video_id')})
+const VisibleActivity = `(a.video_id IS NULL OR EXISTS (SELECT 1 FROM videos pv JOIN users pu ON pu.id = pv.author_id WHERE pv.id = a.video_id AND ${VideoVisibleSql('$1', 'pv', 'pu')})) AND (a.comment_id IS NULL OR NOT ${RemovedSql('comment', 'a.comment_id')}) AND (a.video_id IS NULL OR NOT ${RemovedSql('video', 'a.video_id')})
 	AND NOT EXISTS (SELECT 1 FROM users banned WHERE banned.id = a.actor AND banned.suspended_at IS NOT NULL)`;
 
 export async function Activity(Pool, UserId, Kinds, { Before = null, After = null }, Limit) {
 	const Result = await Pool.query(`SELECT a.kind, a.at, extract(epoch FROM a.at)::float8 AS epoch, a.at <= me.notices_read_at AS read,
-		u.id, u.username, u.display_name, u.bio, u.avatar_name, ${RelationSql('$1', 'u.id')} AS relation,
+		u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, ${RelationSql('$1', 'u.id')} AS relation,
 		a.video_id, v.author_id AS video_author, v.cover_name, v.description, a.comment_id, c.body, c.parent_id, p.author_id AS parent_author
 		FROM (${ActivitySql}) a JOIN users me ON me.id = $1 JOIN users u ON u.id = a.actor
 		LEFT JOIN videos v ON v.id = a.video_id LEFT JOIN comments c ON c.id = a.comment_id LEFT JOIN comments p ON p.id = c.parent_id
@@ -108,7 +116,7 @@ export async function RecordView(Pool, VideoId, Viewer) {
 }
 
 export async function FindUser(Pool, Value, ById = false) {
-	const Result = await Pool.query(`SELECT id, username, display_name, bio, role, avatar_name FROM users WHERE ${ById ? 'id' : 'username'} = $1`, [ById ? Id(Value) : String(Value).toLowerCase()]);
+	const Result = await Pool.query(`SELECT id, username, display_name, bio, role, avatar_name, verified, pride_flag, user_badges, private_account, comment_permission FROM users WHERE ${ById ? 'id' : 'username'} = $1`, [ById ? Id(Value) : String(Value).toLowerCase()]);
 	if (!Result.rowCount) throw new HttpError(404, 'UserNotFound');
 	return Result.rows[0];
 }
@@ -135,16 +143,16 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 	if (id) Where('v.id = ?', Id(id));
 	if (query) Where("v.description ILIKE ? ESCAPE '\\'", `%${String(query).slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`);
 	Conditions.push(`NOT ${BlockedBetween('$1', 'v.author_id')}`);
-	Conditions.push(`NOT ${RemovedSql('video', 'v.id')}`, 'u.suspended_at IS NULL');
+	Conditions.push(VideoVisibleSql('$1::bigint'));
 	if (forYou) Conditions.push(`NOT ${ForYouIneligibleSql('v.id')}`);
 	Values.push(Math.min(Math.max(Number(limit) || 20, 1), 50) + 1);
-	const Result = await Pool.query(`SELECT v.*, u.username, u.display_name, u.bio, u.avatar_name,
+	const Result = await Pool.query(`SELECT v.*, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account,
 		(SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes,
 		(SELECT count(*)::int FROM comments c WHERE c.video_id = v.id AND NOT ${RemovedSql('comment', 'c.id')}) AS comments,
 		(SELECT count(*)::int FROM favorites f WHERE f.video_id = v.id) AS favorites,
 		EXISTS (SELECT 1 FROM likes l WHERE l.video_id = v.id AND l.user_id = $1) AS liked,
 		EXISTS (SELECT 1 FROM favorites f WHERE f.video_id = v.id AND f.user_id = $1) AS saved,
-		${RelationSql('$1', 'v.author_id')} AS relation
+		${RelationSql('$1', 'v.author_id')} AS relation, ${CommentsAllowedSql('$1::bigint')} AS can_comment
 		FROM videos v JOIN users u ON u.id = v.author_id ${Conditions.length ? `WHERE ${Conditions.join(' AND ')}` : ''}
 		ORDER BY v.id DESC LIMIT $${Values.length}`, Values);
 	const HasMore = Result.rows.length === Values.at(-1);
@@ -167,15 +175,17 @@ export function VideoShape(Row, Origin) {
 		},
 		music: { id: Row.id, title: 'Original sound', authorName: Row.display_name, original: true, duration: Row.duration,
 			playUrl: '', coverThumb: Author.avatarThumb, coverMedium: Author.avatarMedium, coverLarge: Author.avatarLarger },
-		textExtra: [], challenges: [], digged: Row.liked, collected: Row.saved, itemCommentStatus: 0,
-		officalItem: false, secret: false, privateItem: false, shareEnabled: true, duetEnabled: false, stitchEnabled: false,
-		forFriend: false, originalItem: false, isAd: false, item_control: {}, contents: [],
+		textExtra: [], challenges: [], digged: Row.liked, collected: Row.saved, itemCommentStatus: Row.can_comment === false ? 1 : 0,
+		officalItem: false, secret: Row.visibility === 'only_me', privateItem: Row.visibility === 'only_me', shareEnabled: true, duetEnabled: false, stitchEnabled: false,
+		forFriend: Row.visibility === 'friends', originalItem: false, isAd: false, item_control: {}, contents: [],
 	};
 }
 
 export async function AddComment(Pool, VideoId, AuthorId, Text, ParentId = null) {
 	if (typeof Text !== 'string' || !Text.trim() || Text.length > 1500) throw new HttpError(400, 'InvalidComment');
-	const Exists = await Pool.query('SELECT author_id FROM videos WHERE id = $1', [VideoId]);
+	await AssertVideoVisible(Pool, VideoId, AuthorId);
+	const Exists = await Pool.query(`SELECT v.author_id, ${CommentsAllowedSql('$2::bigint')} AS allowed FROM videos v JOIN users u ON u.id = v.author_id WHERE v.id = $1`, [VideoId, AuthorId]);
+	if (!Exists.rows[0]?.allowed) throw new HttpError(403, 'CommentsNotAllowed');
 	if (!Exists.rowCount) throw new HttpError(404, 'VideoNotFound');
 	if ((await Pool.query(`SELECT ${BlockedBetween('$1', '$2')} AS blocked`, [AuthorId, Exists.rows[0].author_id])).rows[0].blocked) throw new HttpError(403, 'BlockedRelationship');
 	const Added = await Pool.query(`INSERT INTO comments(video_id, author_id, body, parent_id)
@@ -191,7 +201,13 @@ export async function AddComment(Pool, VideoId, AuthorId, Text, ParentId = null)
 export async function SetRelation(Pool, Table, Columns, Values, Enabled) {
 	const Allowed = { likes: ['user_id', 'video_id'], favorites: ['user_id', 'video_id'], follows: ['follower_id', 'following_id'], comment_likes: ['user_id', 'comment_id'] };
 	if (JSON.stringify(Allowed[Table]) !== JSON.stringify(Columns)) throw new Error('InvalidRelation');
-	if (Table === 'follows' && Enabled && (await Pool.query(`SELECT ${BlockedBetween('$1::bigint', '$2::bigint')} AS blocked`, Values)).rows[0].blocked) throw new HttpError(403, 'BlockedRelationship');
+	if (Table === 'follows') return SetFollow(Pool, Values[0], Values[1], Enabled);
+	if (Enabled && ['likes', 'favorites'].includes(Table)) await AssertVideoVisible(Pool, Values[1], Values[0]);
+	if (Enabled && Table === 'comment_likes') {
+		const Comment = (await Pool.query('SELECT video_id FROM comments WHERE id = $1', [Values[1]])).rows[0];
+		if (!Comment) throw new HttpError(404, 'CommentNotFound');
+		await AssertVideoVisible(Pool, Comment.video_id, Values[0]);
+	}
 	try {
 		if (Enabled) await Pool.query(`INSERT INTO ${Table}(${Columns.join(',')}) VALUES ($1, $2) ON CONFLICT DO NOTHING`, Values);
 		else await Pool.query(`DELETE FROM ${Table} WHERE ${Columns[0]} = $1 AND ${Columns[1]} = $2`, Values);

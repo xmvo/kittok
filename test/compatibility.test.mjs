@@ -152,11 +152,12 @@ test('migrations are idempotent and passwords and session tokens are hashed at r
 	assert.equal((await Call('/api/v1/session', 'POST', { username: 'owner', password: 'wrong' })).status, 401);
 });
 
-test('invites have one-use enforcement and clients cannot choose an admin role', async () => {
+test('invites have one-use enforcement and clients cannot choose an admin role or verification badge', async () => {
 	const Code = Token(); await Pool.query("INSERT INTO invites(token_hash, created_by, expires_at) VALUES ($1,$2,now()+interval '1 day')", [Hash(Code), Owner.id]);
-	const New = await Call('/api/v1/users', 'POST', { username: 'newkitten', displayName: 'New Kitten', password: Password, role: 'admin', invite: Code });
+	const New = await Call('/api/v1/users', 'POST', { username: 'newkitten', displayName: 'New Kitten', password: Password, role: 'admin', verified: true, invite: Code });
 	assert.equal(New.status, 201);
-	assert.equal((await Pool.query("SELECT role FROM users WHERE username='newkitten'")).rows[0].role, 'member');
+	assert.equal((await New.json()).user.verified, false);
+	assert.deepEqual((await Pool.query("SELECT role, verified FROM users WHERE username='newkitten'")).rows[0], { role: 'member', verified: false });
 	assert.equal((await Call('/api/v1/users', 'POST', { username: 'anotherkitten', password: Password, invite: Code })).status, 403);
 });
 
@@ -195,7 +196,7 @@ test('bridge play reports count one view per viewer per window and media request
 	await View({ cookie: Cookie });
 	assert.equal(await Views(), Start + 2);
 	assert.equal((await View({}, 'nope')).status, 400);
-	assert.equal((await View({}, '1')).status, 204);
+	assert.equal((await View({}, '1')).status, 404);
 	assert.equal((await Call('/_kittok/view')).status, 405);
 	await Pool.query("UPDATE video_views SET viewed_at = now() - interval '7 hours' WHERE video_id=$1", [VideoId]);
 	await View({ cookie: Cookie });
@@ -708,7 +709,7 @@ test('original client block requests persist, sever follows, and hide each side 
 	assert.equal(await SeesVideo(AsGrumpy), false);
 	assert.equal(await SeesVideo(), true);
 	assert.equal((await Call(`/api/item/detail/?itemId=${VideoId}`, 'GET', undefined, AsGrumpy)).status, 404);
-	assert.equal((await Call(`/api/comment/publish/?aweme_id=${VideoId}&text=hiss&reply_id=0`, 'POST', undefined, AsGrumpy)).status, 403);
+	assert.equal((await Call(`/api/comment/publish/?aweme_id=${VideoId}&text=hiss&reply_id=0`, 'POST', undefined, AsGrumpy)).status, 404);
 	assert.equal((await Follow(Owner, AsGrumpy)).status, 403);
 	assert.equal((await Follow(Grumpy, Auth())).status, 403);
 	assert.equal((await Call('/api/v1/users/owner/follow', 'PUT', undefined, AsGrumpy)).status, 403);
@@ -830,11 +831,11 @@ test('direct messages honor recipient privacy, end with the session, and follow 
 	const Short = (await Pool.query('SELECT id FROM conversations WHERE conversation_key = $1', [`0:1:${Owner.id}:${Friend.id}`])).rows[0].id;
 	const Send = ClientId => Im(100, 'send_message_body', { conversation_short_id: Short, conversation_type: 1, message_type: 7, content: '{"aweType":0,"text":"Knock knock"}', client_message_id: ClientId });
 	const Restriction = await (await Call('/api/privacy/setting/restriction/v1/', 'GET', undefined, AsFriend)).json();
-	assert.deepEqual(Restriction.privacy_settings, { private_account: 0, dm_setting_friends: 1, dm_setting_potential_connection: 1, dm_setting_others: 1 });
+	assert.deepEqual(Restriction.privacy_settings, { private_account: 0, comment: 0, dm_setting_friends: 1, dm_setting_potential_connection: 1, dm_setting_others: 1, message_read_status: 1 });
 	assert.deepEqual(Restriction.privacy_restriction.account.dm_setting_others.values.map(Option => [Option.value, Option.show_type]), [[1, 0], [2, 0], [3, 0]]);
-	assert.equal(Restriction.privacy_restriction.account.comment.show_type, 2);
+	assert.equal(Restriction.privacy_restriction.account.comment.show_type, 0);
 	const Pages = JSON.parse((await (await Call('/api/privacy/unified_config/v1', 'GET', undefined, AsFriend)).json()).configs);
-	assert.deepEqual(Object.keys(Pages), ['main', 'direct_message_permission', 'dm_friends', 'dm_potential_connection', 'dm_others']);
+	assert.deepEqual(Object.keys(Pages), ['main', 'comment_permission', 'direct_message_permission', 'dm_friends', 'dm_potential_connection', 'dm_others']);
 	assert.deepEqual(Pages.direct_message_permission.contents[0].items.map(Item => Item.item_tag), ['dm_friends_permission_entrance', 'dm_potential_connection_permission_entrance', 'dm_others_permission_entrance']);
 	assert.equal(JSON.parse((await (await Call('/api/privacy/unified_config/v1')).json()).configs).main, undefined);
 	for (const Path of ['/tiktok/region/change/status/get/v1', '/api/compliance/settings/', '/api/privacy/user/effected_count/v1']) assert.equal((await (await Call(Path, 'GET', undefined, AsFriend)).json()).status_code, 0);
@@ -843,7 +844,8 @@ test('direct messages honor recipient privacy, end with the session, and follow 
 	assert.equal((await Send('private-1')).body.send_message_body.status, 2);
 	assert.equal((await Im(609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Friend.id] })).status_code, 11);
 	assert.equal((await Native('dm_setting_friends', 4)).status_code, 1);
-	assert.equal((await Native('private_account', 1)).status_code, 1);
+	assert.equal((await Native('private_account', 1)).status_code, 0);
+	assert.equal((await Native('private_account', 0)).status_code, 0);
 	assert.equal((await Stored()).dm_friends, 3);
 	assert.equal((await Form({ dm_setting_friends: '1' })).status, 303);
 	assert.equal((await Send('private-2')).body.send_message_body.status, 0);
@@ -1006,7 +1008,7 @@ test('moderation gives warnings, per-feature strikes, timed feature restrictions
 	const Denied = await (await fetch(Origin + '/passport/web/user/login/', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ account: 'offender', password: Password, mix_mode: '0' }) })).json();
 	assert.equal(Denied.data.error_code, 1091); assert.equal(Denied.data.user_id_str, Offender.id);
 	const Ticket = Denied.data.verify_ticket;
-	assert.equal((await (await Call(`/tns-api/appeal/status/?object_type=6&object_id=${Offender.id}&verify_ticket=${Ticket.slice(0, -1)}0`)).json()).status_code, 1);
+	assert.equal((await (await Call(`/tns-api/appeal/status/?object_type=6&object_id=${Offender.id}&verify_ticket=${Ticket.slice(0, -1)}${Ticket.endsWith('0') ? '1' : '0'}`)).json()).status_code, 1);
 	const Dialog = await (await Call(`/tns-api/appeal/status/?object_type=6&object_id=${Offender.id}&verify_ticket=${encodeURIComponent(Ticket)}`)).json();
 	assert.deepEqual(await (await Call(`/aweme/v2/appeal/status/?object_type=6&object_id=${Offender.id}&verify_ticket=${encodeURIComponent(Ticket)}`)).json(), Dialog);
 	assert.equal(Dialog.status_code, 0); assert.equal(Dialog.appeal_type, 2018); assert.equal(Dialog.pop_title, 'Your account was permanently banned');
@@ -1065,4 +1067,405 @@ test('users, sessions, videos, and social data survive a server restart', async 
 	assert.equal((await (await Call(`/api/comment/list/reply/?comment_id=${Thread.cid}&count=3`, 'GET', undefined, Auth())).json()).comments[1].user_digged, 1);
 	assert.equal((await Call('/api/v1/session', 'DELETE', undefined, Auth())).status, 200);
 	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, { cookie: Cookie })).json()).user, null);
+});
+
+test('only admins grant and remove persistent verification, with consistent native badges and an audit trail', async () => {
+	const Signed = await Login(Pool, 'owner', Password);
+	Cookie = `kittok_session=${Signed.Token}`; Session = { csrfToken: Signed.Csrf };
+	const Member = await CreateUser(Pool, { username: 'badge_kitten', displayName: 'Badge Kitten', password: Password }, 'closed', true);
+	const MemberSession = await Login(Pool, 'badge_kitten', Password);
+	const AsMember = { cookie: `kittok_session=${MemberSession.Token}`, 'x-csrf-token': MemberSession.Csrf };
+	const Endpoint = `/_kittok/admin/users/${Member.id}/verification`;
+	const Verify = (Verified, Headers = Auth()) => Call(Endpoint, 'POST', { verified: Verified }, Headers);
+	const Profile = () => Call('/api/user/detail/?uniqueId=badge_kitten').then(Response => Response.json());
+	const Audit = () => Pool.query("SELECT admin_id, detail FROM admin_actions WHERE action = 'user.verification' AND target = '@badge_kitten' ORDER BY id");
+	assert.equal((await Profile()).userInfo.user.verified, false);
+	assert.equal((await Verify(true, {})).status, 404);
+	assert.equal((await Verify(true, AsMember)).status, 404);
+	assert.equal((await Verify(true, { cookie: Cookie })).status, 403);
+	for (const Invalid of ['true', 1, null]) assert.equal((await Verify(Invalid)).status, 400);
+	assert.equal((await Call(Endpoint, 'POST', {}, Auth())).status, 400);
+	assert.equal((await Call('/_kittok/admin/users/9223372036854775807/verification', 'POST', { verified: true }, Auth())).status, 404);
+	assert.equal((await Call('/api/update/profile/', 'POST', { verified: true, custom_verify: 'Verified account' }, AsMember)).status, 200);
+	assert.equal((await Profile()).userInfo.user.verified, false);
+	assert.deepEqual(await (await Verify(true)).json(), { ok: true, verified: true });
+	assert.equal((await Verify(true)).status, 200);
+	assert.deepEqual((await Audit()).rows, [{ admin_id: Owner.id, detail: 'verified' }]);
+	assert.equal((await Profile()).userInfo.user.verified, true);
+	const AdminProfile = await (await Call(`/_kittok/admin/users/${Member.id}`, 'GET', undefined, Auth())).json();
+	assert.equal(AdminProfile.user.verified, true); assert.equal(AdminProfile.user.role, 'member');
+	assert.equal((await (await Call('/_kittok/admin/users?q=badge_kitten', 'GET', undefined, Auth())).json()).users[0].verified, true);
+	const Search = await (await Call('/api/search/user/full/?keyword=badge_kitten')).json();
+	assert.equal(Search.user_list[0].user_info.custom_verify, 'Verified account');
+	const Edited = await (await Call('/api/update/profile/', 'POST', { signature: 'Still verified', verified: false }, AsMember)).json();
+	assert.equal(Edited.user.custom_verify, 'Verified account');
+	const Published = await (await Call(`/api/comment/publish/?aweme_id=${VideoId}&text=Verified%20comment`, 'POST', undefined, AsMember)).json();
+	assert.equal(Published.comment.user.custom_verify, 'Verified account');
+	assert.equal((await (await Call(`/api/comment/list/?aweme_id=${VideoId}`)).json()).comments.find(Comment => Comment.cid === Published.comment.cid).user.custom_verify, 'Verified account');
+	assert.equal((await Call('/api/v1/users/badge_kitten/follow', 'PUT', undefined, Auth())).status, 200);
+	assert.equal((await (await Call(`/api/user/list/?scene=21&secUid=${Owner.id}`)).json()).userList.find(Entry => Entry.user.id === Member.id).user.verified, true);
+	assert.equal((await Call(`/_kittok/admin/users/${Owner.id}/verification`, 'POST', { verified: true }, Auth())).status, 200);
+	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, Auth())).json()).user.verified, true);
+	assert.equal((await (await Call(`/api/item/detail/?itemId=${VideoId}`)).json()).itemInfo.itemStruct.author.verified, true);
+	const Html = await (await Call('/@owner', 'GET', undefined, Auth())).text();
+	assert.equal(ReadJsonScript(Html, '__UNIVERSAL_DATA_FOR_REHYDRATION__').__DEFAULT_SCOPE__['webapp.app-context'].user.verified, true);
+	await Stop(); await Start();
+	assert.equal((await Profile()).userInfo.user.verified, true);
+	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, AsMember)).json()).user.verified, true);
+	assert.equal((await Verify(false)).status, 200);
+	assert.equal((await Profile()).userInfo.user.verified, false);
+	assert.equal((await (await Call('/api/search/user/full/?keyword=badge_kitten')).json()).user_list[0].user_info.custom_verify, undefined);
+	assert.equal((await (await Call(`/api/comment/list/?aweme_id=${VideoId}`)).json()).comments.find(Comment => Comment.cid === Published.comment.cid).user.custom_verify, undefined);
+	assert.deepEqual((await Audit()).rows, [{ admin_id: Owner.id, detail: 'verified' }, { admin_id: Owner.id, detail: 'unverified' }]);
+	assert.equal((await Call(`/_kittok/admin/users/${Owner.id}/verification`, 'POST', { verified: false }, Auth())).status, 200);
+	await Stop(); await Start();
+	assert.equal((await Profile()).userInfo.user.verified, false);
+	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, Auth())).json()).user.verified, false);
+});
+
+test('pride flags are optional at signup, public, editable by their owner, and cannot grant community badges', async () => {
+	const Code = Token(); await Pool.query("INSERT INTO invites(token_hash, created_by, expires_at) VALUES ($1,$2,now()+interval '1 day')", [Hash(Code), Owner.id]);
+	const Signup = await Call('/api/v1/users', 'POST', { username: 'pride_kitten', password: Password, invite: Code, prideFlag: 'bisexual', verified: true, userBadges: ['supporter'], user_badges: ['contributor'] });
+	assert.equal(Signup.status, 201);
+	const New = (await Signup.json()).user;
+	assert.equal(New.prideFlag, 'bisexual'); assert.equal(New.verified, false);
+	assert.deepEqual(New.kittokBadges.map(Badge => Badge.id), ['bisexual']);
+	const Signed = await Login(Pool, 'pride_kitten', Password);
+	const As = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	const Before = (await Pool.query('SELECT pride_flag, user_badges FROM users WHERE id=$1', [Owner.id])).rows[0];
+	const Update = (Body, Headers = As) => Call('/api/v1/profile/badges', 'PATCH', Body, Headers);
+	assert.equal((await Update({ prideFlag: 'rainbow' }, {})).status, 401);
+	assert.equal((await Update({ prideFlag: 'rainbow' }, { cookie: As.cookie })).status, 403);
+	for (const Invalid of ['<script>', 'unknown', [], null, true]) assert.equal((await Update({ prideFlag: Invalid })).status, 400);
+	assert.equal((await Update({ userBadges: ['supporter'] })).status, 400);
+	const Changed = await (await Update({ prideFlag: 'asexual', verified: true, userBadges: ['supporter'], userId: Owner.id })).json();
+	assert.deepEqual(Changed.kittokBadges.map(Badge => Badge.id), ['asexual']);
+	assert.deepEqual((await Pool.query('SELECT verified, role, user_badges FROM users WHERE id=$1', [New.id])).rows[0], { verified: false, role: 'member', user_badges: [] });
+	assert.deepEqual((await Pool.query('SELECT pride_flag, user_badges FROM users WHERE id=$1', [Owner.id])).rows[0], Before);
+	const Public = await (await Call('/_kittok/badges?users=pride_kitten,missing_user')).json();
+	assert.deepEqual(Object.keys(Public.users), ['pride_kitten']);
+	assert.deepEqual(Object.keys(Public.users.pride_kitten[0]).sort(), ['icon', 'id', 'label', 'type']);
+	assert.equal((await Call('/_kittok/badges?users=invalid!')).status, 400);
+	assert.equal((await Call('/_kittok/badges?users=' + Array.from({ length: 51 }, (_, Index) => 'user_' + Index).join(','))).status, 400);
+	const Catalog = await (await Call('/_kittok/badges/catalog')).json();
+	assert.equal(Catalog.pride.length, 13); assert.deepEqual(Catalog.community.map(Badge => Badge.id), ['contributor', 'early_member', 'supporter']);
+	for (const Badge of [...Catalog.pride, ...Catalog.community]) {
+		const Icon = await Call(Badge.icon); assert.equal(Icon.status, 200); assert.match(Icon.headers.get('content-type'), /image\/svg\+xml/);
+		const Svg = await Icon.text(); assert.match(Svg, /^<svg/); assert.ok(!/script|onload|foreignObject|href=/.test(Svg));
+	}
+	assert.equal((await Call('/_kittok/badges/icon/missing.svg')).status, 404);
+	const Account = await (await Call('/account', 'GET', undefined, As)).text();
+	assert.ok(Account.includes('name="prideFlag"') && Account.includes('value="asexual" selected') && Account.includes('Shown publicly beside your name'));
+	const Saved = await fetch(Origin + '/account/badges', { method: 'POST', redirect: 'manual', headers: { cookie: As.cookie, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ csrf: Signed.Csrf, prideFlag: 'pansexual' }) });
+	assert.equal(Saved.status, 303); assert.equal(Saved.headers.get('location'), '/account?badges=saved#badges');
+	assert.equal((await (await Call('/api/user/detail/?uniqueId=pride_kitten')).json()).userInfo.user.prideFlag, 'pansexual');
+	await Stop(); await Start();
+	assert.equal((await (await Call('/api/v1/session', 'GET', undefined, As)).json()).user.prideFlag, 'pansexual');
+	assert.equal((await Update({ prideFlag: '' })).status, 200);
+	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).users.pride_kitten, []);
+	assert.equal((await Call(`/_kittok/admin/users/${Owner.id}/badges`, 'POST', { prideFlag: 'rainbow', userBadges: ['early_member'] }, Auth())).status, 200);
+	const VideoAuthor = (await (await Call(`/api/item/detail/?itemId=${VideoId}`)).json()).itemInfo.itemStruct.author;
+	assert.deepEqual(VideoAuthor.kittokBadges.map(Badge => Badge.id), ['rainbow', 'early_member']);
+	assert.equal((await Call(`/_kittok/admin/users/${Owner.id}/badges`, 'POST', { prideFlag: '', userBadges: [] }, Auth())).status, 200);
+	const GuestSignup = await (await Call('/account?register=1')).text();
+	assert.ok(GuestSignup.includes('None / prefer not to say') && GuestSignup.includes('Shown publicly beside your name'));
+	assert.equal((await fetch(Origin + '/signup', { redirect: 'manual' })).headers.get('location'), '/account?register=1');
+	await assert.rejects(CreateUser(Pool, { username: 'bad_flag', password: Password, prideFlag: 'fake' }, 'closed', true), /InvalidPrideFlag/);
+});
+
+test('admins manage profile flags and community badges without changing permissions or leaking identity into audit details', async () => {
+	const Target = (await Pool.query("SELECT id FROM users WHERE username='pride_kitten'")).rows[0];
+	const Signed = await Login(Pool, 'pride_kitten', Password);
+	const As = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	const Write = (Body, Headers = Auth()) => Call(`/_kittok/admin/users/${Target.id}/badges`, 'POST', Body, Headers);
+	assert.equal((await Write({ userBadges: ['supporter'] }, As)).status, 404);
+	assert.equal((await Write({ userBadges: ['supporter'] }, {})).status, 404);
+	assert.equal((await Write({ userBadges: ['supporter'] }, { cookie: Cookie })).status, 403);
+	for (const Bad of [{}, { userBadges: ['admin'] }, { userBadges: 'supporter' }, { userBadges: [null] }, { prideFlag: 'unknown', userBadges: ['supporter'] }]) assert.equal((await Write(Bad)).status, 400);
+	assert.equal((await Call('/_kittok/admin/users/9223372036854775807/badges', 'POST', { prideFlag: '' }, Auth())).status, 404);
+	assert.equal((await Write({ prideFlag: 'transgender', userBadges: ['supporter', 'contributor', 'supporter'] })).status, 200);
+	assert.equal((await Write({ prideFlag: 'transgender', userBadges: ['contributor', 'supporter'] })).status, 200);
+	const Audit = (await Pool.query("SELECT detail FROM admin_actions WHERE action='user.badges' AND target='@pride_kitten'")).rows;
+	assert.deepEqual(Audit, [{ detail: 'Profile badges updated' }]);
+	const Profile = await (await Call(`/_kittok/admin/users/${Target.id}`, 'GET', undefined, Auth())).json();
+	assert.equal(Profile.user.pride_flag, 'transgender'); assert.deepEqual(Profile.user.user_badges, ['contributor', 'supporter']);
+	assert.equal(Profile.user.role, 'member'); assert.equal(Profile.user.verified, false);
+	const List = await (await Call('/_kittok/admin/users?q=pride_kitten', 'GET', undefined, Auth())).json();
+	assert.deepEqual(List.users[0].user_badges, ['contributor', 'supporter']);
+	assert.equal((await Call(`/api/v1/users/pride_kitten/follow`, 'PUT', undefined, Auth())).status, 200);
+	const Following = await (await Call(`/api/user/list/?scene=21&secUid=${Owner.id}`)).json();
+	assert.deepEqual(Following.userList.find(Entry => Entry.user.id === Target.id).user.kittokBadges.map(Badge => Badge.id), ['transgender', 'contributor', 'supporter']);
+	const Comment = await (await Call(`/api/comment/publish/?aweme_id=${VideoId}&text=Badge%20order`, 'POST', undefined, As)).json();
+	assert.deepEqual(Comment.comment.user.kittokBadges.map(Badge => Badge.id), ['transgender', 'contributor', 'supporter']);
+	const Search = await (await Call('/api/search/user/full/?keyword=pride_kitten')).json();
+	assert.deepEqual(Search.user_list[0].user_info.kittokBadges.map(Badge => Badge.id), ['transgender', 'contributor', 'supporter']);
+	assert.equal((await Call('/api/v1/profile/badges', 'PATCH', { prideFlag: '' }, As)).status, 200);
+	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).users.pride_kitten.map(Badge => Badge.id), ['contributor', 'supporter']);
+	assert.equal((await Write({ prideFlag: 'nonbinary' })).status, 200);
+	await Stop(); await Start();
+	assert.deepEqual((await (await Call('/api/user/detail/?uniqueId=pride_kitten')).json()).userInfo.user.kittokBadges.map(Badge => Badge.id), ['nonbinary', 'contributor', 'supporter']);
+	assert.equal((await Write({ userBadges: [] })).status, 200);
+	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).users.pride_kitten.map(Badge => Badge.id), ['nonbinary']);
+	assert.equal((await Write({ prideFlag: '', userBadges: [] })).status, 200);
+	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).users.pride_kitten, []);
+});
+
+test('native request inboxes arrive live, enforce the pending limit, and keep read status private until mutual consent', async () => {
+	const Make = async Name => {
+		const User = await CreateUser(Pool, { username: Name, password: Password }, 'closed', true);
+		const Signed = await Login(Pool, Name, Password);
+		return { ...User, headers: { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf } };
+	};
+	const Host = await Make('privacy_host'), Peer = await Make('privacy_peer');
+	await Pool.query('UPDATE users SET dm_others=2 WHERE id=$1', [Host.id]);
+	const Im = async (As, Cmd, Field, Body = {}, Inbox = 0) => {
+		const Response = await fetch(Origin + '/v1/kittok', { method: 'POST', headers: { ...As.headers, 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: Cmd, sequence_id: '1', inbox_type: Inbox, body: { [Field]: Body } }) });
+		assert.equal(Response.status, 200);
+		return Proto.Decode('Response', Buffer.from(await Response.arrayBuffer()));
+	};
+	const Setting = (As, Value) => Call('/api/privacy/user/settings/update/v1', 'POST', { field: 'message_read_status', value: Value }, As.headers).then(Response => Response.json());
+	const Watch = async As => {
+		const Socket = new WebSocket(Origin.replace('http', 'ws') + '/ws/v2', { protocols: ['pbbp2'], headers: { ...As.headers, origin: Origin } });
+		Socket.binaryType = 'arraybuffer'; const Frames = []; let Pong;
+		Socket.onmessage = Event => { if (Event.data === 'hi') Pong?.(); else Frames.push(Proto.Decode('Response', Proto.Decode('Frame', new Uint8Array(Event.data)).payload)); };
+		await new Promise((Resolve, Reject) => { Socket.onopen = Resolve; Socket.onerror = Reject; });
+		return { Frames, Fence: () => new Promise((Resolve, Reject) => { const Timer = setTimeout(() => Reject(new Error('SocketFenceTimeout')), 2000); Pong = () => { clearTimeout(Timer); Resolve(); }; Socket.send('hi'); }), Close: () => new Promise(Resolve => { Socket.onclose = Resolve; Socket.close(); }) };
+	};
+	const HostSocket = await Watch(Host), PeerSocket = await Watch(Peer);
+	try {
+		const Chat = (await Im(Peer, 609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Host.id] })).body.create_conversation_v2_body.conversation;
+		const Ref = { conversation_short_id: Chat.conversation_short_id, conversation_type: 1 };
+		const Send = Id => Im(Peer, 100, 'send_message_body', { ...Ref, message_type: 7, client_message_id: Id, content: JSON.stringify({ aweType: 0, text: Id }), ext: { stranger: Peer.id } }).then(Response => Response.body.send_message_body);
+		const Index = async As => (await Im(As, 2000, 'participants_read_index_body', Ref)).body.participants_read_index_body.indexes.find(Row => Row.user_id === Host.id).index;
+		assert.equal((await Im(Host, 203, 'messages_per_user_init_v2_body', {}, 3)).body.messages_per_user_init_v2_body.conversations, undefined);
+		const First = await Send('privacy-1'); assert.equal(First.status, 0);
+		await HostSocket.Fence();
+		const Live = HostSocket.Frames.find(Frame => Frame.cmd === 500);
+		assert.equal(Live.inbox_type, 3); assert.equal(Live.body.has_new_message_notify.message.ext.stranger, Host.id);
+		const Inbox = (await Im(Host, 203, 'messages_per_user_init_v2_body', {}, 3)).body.messages_per_user_init_v2_body;
+		assert.equal(Inbox.conversations[0].inbox_type, 3); assert.equal(Inbox.conversations[0].conversation_core_info.ext.stranger, Host.id);
+		assert.deepEqual(Inbox.messages.map(Message => Message.ext.stranger), [Host.id]);
+		assert.equal((await Im(Host, 203, 'messages_per_user_init_v2_body')).body.messages_per_user_init_v2_body.conversations, undefined);
+		assert.equal((await Im(Peer, 203, 'messages_per_user_init_v2_body')).body.messages_per_user_init_v2_body.messages[0].ext.stranger, undefined);
+		await Im(Host, 2002, 'mark_conversation_read_body', { ...Ref, read_message_index: '1' });
+		await Im(Host, 411, 'send_input_status_body', { ...Ref, status: 1 }); await PeerSocket.Fence();
+		assert.ok(!PeerSocket.Frames.some(Frame => [501, 510].includes(Frame.cmd)));
+		assert.equal(await Index(Peer), '0'); assert.equal(await Index(Host), '1');
+		const Burst = await Promise.all(Array.from({ length: 5 }, (_, I) => Send('privacy-burst-' + I)));
+		assert.equal(Burst.filter(Result => Result.status === 0).length, 2);
+		assert.ok(Burst.filter(Result => Result.status !== 0).every(Result => Result.check_message.includes('up to 3 messages')));
+		assert.equal((await Send('privacy-1')).server_message_id, First.server_message_id);
+		const Combo = (await Im(Host, 204, 'messages_per_user_combo_body', { inboxes: [{ inbox_type: 0, cursor: '0' }, { inbox_type: 3, cursor: '0' }] })).body.messages_per_user_combo_body.inboxes;
+		assert.equal(Combo[0].messages, undefined); assert.equal(Combo[1].messages.length, 3);
+		assert.equal((await Im(Host, 2006, 'get_conversation_list_body', {}, 3)).body.get_conversation_list_body.list[0].inbox_type, 3);
+		assert.equal((await Call('/api/im/stranger/unlimit', 'POST', { conversation_id: Chat.conversation_id }, Host.headers)).status, 200);
+		await HostSocket.Fence();
+		const Upgrade = HostSocket.Frames.find(Frame => Frame.body?.has_new_message_notify?.message?.message_type === 50010);
+		assert.equal(Upgrade.inbox_type, 3); assert.equal(Upgrade.body.has_new_message_notify.previous_cursor, Upgrade.body.has_new_message_notify.next_cursor);
+		assert.equal((await Pool.query('SELECT count(*)::int AS count FROM messages WHERE conversation_id=$1', [Chat.conversation_short_id])).rows[0].count, 3);
+		assert.equal((await Send('privacy-accepted')).status, 0);
+		PeerSocket.Frames.length = 0;
+		await Im(Host, 2002, 'mark_conversation_read_body', { ...Ref, read_message_index: '4' }); await PeerSocket.Fence();
+		assert.ok(PeerSocket.Frames.some(Frame => Frame.cmd === 501)); assert.equal(await Index(Peer), '4');
+		assert.equal((await Setting(Host, 0)).status_code, 0);
+		assert.equal((await Setting(Host, 2)).status_code, 1);
+		assert.equal((await Call('/api/privacy/user/settings/update/v1', 'POST', { field: 'message_read_status', value: 1 }, { cookie: Host.headers.cookie })).status, 403);
+		PeerSocket.Frames.length = 0;
+		await Send('privacy-off'); await Im(Host, 2002, 'mark_conversation_read_body', { ...Ref, read_message_index: '5' }); await PeerSocket.Fence();
+		assert.ok(!PeerSocket.Frames.some(Frame => Frame.cmd === 501)); assert.equal(await Index(Peer), '0'); assert.equal(await Index(Host), '5');
+		const Batch = (await Im(Peer, 2038, 'batch_get_conversation_participants_readindex', { conversation_short_id: [Chat.conversation_short_id] })).body.batch_get_conversation_participants_readindex.conversationParticipantsReadIndex;
+		assert.equal(Batch[0].participantReadIndex.find(Row => Row.user_id === Host.id).index, '0');
+		await Setting(Host, 1); await Setting(Peer, 0); assert.equal(await Index(Peer), '0'); await Setting(Peer, 1); assert.equal(await Index(Peer), '5');
+		await Im(Host, 411, 'send_input_status_body', { ...Ref, status: 1 }); await PeerSocket.Fence();
+		assert.ok(PeerSocket.Frames.some(Frame => Frame.cmd === 510)); PeerSocket.Frames.length = 0;
+		assert.equal((await Call('/api/v1/users/privacy_peer/block', 'PUT', undefined, Host.headers)).status, 200);
+		await Im(Host, 2002, 'mark_conversation_read_body', { ...Ref, read_message_index: '5' }); await Im(Host, 411, 'send_input_status_body', { ...Ref, status: 1 }); await PeerSocket.Fence();
+		assert.ok(!PeerSocket.Frames.some(Frame => [501, 510].includes(Frame.cmd))); assert.equal(await Index(Peer), '0'); assert.equal((await Send('privacy-blocked')).status, 5);
+		await Setting(Host, 0);
+	} finally { await Promise.all([HostSocket.Close(), PeerSocket.Close()]); }
+	await Stop(); await Start();
+	const Saved = await (await Call('/api/privacy/setting/restriction/v1/', 'GET', undefined, Host.headers)).json();
+	assert.equal(Saved.privacy_settings.message_read_status, 0);
+	const Pages = JSON.parse((await (await Call('/api/privacy/unified_config/v1', 'GET', undefined, Host.headers)).json()).configs);
+	assert.equal(Pages.direct_message_permission.contents[0].items[2].item_info.label_config.find(Option => Option.option_value === 2).label_title, 'Receive as message request');
+	assert.equal(Pages.direct_message_permission.contents[1].items[0].item_type, 1);
+	assert.ok((await (await Call('/account', 'GET', undefined, Host.headers)).text()).includes('value="0" selected>Keep read status private'));
+	const Requester = await Make('declined_peer');
+	const Room = (await Im(Requester, 609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Host.id] })).body.create_conversation_v2_body.conversation;
+	const SendRequest = Id => Im(Requester, 100, 'send_message_body', { conversation_short_id: Room.conversation_short_id, conversation_type: 1, message_type: 7, client_message_id: Id, content: '{"text":"request"}' });
+	assert.equal((await SendRequest('decline-1')).body.send_message_body.status, 0);
+	assert.equal((await Im(Host, 1004, 'delete_stranger_conversation_body', { conversation_short_id: Room.conversation_short_id })).status_code, 0);
+	assert.equal((await SendRequest('decline-2')).body.send_message_body.status, 3);
+	assert.equal((await (await Call('/api/im/stranger/unlimit', 'POST', { conversation_id: Room.conversation_id }, Host.headers)).json()).status_code, 1);
+	assert.equal((await Im(Host, 203, 'messages_per_user_init_v2_body', {}, 3)).body.messages_per_user_init_v2_body.conversations, undefined);
+	const Blocked = await Make('blocked_requester');
+	const BlockedRoom = (await Im(Blocked, 609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Host.id] })).body.create_conversation_v2_body.conversation;
+	await Im(Blocked, 100, 'send_message_body', { conversation_short_id: BlockedRoom.conversation_short_id, conversation_type: 1, message_type: 7, client_message_id: 'blocked-request-1', content: '{"text":"request"}' });
+	await Call('/api/v1/users/blocked_requester/block', 'PUT', undefined, Host.headers);
+	assert.equal((await Im(Host, 1001, 'get_stranger_conversation_body')).body.get_stranger_conversation_body.conversation_list, undefined);
+	assert.equal((await Im(Host, 200, 'messages_per_user_body', { cursor: '0' }, 3)).body.messages_per_user_body.messages, undefined);
+});
+
+test('private accounts, follow requests, post audiences and comment permissions guard every public path and media bytes', async () => {
+	const Host = await CreateUser(Pool, { username: 'private_cat', password: Password }, 'closed', true);
+	const Peer = await CreateUser(Pool, { username: 'private_peer', password: Password }, 'closed', true);
+	const Outsider = await CreateUser(Pool, { username: 'private_outsider', password: Password }, 'closed', true);
+	const Headers = async User => { const Session = await Login(Pool, User.username, Password); return { cookie: `kittok_session=${Session.Token}`, 'x-csrf-token': Session.Csrf }; };
+	const H = await Headers(Host), P = await Headers(Peer), O = await Headers(Outsider);
+	const Id_ = await ImportVideo(Pool, Config, Host.id, join(Directory, 'input.mp4'), 'Private cat test');
+	const NativePrivate = Value => Call(`/api/privacy/user/private_account/update/v1?private_account=${Value}`, 'POST', undefined, H);
+	const Follow = (Headers, On = true) => Call(`/api/commit/follow/user/?user_id=${Host.id}&action_type=${On ? 1 : 0}`, 'POST', undefined, Headers);
+	const Decide = (Who, Headers = H, Accept = true) => Call(`/api/commit/follow/request/${Accept ? 'approve' : 'reject'}/?user_id=${Who.id}`, 'POST', undefined, Headers);
+	const Post = (Visibility, Comments = 'default', Headers = H) => Call(`/api/v1/videos/${Id_}`, 'PATCH', { visibility: Visibility, comments: Comments }, Headers);
+	const Detail = Headers => Call(`/api/item/detail/?itemId=${Id_}`, 'GET', undefined, Headers);
+	const Comment = Headers => Call(`/api/comment/publish/?aweme_id=${Id_}&text=hello&reply_id=0`, 'POST', undefined, Headers);
+	const Video = (await Pool.query('SELECT * FROM videos WHERE id = $1', [Id_])).rows[0];
+	assert.equal((await NativePrivate('invalid')).status, 400);
+	assert.equal((await NativePrivate(1)).status, 200);
+	assert.equal((await (await Follow(P)).json()).follow_status, 4);
+	assert.equal((await (await Follow(P)).json()).follow_status, 4);
+	assert.equal((await Pool.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [Peer.id, Host.id])).rowCount, 0);
+	assert.equal((await Pool.query('SELECT 1 FROM follow_requests WHERE follower_id = $1 AND following_id = $2', [Peer.id, Host.id])).rowCount, 1);
+	const Profile = (await (await Call('/api/user/detail/?uniqueId=private_cat', 'GET', undefined, P)).json()).userInfo;
+	assert.equal(Profile.user.privateAccount, true); assert.equal(Profile.user.relation, 3); assert.equal(Profile.stats.followerCount, 0);
+	for (const Headers of [undefined, P, O]) {
+		assert.equal((await Detail(Headers)).status, 404);
+		assert.equal((await Call(`/media/${Video.file_name}`, 'GET', undefined, Headers)).status, 404);
+		assert.equal((await Call(`/media/${Video.cover_name}`, 'HEAD', undefined, Headers)).status, 404);
+		assert.deepEqual((await (await Call(`/api/post/item_list/?secUid=${Host.id}`, 'GET', undefined, Headers)).json()).itemList, []);
+		assert.equal((await Call(`/api/comment/list/?aweme_id=${Id_}`, 'GET', undefined, Headers)).status, 404);
+	}
+	assert.equal((await Comment(P)).status, 404);
+	assert.equal((await Call(`/api/v1/videos/${Id_}/like`, 'PUT', undefined, P)).status, 404);
+	assert.equal((await Detail(H)).status, 200);
+	assert.equal((await Decide(Peer, O)).status, 404);
+	assert.equal((await (await Call('/api/v1/follow-requests', 'GET', undefined, H)).json()).requests[0].id, Peer.id);
+	assert.deepEqual((await (await Call('/api/v1/follow-requests', 'GET', undefined, O)).json()).requests, []);
+	assert.equal((await Decide(Peer)).status, 200);
+	assert.equal((await Detail(P)).status, 200);
+	const Bytes = await Call(`/media/${Video.file_name}`, 'GET', undefined, { ...P, range: 'bytes=0-10' });
+	assert.equal(Bytes.status, 206); assert.equal((await Bytes.arrayBuffer()).byteLength, 11); assert.equal(Bytes.headers.get('cache-control'), 'private, no-store');
+	assert.equal((await Comment(P)).status, 200);
+	const Root = (await (await Call(`/api/comment/list/?aweme_id=${Id_}`, 'GET', undefined, H)).json()).comments[0].cid;
+	assert.equal((await Call(`/api/comment/list/reply/?comment_id=${Root}`, 'GET', undefined, O)).status, 404);
+	assert.equal((await Post('friends')).status, 200); assert.equal((await Detail(P)).status, 404);
+	assert.equal((await Call(`/api/v1/users/private_peer/follow`, 'PUT', undefined, H)).status, 200);
+	assert.equal((await Detail(P)).status, 200);
+	assert.equal((await Post('only_me')).status, 200); assert.equal((await Detail(P)).status, 404); assert.equal((await Detail(H)).status, 200);
+	assert.equal((await Post('followers', 'none')).status, 200);
+	assert.equal((await Comment(P)).status, 403);
+	assert.equal((await (await Detail(P)).json()).itemInfo.itemStruct.itemCommentStatus, 1);
+	assert.equal((await Post('public', 'friends')).status, 200); assert.equal((await Comment(P)).status, 200);
+	assert.equal((await Call('/api/v1/profile/privacy', 'PATCH', { privateAccount: true, comments: 'none' }, H)).status, 200);
+	assert.equal((await Post('public', 'everyone')).status, 200); assert.equal((await Comment(P)).status, 403);
+	assert.equal((await Post('nonsense')).status, 400); assert.equal((await Post('public', 'default', O)).status, 404);
+	assert.equal((await Follow(O)).status, 200); assert.equal((await Decide(Outsider, H, false)).status, 200); assert.equal((await Detail(O)).status, 404);
+	await Follow(O); await Follow(O, false);
+	assert.equal((await (await Call('/api/v1/follow-requests', 'GET', undefined, H)).json()).requests.length, 0);
+	await Follow(O);
+	assert.equal((await NativePrivate(0)).status, 200);
+	assert.equal((await (await Call('/api/v1/follow-requests', 'GET', undefined, H)).json()).requests.length, 0);
+	assert.equal((await Pool.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [Outsider.id, Host.id])).rowCount, 1);
+	await NativePrivate(1);
+	assert.equal((await Call('/api/v1/users/private_peer/block', 'PUT', undefined, H)).status, 200);
+	assert.equal((await Detail(P)).status, 404); assert.equal((await Call(`/media/${Video.file_name}`, 'GET', undefined, P)).status, 404);
+	assert.equal((await Call(`/media/${Video.file_name}?review=1`, 'GET', undefined, P)).status, 404);
+	const AdminSession = await Login(Pool, 'owner', Password);
+	assert.equal((await Call(`/media/${Video.file_name}?review=1`, 'HEAD', undefined, { cookie: `kittok_session=${AdminSession.Token}` })).status, 200);
+	await Stop(); await Start();
+	assert.equal((await Detail(P)).status, 404); assert.equal((await (await Call('/api/v1/session', 'GET', undefined, H)).json()).user.privateAccount, true);
+	assert.equal((await Call('/upload', 'GET', undefined, H)).status, 200);
+	assert.ok((await (await Call('/account/posts', 'GET', undefined, H)).text()).includes(`/account/posts/${Id_}`));
+	assert.equal((await Call(`/account/posts/${Id_}`, 'GET', undefined, O)).status, 404);
+	const Input = await readFile(join(Directory, 'input.mp4'));
+	const Upload = await fetch(`${Origin}/api/v1/videos?visibility=only_me&comments=none&description=Private%20upload`, { method: 'POST', headers: { ...H, 'content-type': 'video/mp4' }, body: Input });
+	assert.equal(Upload.status, 201); const Uploaded = (await Upload.json()).id;
+	assert.equal((await Call(`/api/item/detail/?itemId=${Uploaded}`, 'GET', undefined, O)).status, 404);
+	assert.deepEqual((await Pool.query('SELECT visibility, comment_permission FROM videos WHERE id = $1', [Uploaded])).rows[0], { visibility: 'only_me', comment_permission: 'none' });
+});
+
+
+test('native single-message deletion is personal and unsending is sender-only, live, persistent and time-limited', async () => {
+	const Make = async Name => {
+		const User = await CreateUser(Pool, { username: Name, password: Password }, 'closed', true);
+		const Signed = await Login(Pool, Name, Password);
+		return { ...User, headers: { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf } };
+	};
+
+	const Host = await Make('action_host'), Peer = await Make('action_peer'), Stranger = await Make('action_stranger');
+	const Im = async (As, Cmd, Field, Body = {}, Inbox = 0) => {
+		const Response = await fetch(Origin + '/v1/kittok', { method: 'POST', headers: { ...As.headers, 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: Cmd, sequence_id: '1', inbox_type: Inbox, body: { [Field]: Body } }) });
+		assert.equal(Response.status, 200);
+		return Proto.Decode('Response', Buffer.from(await Response.arrayBuffer()));
+	};
+	const Watch = async As => {
+		const Socket = new WebSocket(Origin.replace('http', 'ws') + '/ws/v2', { protocols: ['pbbp2'], headers: { ...As.headers, origin: Origin } });
+		Socket.binaryType = 'arraybuffer'; const Frames = []; let Pong;
+		Socket.onmessage = Event => { if (Event.data === 'hi') Pong?.(); else Frames.push(Proto.Decode('Response', Proto.Decode('Frame', new Uint8Array(Event.data)).payload)); };
+		await new Promise((Resolve, Reject) => { Socket.onopen = Resolve; Socket.onerror = Reject; });
+		return { Frames, Fence: () => new Promise((Resolve, Reject) => { const Timer = setTimeout(() => Reject(new Error('SocketFenceTimeout')), 2000); Pong = () => { clearTimeout(Timer); Resolve(); }; Socket.send('hi'); }), Close: () => Socket.readyState === 3 ? Promise.resolve() : new Promise(Resolve => { Socket.onclose = Resolve; Socket.close(); }) };
+	};
+
+	const PeerSocket = await Watch(Peer);
+	try {
+		const Chat = (await Im(Host, 609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Peer.id] })).body.create_conversation_v2_body.conversation;
+		const Ref = { conversation_short_id: Chat.conversation_short_id, conversation_type: 1 };
+		const Send = Id => Im(Host, 100, 'send_message_body', { ...Ref, message_type: 7, client_message_id: Id, content: JSON.stringify({ aweType: 0, text: Id }), ext: { 's:is_recalled': 'true', 's:server_message_id': '123', stranger: Host.id } }).then(Response => Response.body.send_message_body);
+		const History = async As => (await Im(As, 301, 'messages_in_conversation_body', Ref)).body.messages_in_conversation_body.messages ?? [];
+		const First = await Send('Personal delete test'); const Second = await Send('Unsend test');
+		assert.deepEqual(await (await Call(`/api/v1/messages/${Second.server_message_id}/actions`, 'GET', undefined, Host.headers)).json(), { canUnsend: true });
+		assert.deepEqual(await (await Call(`/api/v1/messages/${Second.server_message_id}/actions`, 'GET', undefined, Peer.headers)).json(), { canUnsend: false });
+		assert.equal((await Call(`/api/v1/messages/${Second.server_message_id}/actions`, 'GET', undefined, Stranger.headers)).status, 404);
+		assert.equal((await Call(`/api/v1/messages/${Second.server_message_id}`, 'DELETE', undefined, { cookie: Host.headers.cookie })).status, 403);
+		const Initial = await History(Peer); assert.equal(Initial[0].ext['s:is_recalled'], undefined); assert.equal(Initial[0].ext['s:server_message_id'], undefined);
+		assert.equal((await Im(Stranger, 701, 'delete_message_body', { ...Ref, message_id: First.server_message_id })).status_code, 1001);
+		assert.equal((await Im(Peer, 701, 'delete_message_body', { ...Ref, message_id: First.server_message_id })).status_code, 0);
+		assert.equal((await Im(Peer, 701, 'delete_message_body', { ...Ref, message_id: First.server_message_id })).status_code, 0);
+		assert.ok(!(await History(Peer)).some(Row => Row.server_message_id === First.server_message_id));
+		assert.ok((await History(Host)).some(Row => Row.server_message_id === First.server_message_id));
+		const Init = (await Im(Peer, 203, 'messages_per_user_init_v2_body')).body.messages_per_user_init_v2_body;
+		assert.ok(!Init.messages.some(Row => Row.server_message_id === First.server_message_id));
+		assert.equal((await Im(Peer, 702, 'recall_message_body', { ...Ref, server_message_id: Second.server_message_id })).status_code, 4);
+		assert.equal((await Im(Host, 702, 'recall_message_body', { ...Ref, server_message_id: Second.server_message_id })).status_code, 0);
+		await PeerSocket.Fence();
+		const Notice = PeerSocket.Frames.find(Frame => Frame.body?.has_new_message_notify?.message?.message_type === 50021);
+		assert.equal(Notice.body.has_new_message_notify.message.ext['s:server_message_id'], Second.server_message_id);
+		assert.equal(Notice.body.has_new_message_notify.previous_cursor, Notice.body.has_new_message_notify.next_cursor);
+		for (const As of [Host, Peer]) {
+			const Row = (await History(As)).find(Row => Row.server_message_id === Second.server_message_id);
+			assert.equal(Row.ext['s:is_recalled'], 'true'); assert.equal(JSON.parse(Row.content).text, '');
+		}
+		const Old = await Send('Too old to unsend'); await Pool.query("UPDATE messages SET created_at = now() - interval '4 minutes' WHERE id = $1", [Old.server_message_id]);
+		assert.equal((await Im(Host, 702, 'recall_message_body', { ...Ref, server_message_id: Old.server_message_id })).status_code, 4);
+		assert.equal((await Call(`/api/v1/messages/${Old.server_message_id}`, 'DELETE', undefined, Host.headers)).status, 403);
+		const Third = await Send('Unsend from native menu');
+		assert.equal((await Call(`/api/v1/messages/${Third.server_message_id}`, 'DELETE', undefined, Peer.headers)).status, 404);
+		assert.equal((await Call(`/api/v1/messages/${Third.server_message_id}`, 'DELETE', undefined, Host.headers)).status, 200);
+		assert.equal((await History(Peer)).find(Row => Row.server_message_id === Third.server_message_id).ext['s:is_recalled'], 'true');
+		const Fourth = await Send('Legacy request deletion test');
+		assert.equal((await Im(Peer, 1003, 'delete_stranger_message_body', { ...Ref, server_message_id: Fourth.server_message_id })).status_code, 0);
+		assert.ok(!(await History(Peer)).some(Row => Row.server_message_id === Fourth.server_message_id));
+		assert.ok((await History(Host)).some(Row => Row.server_message_id === Fourth.server_message_id));
+		assert.equal((await Send('Personal delete test')).server_message_id, First.server_message_id);
+		assert.ok(!(await History(Peer)).some(Row => Row.server_message_id === First.server_message_id));
+		await PeerSocket.Close(); await Stop(); await Start();
+		assert.ok(!(await History(Peer)).some(Row => Row.server_message_id === First.server_message_id));
+		assert.equal((await History(Peer)).find(Row => Row.server_message_id === Second.server_message_id).ext['s:is_recalled'], 'true');
+	} finally { await PeerSocket.Close(); }
+});
+
+
+test('privacy changes and concurrent follow requests remain consistent without foreign-key lock deadlocks', async () => {
+	const { SetFollow, SetPrivateAccount } = await import('../src/privacy.mjs');
+	const Host = await CreateUser(Pool, { username: 'race_host', password: Password }, 'closed', true);
+	const Peers = await Promise.all(Array.from({ length: 6 }, (_, I) => CreateUser(Pool, { username: 'race_peer_' + I, password: Password }, 'closed', true)));
+	await SetPrivateAccount(Pool, Host.id, true);
+	await Promise.all(Peers.map(Peer => SetFollow(Pool, Peer.id, Host.id, true)));
+	await Promise.all([
+		...Peers.map(async Peer => { for (let I = 0; I < 8; I++) await SetFollow(Pool, Peer.id, Host.id, I % 3 !== 0); }),
+		(async () => { for (let I = 0; I < 12; I++) await SetPrivateAccount(Pool, Host.id, I % 2 === 1); })(),
+	]);
+	assert.equal((await Pool.query('SELECT 1 FROM follow_requests r JOIN follows f USING(follower_id, following_id) WHERE r.following_id = $1', [Host.id])).rowCount, 0);
+	await SetPrivateAccount(Pool, Host.id, false);
+	assert.equal((await Pool.query('SELECT 1 FROM follow_requests WHERE following_id = $1', [Host.id])).rowCount, 0);
 });

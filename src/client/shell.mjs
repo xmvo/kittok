@@ -20,8 +20,8 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	if (User) {
 		App.user = {
 			uid: User.id, secUid: User.id, uniqueId: User.username, nickName: User.display_name,
-			signature: User.bio ?? '', avatarUri: [AvatarUrl(User, Origin)],
-			ftcUser: false, isPrivateAccount: false, region: App.region, storeRegion: App.region,
+			signature: User.bio ?? '', avatarUri: [AvatarUrl(User, Origin)], verified: Boolean(User.verified),
+			ftcUser: false, isPrivateAccount: Boolean(User.private_account), region: App.region, storeRegion: App.region,
 			hasSearchPermission: true, hasIMPermission: Config?.Features?.messages !== false, hasLivePermission: false,
 			hasSearchLivePermission: false, hasExtendedViewingPermission: false,
 			roomId: '', suggestAccountBind: false, showPrivateBanner: false, showScheduleTips: false,
@@ -65,5 +65,5 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	const Instance = { name: Config?.Name ?? 'Kittok', account: User ? { username: User.username, displayName: User.display_name, role: User.role } : null, csrfToken: User?.csrf_token ?? null, announcement: Config?.Announcement?.text ? Config.Announcement : null };
 	const Hidden = Object.entries(Config?.Features ?? {}).filter(([, On]) => !On).flatMap(([Name]) => FeatureSelectors[Name] ?? []);
 	Html = Html.replace(/<title>[\s\S]*?<\/title>/, `<title>${Instance.name.replace(/[<&]/g, '')}</title>`);
-	return Html.replace('<head>', `<head><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="/public/brand.css">${Hidden.length ? `<style>${Hidden.join(',')}{display:none!important}</style>` : ''}<script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);
+	return Html.replace('<head>', `<head><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="/public/brand.css"><link rel="stylesheet" href="/public/user-badges.css"><link rel="stylesheet" href="/public/responsive.css"><script src="/public/user-badges.js" defer></script><script src="/public/message-actions.js" defer></script>${Hidden.length ? `<style>${Hidden.join(',')}{display:none!important}</style>` : ''}<script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);
 }

@@ -4,11 +4,13 @@ import { RequireCsrf, RecordEvent, ClientInfo } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveMedia } from '../media.mjs';
 import { ActiveRestriction, RestrictionText, RemovedSql, ModerationNotices, UnreadModerationNotices, MarkModerationNoticesRead, ReadBanTicket, ActiveBan, BanText, Appeal } from '../moderation.mjs';
 import { AcceptRequest } from './im.mjs';
+import { AssertVideoVisible, VideoVisibleSql, SetPrivateAccount, DecideFollowRequest, FollowRequests } from '../privacy.mjs';
+import { PublicBadges } from '../badges.mjs';
 import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
 
-const FollowStatus = Value => ({ 1: 1, 2: 2 })[Value] ?? 0;
+const FollowStatus = Value => ({ 1: 1, 2: 2, 3: 4 })[Value] ?? 0;
 const Offset = Value => Math.min(Math.max(Math.floor(Number(Value)) || 0, 0), 100000);
 const PageSize = (Value, Default) => Math.min(Math.max(Number(Value) || Default, 1), 50);
 
@@ -16,13 +18,13 @@ function CommentShape(Row, Origin) {
 	return {
 		cid: Row.id, aweme_id: Row.video_id, text: Row.body, text_extra: [], create_time: Math.floor(new Date(Row.created_at).getTime() / 1000),
 		digg_count: Row.likes ?? 0, reply_comment_total: Row.replies ?? 0, user_digged: Row.liked ? 1 : 0, reply_id: Row.parent_id ?? '0', reply_to_reply_id: '0',
-		user: { uid: Row.author_id, unique_id: Row.username, nickname: Row.display_name, sec_uid: Row.author_id, avatar_thumb: { url_list: [AvatarUrl(Row, Origin)] } },
+		user: ApiUser({ ...Row, id: Row.author_id }, Origin),
 	};
 }
 
 function ApiUser(Row, Origin) {
 	const Avatar = { url_list: [AvatarUrl(Row, Origin)] };
-	return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio ?? '', avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, is_block: Row.relation === 4 };
+	return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio ?? '', avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, is_block: Row.relation === 4, kittokBadges: PublicBadges(Row), ...(Row.verified ? { custom_verify: 'Verified account', enterprise_verify_reason: '', verification_type: 1 } : {}) };
 }
 
 const NoticeKinds = { 500: ['like', 'comment_like', 'comment', 'follow'], 3: ['like', 'comment_like'], 505: ['like', 'comment_like'], 2: ['comment'], 7: ['follow'] };
@@ -46,9 +48,12 @@ const ReportReasons = [[101, 'spam', 'Spam or scams'], [102, 'harassment', 'Hara
 const ReportTargets = { video: 'video', photo_mode: 'video', comment: 'comment', user: 'user', im: 'message' };
 
 async function CommentPage(Pool, Origin, Viewer, { video, parent, cursor, count }) {
+	if (parent) video = (await Pool.query('SELECT video_id FROM comments WHERE id = $1', [parent])).rows[0]?.video_id;
+	if (!video) throw new HttpError(404, 'VideoNotFound');
+	await AssertVideoVisible(Pool, video, Viewer);
 	const Limit = PageSize(count, 20);
 	const After = cursor && cursor !== '0' ? Id(cursor) : null;
-	const Result = await Pool.query(`SELECT c.*, u.username, u.display_name, u.avatar_name,
+	const Result = await Pool.query(`SELECT c.*, u.username, u.display_name, u.avatar_name, u.verified, u.pride_flag, u.user_badges,
 		(SELECT count(*)::int FROM comment_likes l WHERE l.comment_id = c.id) AS likes,
 		EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.user_id = $1::bigint) AS liked,
 		(SELECT count(*)::int FROM comments r WHERE r.parent_id = c.id) AS replies
@@ -124,6 +129,11 @@ export async function Compatibility(Context) {
 			followings: List.users.map(Row => ApiUser(Row, Config.Origin)),
 		}); return true;
 	}
+	if (Path === '/api/user/settings/') {
+		RequireMethod(Request, ['GET']);
+		const Settings = User ? await DmSettings(Pool, User.id) : {};
+		Json(Response, { status_code: 0, statusCode: 0, settings: { ...Settings, privateAccount: Boolean(User?.private_account), private_account: User?.private_account ? 1 : 0, languageSettings: { videoTranslationLanguages: [] } } }); return true;
+	}
 	const SettingDefaults = {
 		'/tiktok/region/change/status/get/v1': { is_change_region_enabled: false },
 		'/api/compliance/settings/': {},
@@ -137,17 +147,23 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']);
 		const Messages = User && Config.Features?.messages !== false;
 		const Choice = { show_type: 0, values: [{ value: 1, show_type: 0 }, { value: 2, show_type: 0 }, { value: 3, show_type: 0 }] };
-		const Account = { comment: { show_type: 2 }, private_account: { show_type: 2 }, ...(Messages ? { direct_message: { show_type: 0 }, ...Object.fromEntries(Object.keys(DmAudiences).map(Key => [Key, Choice])) } : {}) };
-		Json(Response, { status_code: 0, statusCode: 0, privacy_restriction: { account: Account }, privacy_settings: { private_account: 0, ...(Messages ? await DmSettings(Pool, User.id) : {}) } }); return true;
+		const Account = { comment: { show_type: User ? 0 : 2, values: [0, 1, 2, 3].map(value => ({ value, show_type: 0 })) }, private_account: { show_type: User ? 0 : 2 }, ...(Messages ? { direct_message: { show_type: 0 }, message_read_status: { show_type: 0, values: [{ value: 0, show_type: 0 }, { value: 1, show_type: 0 }] }, ...Object.fromEntries(Object.keys(DmAudiences).map(Key => [Key, Choice])) } : {}) };
+		Json(Response, { status_code: 0, statusCode: 0, privacy_restriction: { account: Account }, privacy_settings: { private_account: User?.private_account ? 1 : 0, comment: ({everyone:0,friends:1,none:2,followers:3})[User?.comment_permission ?? 'everyone'], ...(Messages ? await DmSettings(Pool, User.id) : {}) } }); return true;
 	}
 	if (Path === '/api/privacy/unified_config/v1') {
 		RequireMethod(Request, ['GET']);
 		const Configs = {};
+		if (User) {
+			Configs.main = { page_tag: 'main', contents: [{ section_tag: 'interactions', section_header: 'Interactions', items: [{ item_type: 0, item_tag: 'comment_entrance', item_info: { item_title: 'Comments', restriction_key: 'comment', setting_key: 'comment' } }] }] };
+			Configs.main.contents.unshift({ section_tag: 'discoverability', section_header: 'Discoverability', items: [{ item_type: 1, item_tag: 'kittok_private_account', item_info: { item_title: 'Private account', item_subtitle: 'Only followers you approve can view your posts.', restriction_key: 'private_account', setting_key: 'private_account', checked_value: 1, unchecked_value: 0 } }] });
+			Configs.comment_permission = { page_tag: 'comment_permission', page_title: 'Comments', contents: [{ section_tag: 'comment_options', items: [{ item_type: 2, item_tag: 'comment_permission_item', item_info: { item_title: 'Who can comment on your posts', restriction_key: 'comment', setting_key: 'comment', options: [[0,'Everyone'],[3,'Followers'],[1,'Friends'],[2,'No one']].map(([Value,Title]) => ({option_value:Value,option_title:Title,option_tag:'options_comment_' + Value})) } }] }] };
+		}
 		if (User && Config.Features?.messages !== false) {
-			Configs.main = { page_tag: 'main', contents: [{ section_tag: 'interactions', section_header: 'Interactions', items: [{ item_type: 0, item_tag: 'direct_message_entrance', item_info: { item_title: 'Direct messages', restriction_key: 'direct_message', setting_key: 'direct_message' } }] }] };
+			Configs.main.contents.find(Section => Section.section_tag === 'interactions').items.push({ item_type: 0, item_tag: 'direct_message_entrance', item_info: { item_title: 'Direct messages', restriction_key: 'direct_message', setting_key: 'direct_message' } });
 			const Audiences = [['dm_setting_friends', 'dm_friends', 'Friends'], ['dm_setting_potential_connection', 'dm_potential_connection', 'Potential connections'], ['dm_setting_others', 'dm_others', 'Others']];
 			Configs.direct_message_permission = { page_tag: 'direct_message_permission', page_title: 'Direct messages', contents: [{ section_tag: 'dm_entrances', section_header: 'Who can send you direct messages', items: Audiences.map(([Key, Page, Title]) => ({
-				item_type: 0, item_tag: `${Page}_permission_entrance`, item_info: { item_title: Title, restriction_key: Key, setting_key: Key, label_config: [{ option_value: 1, label_title: 'Receive in inbox' }, { option_value: 3, label_title: "Don't receive" }] } })) }] };
+				item_type: 0, item_tag: `${Page}_permission_entrance`, item_info: { item_title: Title, restriction_key: Key, setting_key: Key, label_config: [{ option_value: 1, label_title: 'Receive in inbox' }, { option_value: 2, label_title: 'Receive as message request' }, { option_value: 3, label_title: "Don't receive" }] } })) },
+				{ section_tag: 'message_preferences', section_header: 'Message preferences', items: [{ item_type: 1, item_tag: 'message_read_status', item_info: { item_title: 'Read status', item_subtitle: 'Share when you’ve read messages. Only visible when both people turn this on.', restriction_key: 'message_read_status', setting_key: 'message_read_status', checked_value: 1, unchecked_value: 0 } }] }] };
 			for (const [Key, Page, Title] of Audiences) {
 				Configs[Page] = { page_tag: Page, page_title: Title, contents: [{ section_tag: `${Page}_options`, items: [{ item_type: 2, item_tag: `${Page}_permission_item`, item_info: { item_title: Title, restriction_key: Key, setting_key: Key, options: [
 					{ option_value: 1, option_title: 'Receive in inbox', option_tag: 'options_inbox' }, { option_value: 2, option_title: 'Receive as message request', option_tag: 'options_request' }, { option_value: 3, option_title: "Don't receive", option_tag: 'options_dont_receive' },
@@ -159,13 +175,25 @@ export async function Compatibility(Context) {
 	if (Path === '/api/privacy/user/settings/update/v1') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
-		if (!DmAudiences[Body.field] || ![1, 2, 3].includes(Number(Body.value)) || Config.Features?.messages === false) { Json(Response, { status_code: 1, statusCode: 1, status_msg: 'This setting is not available on this instance.' }); return true; }
-		await SetDmSetting(Pool, User.id, Body.field, Body.value);
-		Json(Response, { status_code: 0, statusCode: 0, privacy_settings: await DmSettings(Pool, User.id) }); return true;
+		try {
+			if (Body.field === 'private_account') await SetPrivateAccount(Pool, User.id, Body.value);
+			else if (Body.field === 'comment') {
+				const Permission = ({0:'everyone',1:'friends',2:'none',3:'followers'})[Body.value];
+				if (!Permission || !['number','string'].includes(typeof Body.value)) throw new HttpError(400, 'InvalidCommentPermission');
+				await Pool.query('UPDATE users SET comment_permission = $2 WHERE id = $1', [User.id, Permission]);
+			} else {
+				if (Config.Features?.messages === false) throw new HttpError(400, 'MessagesDisabled');
+				await SetDmSetting(Pool, User.id, Body.field, Body.value);
+			}
+		} catch (Error) { if (Error.status !== 400) throw Error; Json(Response, { status_code: 1, statusCode: 1, status_msg: 'This setting is not available on this instance.' }); return true; }
+		const Fresh = await FindUser(Pool, User.id, true);
+		Json(Response, { status_code: 0, statusCode: 0, privacy_settings: { ...await DmSettings(Pool, User.id), private_account: Fresh.private_account ? 1 : 0, comment: ({everyone:0,friends:1,none:2,followers:3})[Fresh.comment_permission] } }); return true;
 	}
 	if (Path === '/api/privacy/user/private_account/update/v1') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
-		Json(Response, { status_code: 1, statusCode: 1, status_msg: 'Private accounts are not available on this instance.' }); return true;
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		await SetPrivateAccount(Pool, User.id, Body.private_account ?? Body.private ?? Body.value);
+		Json(Response, { status_code: 0, statusCode: 0 }); return true;
 	}
 	if (Path === '/tns-api/appeal/status/' || Path === '/aweme/v2/appeal/status/') {
 		RequireMethod(Request, ['GET']);
@@ -216,7 +244,7 @@ export async function Compatibility(Context) {
 		if (!User) throw new HttpError(401, 'NotLoggedIn');
 		let Ids;
 		try { Ids = JSON.parse(Params.get('user_ids') ?? '[]').slice(0, 100).map(Id); } catch { throw new HttpError(400, 'InvalidUserIds'); }
-		const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.avatar_name, ${RelationSql('$2::bigint', 'u.id')} AS relation FROM users u WHERE u.id = ANY($1::bigint[])`, [Ids, User.id]);
+		const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, ${RelationSql('$2::bigint', 'u.id')} AS relation FROM users u WHERE u.id = ANY($1::bigint[])`, [Ids, User.id]);
 		Json(Response, { status_code: 0, users: Result.rows.map(Row => {
 			const Avatar = { url_list: [AvatarUrl(Row, Config.Origin)] };
 			return { im_user_profile: { user_id: Row.id, unique_id: Row.username, nick_name: Row.display_name, avatars: { avatar_medium: Avatar, avatar_small: Avatar },
@@ -227,6 +255,7 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['POST']);
 		Limiter.Hit(`view:${Request.socket.remoteAddress}`, 120);
 		const VideoId = Id((await ReadBody(Request, 1024)).id);
+		await AssertVideoVisible(Pool, VideoId, User?.id);
 		await RecordView(Pool, VideoId, User ? `u:${User.id}` : `ip:${createHmac('sha256', ViewSecret).update(Request.socket.remoteAddress ?? '').digest('hex')}`);
 		Response.writeHead(204).end(); return true;
 	}
@@ -265,6 +294,11 @@ export async function Compatibility(Context) {
 		const Owner = (await Pool.query({ video: 'SELECT author_id AS id FROM videos WHERE id = $1', comment: 'SELECT author_id AS id FROM comments WHERE id = $1', user: 'SELECT id FROM users WHERE id = $1' }[Type], [Target])).rows[0]?.id;
 		if (!Owner) throw new HttpError(404, 'ReportTargetNotFound');
 		if (Owner === User.id) throw new HttpError(400, 'CannotReportYourself');
+		if (Type === 'video') await AssertVideoVisible(Pool, Target, User.id);
+		if (Type === 'comment') {
+			const Video = (await Pool.query('SELECT video_id FROM comments WHERE id = $1', [Target])).rows[0];
+			await AssertVideoVisible(Pool, Video.video_id, User.id);
+		}
 		await Pool.query(`INSERT INTO reports(reporter_id, target_type, target_id, owner_id, category, description) VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (reporter_id, target_type, target_id) WHERE status = 'open' DO NOTHING`, [User.id, Type, Target, Owner, Reason[1], String(Body.report_desc ?? '').trim().slice(0, 500)]);
 		Json(Response, { status_code: 0, statusCode: 0, status_msg: '', data: {} }); return true;
@@ -322,12 +356,12 @@ export async function Compatibility(Context) {
 		if (Avatar !== null && !(new RegExp(`^avatar-${User.id}-[0-9a-f-]{36}\\.jpg$`).test(Avatar) && await AvatarExists(Config, Avatar))) throw new HttpError(400, 'InvalidAvatar');
 		const Updated = (await Pool.query(`UPDATE users u SET display_name = COALESCE($2, u.display_name), bio = COALESCE($3, u.bio), avatar_name = COALESCE($4, u.avatar_name)
 			FROM (SELECT avatar_name FROM users WHERE id = $1) Previous WHERE u.id = $1
-			RETURNING u.id, u.username, u.display_name, u.bio, u.avatar_name, Previous.avatar_name AS previous_avatar`, [User.id, Nickname, Bio, Avatar])).rows[0];
+			RETURNING u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, Previous.avatar_name AS previous_avatar`, [User.id, Nickname, Bio, Avatar])).rows[0];
 		if (Updated.previous_avatar && Updated.previous_avatar !== Updated.avatar_name) await RemoveMedia(Config, Updated.previous_avatar);
 		const Changed = [Nickname !== null && 'name', Bio !== null && 'bio', Avatar !== null && 'avatar'].filter(Boolean);
 		if (Changed.length) await RecordEvent(Pool, User.id, 'profile_change', ClientInfo(Request, Config), `Changed ${Changed.join(', ')}`);
 		const Url = { url_list: [AvatarUrl(Updated, Config.Origin)] };
-		Json(Response, { status_code: 0, status_msg: '', user: { uid: Updated.id, sec_uid: Updated.id, unique_id: Updated.username, nickname: Updated.display_name, signature: Updated.bio, avatar_thumb: Url, avatar_medium: Url, avatar_larger: Url } }); return true;
+		Json(Response, { status_code: 0, status_msg: '', user: { ...ApiUser(Updated, Config.Origin), avatar_larger: Url } }); return true;
 	}
 	if (Path === '/api/uniqueid/check/') {
 		RequireMethod(Request, ['GET']);
@@ -342,7 +376,7 @@ export async function Compatibility(Context) {
 	async function SearchUsers(Limit) {
 		if (Config.Features?.search === false) return [];
 		const Query = `%${(Params.get('keyword') ?? '').slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`;
-		const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, ${RelationSql('$3::bigint', 'u.id')} AS relation FROM users u
+		const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, ${RelationSql('$3::bigint', 'u.id')} AS relation FROM users u
 			WHERE (u.username ILIKE $1 ESCAPE '\\' OR u.display_name ILIKE $1 ESCAPE '\\') AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = u.id AND b.blocked_id = $3::bigint) ORDER BY u.username LIMIT $2`, [Query, Limit, User?.id ?? null]);
 		return Promise.all(Result.rows.map(async Row => {
 			const Stats = await UserStats(Pool, Row.id);
@@ -409,7 +443,7 @@ export async function Compatibility(Context) {
 		const Restricted = await ActiveRestriction(Pool, User.id, 'comment');
 		if (Restricted) { Json(Response, { status_code: 22, statusCode: 22, status_msg: RestrictionText(Restricted) }); return true; }
 		const Added = await AddComment(Pool, VideoId, User.id, Body.text, Body.reply_id && Body.reply_id !== '0' ? Id(Body.reply_id) : null);
-		Json(Response, { status_code: 0, status_msg: '', comment: CommentShape({ ...Added, video_id: VideoId, author_id: User.id, username: User.username, display_name: User.display_name }, Config.Origin) }); return true;
+		Json(Response, { status_code: 0, status_msg: '', comment: CommentShape({ ...User, ...Added, video_id: VideoId, author_id: User.id }, Config.Origin) }); return true;
 	}
 	if (Path === '/api/commit/item/digg/' || Path === '/api/item/collect/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
@@ -421,6 +455,16 @@ export async function Compatibility(Context) {
 		if (!Collect) { Json(Response, { status_code: 0, statusCode: 0, is_digg: Enabled ? 0 : 1 }); return true; }
 		const Count = await Pool.query('SELECT count(*)::int AS count FROM favorites WHERE video_id = $1', [Target]);
 		Json(Response, { status_code: 0, statusCode: 0, collected: Enabled, collectCount: Count.rows[0].count }); return true;
+	}
+	if (Path === '/api/v1/follow-requests') {
+		RequireMethod(Request, ['GET']); if (!User) throw new HttpError(401, 'NotLoggedIn');
+		Json(Response, { requests: await FollowRequests(Pool, User.id) }); return true;
+	}
+	if (['/api/commit/follow/request/approve/', '/api/commit/follow/request/reject/'].includes(Path)) {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		await DecideFollowRequest(Pool, User.id, Id(Body.user_id || Body.sec_user_id), Path.includes('/approve/'));
+		Json(Response, { status_code: 0, statusCode: 0 }); return true;
 	}
 	if (Path === '/api/commit/follow/user/' || Path === '/api/follow/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);

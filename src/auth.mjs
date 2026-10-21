@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { isIP } from 'node:net';
 import { Transaction } from './db.mjs';
 import { HttpError } from './http.mjs';
+import { PrideFlag } from './badges.mjs';
 
 const Derive = promisify(Scrypt);
 const Options = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
@@ -39,12 +40,13 @@ export async function RecordEvent(Pool, UserId, Kind, Info = {}, Detail = '') {
 	await Pool.query('INSERT INTO user_events(user_id, kind, ip, country, language, user_agent, detail) VALUES ($1, $2, $3, $4, $5, $6, $7)', [UserId, Kind, Info.ip ?? null, Info.country ?? null, Info.language ?? null, Info.userAgent ?? null, Detail.slice(0, 500)]);
 }
 
-export async function CreateUser(Pool, { username, displayName, password, role = 'member', invite }, Registration = 'closed', Operator = false, Info = {}) {
+export async function CreateUser(Pool, { username, displayName, password, role = 'member', invite, prideFlag = '' }, Registration = 'closed', Operator = false, Info = {}) {
 	const Username = String(username ?? '').trim().toLowerCase();
 	const DisplayName = String(displayName ?? Username).trim();
 	if (!/^[a-z0-9_]{3,24}$/.test(Username)) throw new HttpError(400, 'InvalidUsername');
 	if (DisplayName.length < 1 || DisplayName.length > 50) throw new HttpError(400, 'InvalidDisplayName');
 	if (!Operator && Registration === 'closed') throw new HttpError(403, 'RegistrationClosed');
+	const Flag = PrideFlag(prideFlag);
 	const Encoded = await PasswordHash(password);
 	try {
 		return await Transaction(Pool, async Client => {
@@ -52,7 +54,7 @@ export async function CreateUser(Pool, { username, displayName, password, role =
 				const Used = await Client.query('UPDATE invites SET uses = uses + 1 WHERE token_hash = $1 AND uses < max_uses AND expires_at > now() RETURNING token_hash', [Hash(String(invite ?? ''))]);
 				if (!Used.rowCount) throw new HttpError(403, 'InvalidInvite');
 			}
-			const Result = await Client.query('INSERT INTO users(username, display_name, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, display_name, role', [Username, DisplayName, Encoded, Operator ? role : 'member']);
+			const Result = await Client.query('INSERT INTO users(username, display_name, password_hash, role, pride_flag) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, display_name, role, pride_flag, user_badges', [Username, DisplayName, Encoded, Operator ? role : 'member', Flag]);
 			await RecordEvent(Client, Result.rows[0].id, 'signup', Info, Operator ? 'Created by an operator' : '');
 			return Result.rows[0];
 		});
@@ -84,7 +86,7 @@ export async function Login(Pool, Username, Password, Info = {}) {
 export async function Viewer(Pool, Request) {
 	const Cookie = Request.headers.cookie?.split(';').map(Value => Value.trim()).find(Value => Value.startsWith('kittok_session='))?.slice('kittok_session='.length);
 	if (!Cookie || !/^[a-f0-9]{64}$/.test(Cookie)) return null;
-	const Result = await Pool.query("SELECT u.id, u.username, u.display_name, u.bio, u.role, u.avatar_name, s.csrf_token, s.token_hash, s.last_seen_at < now() - interval '5 minutes' AS stale FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now() AND u.suspended_at IS NULL", [Hash(Cookie)]);
+	const Result = await Pool.query("SELECT u.id, u.username, u.display_name, u.bio, u.role, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, u.comment_permission, s.csrf_token, s.token_hash, s.last_seen_at < now() - interval '5 minutes' AS stale FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now() AND u.suspended_at IS NULL", [Hash(Cookie)]);
 	const User = Result.rows[0];
 	if (User?.stale) Pool.query('UPDATE sessions SET last_seen_at = now() WHERE token_hash = $1', [User.token_hash]).catch(() => {});
 	return User ?? null;

@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Add private accounts, pending follow requests with confirm/delete, per-post audiences, and account/post comment permissions. Enforce visibility in feeds, search, comments, activity, shared-video cards, and media requests; preserve explicit admin review access.
+- Add native inbox 3 message requests with live delivery, acceptance, deletion, a three-message pending limit, and mutually enabled read receipts. Implement personal message deletion and sender-only unsending within three minutes.
+- Add a dedicated upload screen with preview, caption counter, progress, privacy controls and a post manager; add account options and narrow-screen settings/chat layouts.
+- Add optional public pride flags at signup, self-service profile badge editing, and admin-managed community badges. Show flags after native verified badges on profiles and posts, and group secondary admin account actions in a keyboard-accessible three-dot menu.
+- Add admin-managed account verification with persistent badges, grant/remove controls, and an audit trail; prevent registration and profile edits from granting verification.
 - Repair the native report reason/details flow and verify submission through its success screen.
 - Organize admin report cards with contained previews and review dialogs; group secondary report, video, and account actions in keyboard-accessible menus.
 

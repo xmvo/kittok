@@ -35,6 +35,29 @@
 		for (const Entry of Entries) Entry.target.toggleAttribute('data-kittok-compact', Entry.contentRect.width > 0 && Entry.contentRect.width < 80);
 	});
 	function Brand() {
+		document.querySelector('input[name="message_read_status"]')?.setAttribute('aria-label', 'Read status');
+		document.querySelector('input[name="kittok_private_account"]')?.setAttribute('aria-label', 'Private account');
+		for (const Radio of document.querySelectorAll('input[name^="comment_permission_item_"]')) Radio.setAttribute('aria-label', ({0:'Everyone',1:'Friends',2:'No one',3:'Followers'})[Radio.value] ?? 'Comment audience');
+		const Settings = document.getElementById('main-content-setting');
+		if (Settings && location.pathname.startsWith('/setting/') && !Settings.querySelector('[data-kittok-settings-back]')) {
+			const Back = document.createElement('a'); Back.href = '/setting'; Back.textContent = '‹ Settings'; Back.setAttribute('data-kittok-settings-back', ''); Settings.prepend(Back);
+		}
+		const ChatHeader = document.querySelector('#main-content-messages [class*="--DivChatHeader"]');
+		if (ChatHeader && !ChatHeader.querySelector('[data-kittok-chat-back]')) {
+			const Back = document.createElement('button'); Back.type = 'button'; Back.textContent = '‹'; Back.setAttribute('data-kittok-chat-back', ''); Back.setAttribute('aria-label', 'Back to messages'); Back.addEventListener('click', () => { location.href = '/messages'; }); ChatHeader.prepend(Back);
+		}
+		const Edit = location.pathname === '/@' + Instance.account?.username && document.querySelector('[data-e2e="edit-profile-entrance"]');
+		const Actions = document.querySelector('[data-kittok-profile-actions]');
+		if (!Edit) Actions?.remove();
+		else if (!Actions) {
+			const Menu = document.createElement('details'); Menu.setAttribute('data-kittok-profile-actions', '');
+			const Toggle = document.createElement('summary'); Toggle.textContent = '•••'; Toggle.setAttribute('aria-label', 'Account options');
+			const Links = document.createElement('div');
+			for (const [Path, Name] of [['/account/posts','Manage posts'],['/account/requests','Follow requests'],['/account/privacy','Privacy settings']]) {
+				const Link = document.createElement('a'); Link.href = Path; Link.textContent = Name; Links.append(Link);
+			}
+			Menu.append(Toggle, Links); Edit.parentElement.after(Menu);
+		}
 		if (document.title !== Instance.name) document.title = Instance.name;
 		const LoginTitle = document.getElementById('login-modal-title');
 		if (LoginTitle?.textContent === 'Log in to TikTok' && LoginTitle.firstChild?.nodeType === 3) LoginTitle.firstChild.nodeValue = `Log in to ${Instance.name}`;
@@ -57,6 +80,8 @@
 		}
 	}
 	new MutationObserver(Brand).observe(document.documentElement, { childList: true, subtree: true });
+	document.addEventListener('click', Event => { for (const Menu of document.querySelectorAll('[data-kittok-profile-actions][open]')) if (!Menu.contains(Event.target)) Menu.open = false; });
+	document.addEventListener('keydown', Event => { if (Event.key === 'Escape') for (const Menu of document.querySelectorAll('[data-kittok-profile-actions][open]')) Menu.open = false; });
 	const NativeFetch = window.fetch.bind(window);
 	const NativeOpen = XMLHttpRequest.prototype.open;
 	function LocalUrl(Value) {
@@ -94,12 +119,13 @@
 		}
 		const Href = Target.getAttribute('href');
 		const Path = Href ? new URL(Href, location.origin).pathname : '';
+		if (/^\/signup(?:\/|$)/.test(Path)) { Event.preventDefault(); Event.stopImmediatePropagation(); location.href = '/account?register=1'; return; }
 		if (Path === '/@') { Event.preventDefault(); Event.stopImmediatePropagation(); location.href = Instance.account ? '/@' + Instance.account.username : '/login'; return; }
 		if (Target.id === 'header-login-button' || Target.id === 'top-right-action-bar-login-button' || Target.matches('button[class*="SquareTUXButton"][aria-label="Log in"]') || Path === '/login') {
 			Event.preventDefault(); Event.stopImmediatePropagation(); location.href = Instance.account ? '/account' : '/login'; return;
 		}
 		if (Path.startsWith('/tiktokstudio/upload')) {
-			Event.preventDefault(); Event.stopImmediatePropagation(); location.href = '/account';
+			Event.preventDefault(); Event.stopImmediatePropagation(); location.href = '/upload';
 		}
 	}, true);
 	document.addEventListener('keydown', Event => {

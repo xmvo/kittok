@@ -1,0 +1,25 @@
+@media (max-width:760px){
+	body:has(#main-content-setting) [class*="--DivHeaderLeftContainer"]{min-width:0;flex:0 0 auto}
+	#main-content-setting [class*="--DivLayoutContainer"]{min-width:0;width:100%;box-sizing:border-box}
+	#main-content-setting [class*="--DivContentContainer"]{flex:1 1 auto;min-width:0;width:calc(100% - 24px);margin:0 12px;padding:20px 12px;box-sizing:border-box}
+	#main-content-setting:has(>[data-kittok-settings-back]) [class*="--DivLayoutContainer"]{height:calc(100dvh - 104px)}
+	#main-content-setting [class*="--HeaderContainer"]{padding-left:4px;padding-right:4px}
+	#main-content-setting [class*="tux-list-cell__"]{min-width:0}
+	#main-content-setting [class*="tux-list-cell__title"],#main-content-setting [class*="tux-list-cell__subtitle"]{white-space:normal;overflow-wrap:anywhere}
+	#main-content-setting [data-kittok-settings-back]{display:inline-flex;margin:0 12px 8px;padding:8px 4px;color:inherit;text-decoration:none;font-weight:600}
+	body:has(#main-content-messages){overflow:hidden}
+	body:has(#main-content-messages) [aria-hidden][class*="--DivDrawerContainer"]:has([data-testid="dm-new-drawer"]){left:72px;right:0;width:auto;max-width:none;min-width:0}
+	body:has(#main-content-messages) [class*="--DivMessageDrawerContainer"],body:has(#main-content-messages) [data-testid="dm-new-drawer"],body:has(#main-content-messages) [class*="--DivV3AnimRoot"],body:has(#main-content-messages) [class*="--DivV3AnimLeftColumn"],body:has(#main-content-messages) [class*="--DivConversationListContainer"]{width:100%;min-width:0;max-width:100%}
+	body:has(#main-content-messages) #kittok-source{left:8px;max-width:56px;font-size:9px;line-height:1.2}
+	body:has([data-e2e="top-chat-avatar"]) [aria-hidden][class*="--DivDrawerContainer"]:has([data-testid="dm-new-drawer"]){display:none}
+	#main-content-messages:has([data-e2e="top-chat-avatar"]){position:fixed;inset:0;z-index:101;display:flex;width:100%;height:100dvh;min-width:0;margin:0;background:var(--ui-page-flat-1,#121212)}
+	#main-content-messages [data-e2e="dm-new-chatbox"]{width:100%;min-width:0;height:100%}
+	#main-content-messages [class*="--DivChatHeader"]{box-sizing:border-box;min-width:0}
+	#main-content-messages [class*="--DivChatHeaderContentWrapper"]{min-width:0;flex:1}
+	#main-content-messages [class*="--DivNameContainer"]{min-width:0}
+	#main-content-messages [class*="--DivChatHeader"] [data-kittok-chat-back]{display:inline-flex;align-items:center;justify-content:center;flex:none;width:32px;height:40px;margin-right:8px;padding:0;border:0;border-radius:20px;background:transparent;color:inherit;font-size:32px;cursor:pointer}
+	#main-content-messages [data-kittok-chat-back]:focus-visible{outline:2px solid #25f4ee;outline-offset:2px}
+}
+[data-kittok-settings-back],[data-kittok-chat-back]{display:none}
+
+[data-kittok-profile-actions]{position:relative;color:inherit;align-self:center;z-index:5}[data-kittok-profile-actions] summary{list-style:none;cursor:pointer;padding:10px 14px;border:1px solid #555;border-radius:6px;font-weight:700}[data-kittok-profile-actions] summary::-webkit-details-marker{display:none}[data-kittok-profile-actions]>div{position:absolute;top:100%;left:0;min-width:180px;padding:6px;background:#252525;border:1px solid #444;border-radius:8px;box-shadow:0 6px 20px #0006}[data-kittok-profile-actions] a{display:block;padding:12px;color:#eee;text-decoration:none;white-space:nowrap}[data-kittok-profile-actions] a:hover{background:#383838}

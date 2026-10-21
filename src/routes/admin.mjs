@@ -8,6 +8,8 @@ import { Asset, ClientDir, LocalAsset, Root } from '../client/archive.mjs';
 import { BrandSlots, Features, SaveSetting, Settings } from '../settings.mjs';
 import { Page } from './account.mjs';
 import { Enforce, DecideReport, ReverseDecision, LiftRestriction, MessageText, ReviewAppeal, Standing } from '../moderation.mjs';
+import { Transaction } from '../db.mjs';
+import { BadgeCatalog, PrideFlag, UserBadges, PublicBadges } from '../badges.mjs';
 
 const Categories = ['spam', 'harassment', 'hate', 'nudity', 'violence', 'self_harm', 'misinformation', 'impersonation', 'copyright', 'other'];
 const Before = Value => Value ? Id(Value) : null;
@@ -50,7 +52,7 @@ async function DeleteVideos(Pool, Config, Where, Values) {
 
 export async function Admin(Context) {
 	const { Request, Response, Url, Pool, Config, User, Unknown } = Context;
-	const ReportShape = Row => ({ ...Row, owner_avatar: AvatarUrl(Row, Config.Origin), cover: Row.cover_name ? `${Config.Origin}/media/${Row.cover_name}` : null, message_text: Row.message_content === null ? null : MessageText(Row.message_content), message_content: undefined,
+	const ReportShape = Row => ({ ...Row, owner_avatar: AvatarUrl(Row, Config.Origin), cover: Row.cover_name ? `${Config.Origin}/media/${Row.cover_name}?review=1` : null, message_text: Row.message_content === null ? null : MessageText(Row.message_content), message_content: undefined,
 		exists: Row.target_type === 'user' ? Boolean(Row.owner) : Row.target_type === 'video' ? Boolean(Row.cover_name) : Row.target_type === 'message' ? Row.message_content !== null : Row.comment_body !== null });
 	const Path = Url.pathname;
 
@@ -75,7 +77,7 @@ export async function Admin(Context) {
 		if (!User) { Response.writeHead(303, { location: '/login' }); Response.end(); return true; }
 		if (User.role !== 'admin') throw new HttpError(404, 'NotFound');
 		const Links = (await TikTokStyles().catch(() => [])).map(Href => `<link rel="stylesheet" href="${Escape(Href)}">`).join('');
-		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, categories: Categories };
+		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, categories: Categories, badges: BadgeCatalog };
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
 		Response.end(`<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon">
 <script>try{const T=localStorage.getItem('kittok-admin-theme');document.documentElement.dataset.theme=T||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')}catch{}</script>
@@ -103,7 +105,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			const Query = (Params.get('q') ?? '').trim().slice(0, 64);
 			const Like = Query.replace(/^@/, '').replace(/[\\%_]/g, '\\$&');
 			const IsIp = /^[0-9a-fA-F:.]{3,45}$/.test(Query) && /[.:]/.test(Query);
-			const Rows = (await Pool.query(`SELECT u.id, u.username, u.display_name, u.role, u.created_at, u.suspended_at, u.avatar_name,
+			const Rows = (await Pool.query(`SELECT u.id, u.username, u.display_name, u.role, u.verified, u.pride_flag, u.user_badges, u.created_at, u.suspended_at, u.avatar_name,
 				(SELECT count(*)::int FROM videos v WHERE v.author_id = u.id) AS videos, (SELECT count(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
 				(SELECT count(*)::int FROM moderation_decisions x WHERE x.owner_id = u.id AND x.reversed_at IS NULL AND x.account_action IN ('strike', 'ban')) AS violations
 				FROM users u WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' ESCAPE '\\' OR u.display_name ILIKE '%' || $1 || '%' ESCAPE '\\' OR u.id::text = $1
@@ -114,7 +116,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 		const UserMatch = Route.match(/^users\/(\d+)$/);
 		if (UserMatch) {
 			const Target = Id(UserMatch[1]);
-			const Profile = (await Pool.query('SELECT id, username, display_name, bio, role, avatar_name, created_at, suspended_at, notices_read_at FROM users WHERE id = $1', [Target])).rows[0];
+			const Profile = (await Pool.query('SELECT id, username, display_name, bio, role, verified, pride_flag, user_badges, avatar_name, created_at, suspended_at, notices_read_at FROM users WHERE id = $1', [Target])).rows[0];
 			if (!Profile) throw new HttpError(404, 'UserNotFound');
 			const [Events, Sessions, Videos, Comments, Violations, Related, Seen, Against, Filed] = await Promise.all([
 				Pool.query('SELECT id, kind, host(ip) AS ip, country, language, user_agent, detail, created_at FROM user_events WHERE user_id = $1 ORDER BY id DESC LIMIT 100', [Target]),
@@ -133,7 +135,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 				user: { ...Profile, avatar: AvatarUrl(Profile, Config.Origin), self: Profile.id === User.id, stats: await UserStats(Pool, Target) },
 				signup: Signup, seen: Seen.rows[0], events: Events.rows,
 				sessions: Sessions.rows.map(Row => ({ ...Row, id: Row.token_hash.slice(0, 16), token_hash: undefined })),
-				videos: Videos.rows.map(Row => ({ ...Row, cover: `${Config.Origin}/media/${Row.cover_name}` })),
+				videos: Videos.rows.map(Row => ({ ...Row, cover: `${Config.Origin}/media/${Row.cover_name}?review=1` })),
 				comments: Comments.rows, violations: Violations.rows, standing: await Standing(Pool, Target, Config.Moderation),
 				related: Related.rows.map(Row => ({ ...Row, avatar: AvatarUrl(Row, Config.Origin) })),
 				reportsAgainst: Against.rows.map(ReportShape), reportsFiled: Filed.rows.map(ReportShape),
@@ -148,12 +150,12 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			const Rows = (await Pool.query(`SELECT v.id, v.description, v.cover_name, v.created_at, v.view_count::int AS views, u.id AS author_id, u.username,
 				(SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes, (SELECT count(*)::int FROM comments c WHERE c.video_id = v.id) AS comments
 				FROM videos v JOIN users u ON u.id = v.author_id WHERE $1::bigint IS NULL OR v.id < $1 ORDER BY v.id DESC LIMIT 30`, [Before(Params.get('before'))])).rows;
-			Json(Response, { videos: Rows.map(Row => ({ ...Row, cover: `${Config.Origin}/media/${Row.cover_name}` })), hasMore: Rows.length === 30 }); return true;
+			Json(Response, { videos: Rows.map(Row => ({ ...Row, cover: `${Config.Origin}/media/${Row.cover_name}?review=1` })), hasMore: Rows.length === 30 }); return true;
 		}
 		const CommentSql = `SELECT c.id, c.body, c.created_at, c.video_id, c.parent_id, u.id AS author_id, u.username, u.display_name, u.avatar_name, a.username AS video_author, v.description AS video_description, v.cover_name,
 			(SELECT count(*)::int FROM comment_likes l WHERE l.comment_id = c.id) AS likes, (SELECT count(*)::int FROM comments r WHERE r.parent_id = c.id) AS replies
 			FROM comments c JOIN users u ON u.id = c.author_id JOIN videos v ON v.id = c.video_id JOIN users a ON a.id = v.author_id`;
-		const CommentShape = Row => ({ ...Row, avatar: AvatarUrl(Row, Config.Origin), cover: `${Config.Origin}/media/${Row.cover_name}` });
+		const CommentShape = Row => ({ ...Row, avatar: AvatarUrl(Row, Config.Origin), cover: `${Config.Origin}/media/${Row.cover_name}?review=1` });
 		if (Route === 'comments') {
 			const Rows = (await Pool.query(`${CommentSql} WHERE $1::bigint IS NULL OR c.id < $1 ORDER BY c.id DESC LIMIT 50`, [Before(Params.get('before'))])).rows;
 			Json(Response, { comments: Rows.map(CommentShape), hasMore: Rows.length === 50 }); return true;
@@ -211,7 +213,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 				const Priority = Math.max(...Row.categories.map(Category => Severity[Category] ?? 1)) * 10 + Math.min(Row.reports, 9);
 				return { type: Row.target_type, id: Row.target_id, report: Row.report_id, reports: Row.reports, first_at: Row.first_at, last_at: Row.last_at, reasons: Tally, top: Top, priority: Priority,
 					preview: { video: Row.description, comment: Row.body, message: Row.message_content === null ? null : MessageText(Row.message_content) }[Row.target_type] ?? Row.display_name,
-					thumb: Row.cover_name || Row.comment_cover ? `${Config.Origin}/media/${Row.cover_name || Row.comment_cover}` : null,
+					thumb: Row.cover_name || Row.comment_cover ? `${Config.Origin}/media/${Row.cover_name || Row.comment_cover}?review=1` : null,
 					owner: Row.owner_id ? { id: Row.owner_id, username: Row.username, display_name: Row.display_name, avatar: AvatarUrl(Row, Config.Origin), banned: Boolean(Row.suspended_at), strikes: Row.strikes } : null };
 			}).sort((A, B) => B.priority - A.priority || new Date(A.first_at) - new Date(B.first_at));
 			Json(Response, { tickets: Tickets }); return true;
@@ -236,7 +238,7 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 			const OwnerId = Content?.owner ?? (await Pool.query('SELECT owner_id FROM reports WHERE target_type = $1 AND target_id = $2 LIMIT 1', [Type, TargetId])).rows[0]?.owner_id;
 			const Owner = OwnerId ? (await Pool.query('SELECT id, username, display_name, avatar_name, role, created_at, suspended_at FROM users WHERE id = $1', [OwnerId])).rows[0] : null;
 			const Decisions = (await Pool.query(`SELECT d.*, m.username AS moderator FROM moderation_decisions d LEFT JOIN users m ON m.id = d.moderator_id WHERE d.target_type = $1 AND d.target_id = $2 ORDER BY d.id DESC`, [Type, TargetId])).rows;
-			const Media = Name => Name ? `${Config.Origin}/media/${Name}` : null;
+			const Media = Name => Name ? `${Config.Origin}/media/${Name}?review=1` : null;
 			Json(Response, {
 				type: Type, id: TargetId, open: Reports.filter(Row => Row.status === 'open').map(Row => Row.id),
 				content: Content && { ...Content, file: Media(Content.file_name), cover: Media(Content.cover_name), file_name: undefined, cover_name: undefined },
@@ -288,6 +290,36 @@ ${Links}<link rel="stylesheet" href="/public/admin.css"><script id="kittok-admin
 		const Saved = await SaveSetting(Pool, Config, SettingMatch[1], Body.value);
 		await Audit(Pool, User, `settings.${SettingMatch[1]}`, SettingMatch[1], typeof Saved === 'string' ? Saved.slice(0, 120) : JSON.stringify(Saved).slice(0, 200));
 		Json(Response, Settings(Config)); return true;
+	}
+	const Verification = Route.match(/^users\/(\d+)\/verification$/);
+	if (Verification) {
+		if (typeof Body.verified !== 'boolean') throw new HttpError(400, 'InvalidVerification');
+		const Target = Id(Verification[1]);
+		await Transaction(Pool, async Client => {
+			const Account = (await Client.query('SELECT username, verified FROM users WHERE id = $1 FOR UPDATE', [Target])).rows[0];
+			if (!Account) throw new HttpError(404, 'UserNotFound');
+			if (Account.verified === Body.verified) return;
+			await Client.query('UPDATE users SET verified = $2 WHERE id = $1', [Target, Body.verified]);
+			await Audit(Client, User, 'user.verification', `@${Account.username}`, Body.verified ? 'verified' : 'unverified');
+		});
+		Json(Response, { ok: true, verified: Body.verified }); return true;
+	}
+	const Badges = Route.match(/^users\/(\d+)\/badges$/);
+	if (Badges) {
+		if (Body.prideFlag === undefined && Body.userBadges === undefined) throw new HttpError(400, 'InvalidUserBadges');
+		const Flag = Body.prideFlag === undefined ? undefined : PrideFlag(Body.prideFlag);
+		const Awards = Body.userBadges === undefined ? undefined : UserBadges(Body.userBadges);
+		const Updated = await Transaction(Pool, async Client => {
+			const Account = (await Client.query('SELECT id, username, pride_flag, user_badges FROM users WHERE id=$1 FOR UPDATE', [Id(Badges[1])])).rows[0];
+			if (!Account) throw new HttpError(404, 'UserNotFound');
+			const Next = { ...Account, pride_flag: Flag ?? Account.pride_flag, user_badges: Awards ?? Account.user_badges };
+			if (Next.pride_flag !== Account.pride_flag || JSON.stringify(Next.user_badges) !== JSON.stringify(Account.user_badges)) {
+				await Client.query('UPDATE users SET pride_flag=$2, user_badges=$3 WHERE id=$1', [Account.id, Next.pride_flag, Next.user_badges]);
+				await Audit(Client, User, 'user.badges', `@${Account.username}`, 'Profile badges updated');
+			}
+			return Next;
+		});
+		Json(Response, { ok: true, prideFlag: Updated.pride_flag, userBadges: Updated.user_badges, kittokBadges: PublicBadges(Updated) }); return true;
 	}
 	const UserAction = Route.match(/^users\/(\d+)\/(suspend|unsuspend|role|delete|violations|sessions\/revoke)$/);
 	if (UserAction) {

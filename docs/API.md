@@ -5,25 +5,31 @@ All routes are on the instance's configured public origin. Responses are JSON. I
 | Method | Route | Behavior |
 | --- | --- | --- |
 | GET | `/api/v1/instance` | Instance name, origin, version, registration mode, source URL |
-| POST | `/api/v1/users` | Register with `username`, `displayName`, `password`, optional `invite` |
+| POST | `/api/v1/users` | Register with `username`, `displayName`, `password`, optional `invite` and `prideFlag` (default `""`, no flag). Cannot choose verification, community badges, or roles |
 | POST | `/api/v1/session` | Log in with `username` and `password`; sets a host-only HttpOnly session cookie, returns `user` and `csrfToken` |
 | GET | `/api/v1/session` | Current `user` and `csrfToken`, or null values |
+| PATCH | `/api/v1/profile/badges` | Authenticated JSON `{prideFlag}`: set your optional public flag, or `""` to remove it. Profile restrictions apply; community badges and verification cannot be changed here |
 | DELETE | `/api/v1/session` | Revoke the current session and clear its cookie |
 | GET | `/api/v1/videos?cursor=ID` | Paginated public feed: `items`, `hasMore`, `cursor` |
-| POST | `/api/v1/videos?description=CAPTION` | Upload raw video bytes with a `video/*` content type; returns `{id}` after transcoding |
+| POST | `/api/v1/videos?description=CAPTION&visibility=public&comments=default` | Upload raw video bytes. Privacy is stored atomically with the new video; returns `{id}` after transcoding |
+| PATCH | `/api/v1/videos/ID` | Owner-only JSON `{visibility, comments}`; audiences: `public`, `followers`, `friends`, `only_me`; comments: `default`, `everyone`, `followers`, `friends`, `none` |
+| PATCH | `/api/v1/profile/privacy` | JSON `{privateAccount: boolean, comments}`; account comments use the same audiences except `default` |
+| GET | `/api/v1/follow-requests` | Your pending incoming requests, newest first (up to 100); review them at `/account/requests` |
+| GET | `/api/v1/messages/ID/actions` | Conversation members only: `{canUnsend}` |
+| DELETE | `/api/v1/messages/ID` | Sender-only unsend, within three minutes; broadcasts the native recall event |
 | PUT / DELETE | `/api/v1/videos/ID/like` | Like/unlike idempotently |
 | PUT / DELETE | `/api/v1/videos/ID/favorite` | Save/unsave idempotently |
 | GET | `/api/v1/videos/ID/comments` | Up to 50 newest comments |
 | POST | `/api/v1/videos/ID/comments` | Add a comment with JSON `{text}` |
-| PUT / DELETE | `/api/v1/users/USERNAME/follow` | Follow/unfollow idempotently; 403 when either user has blocked the other |
-| PUT / DELETE | `/api/v1/users/USERNAME/block` | Block/unblock idempotently; blocking removes follows in both directions |
+| PUT / DELETE | `/api/v1/users/USERNAME/follow` | Follow/unfollow idempotently; private accounts receive a pending request. Unfollow also cancels a pending request; 403 when blocked |
+| PUT / DELETE | `/api/v1/users/USERNAME/block` | Block/unblock idempotently; blocking removes follows and pending requests in both directions |
 | GET | `/health/live` | Process liveness |
 | GET | `/health/ready` | PostgreSQL readiness |
 | GET | `/source` | Current packaged instance source, if generated |
 
 Authenticated writes require both the session cookie and `X-CSRF-Token` from the session response. Login and registration are limited by the directly connected IP; authenticated uploads and comments have user limits. Cross-origin browser writes are rejected. Credentials are supplied to this instance only.
 
-Uploads currently process synchronously. Allow enough request time for ffmpeg. They are public after successful processing. Supported containers are MP4/MOV and WebM; format, dimensions, duration, file size, and tool timeouts are checked. The native account page uses this API.
+Uploads currently process synchronously. Allow enough request time for ffmpeg. They use the requested visibility immediately; the default `public` audience is still limited to approved followers when the author has a private account. Supported containers are MP4/MOV and WebM; format, dimensions, duration, file size, and tool timeouts are checked. The dedicated `/upload` page uses this API; `/account` links to it. `/account/posts` lists your posts and links to each post’s privacy editor.
 
 The client-compatibility API paths are experimental and documented by their handlers in `src/routes/compatibility.mjs`. Kittok API tests do not guarantee that the captured client's controls use the expected paths or session state.
 
@@ -44,6 +50,8 @@ Admins open `/admin` (also linked from the sidebar and `/account`). It is a stan
 | GET | `/_kittok/admin/users/ID` | Profile, stats, sign-up details, countries and languages seen, activity log, active sessions, accounts sharing an IP, videos, comments, violations (moderation decisions), and `standing` (state, active strikes per feature and policy, thresholds, restrictions) |
 | POST | `/_kittok/admin/users/ID/suspend` / `unsuspend` | Suspend records a permanent ban decision (JSON `{category?, reason?}`), signs the user out everywhere, and blocks login; unsuspend reverses every active ban |
 | POST | `/_kittok/admin/users/ID/role` | JSON `{role}`: `admin` or `member` |
+| POST | `/_kittok/admin/users/ID/verification` | JSON `{verified: true\|false}`: grant/remove the instance's verified badge, including on the admin's own account. Does not change roles or permissions. Each change is recorded as `user.verification`; repeated requests for the current value do not add audit entries |
+| POST | `/_kittok/admin/users/ID/badges` | JSON `{prideFlag?, userBadges?}`: update the optional flag and/or community badge IDs. Omitted fields remain unchanged; `""` clears the flag, `[]` removes community badges. Records `user.badges` atomically without copying the selected identity into audit details |
 | POST | `/_kittok/admin/users/ID/sessions/revoke` | JSON `{session}`: a session ID from the user page, or `all` |
 | POST | `/_kittok/admin/users/ID/violations` | JSON `{category, reason, video_id?, comment_id?}`: a strike against the user, their video, or their comment |
 | POST | `/_kittok/admin/enforce` | JSON `{target_type: video\|comment\|user, target_id, category, reason, content_action?: none\|remove\|fyf_ineligible, account_action?: none\|strike\|ban, severe?, restrictions?: [{feature, hours}]}`. Features: `upload`, `comment`, `message`, `live`, `follow`, `profile`; hours 1, 24, 48, 72, 168, 720, or `null` until lifted. Returns `{decision, autoBan}` |
@@ -67,3 +75,19 @@ Admins open `/admin` (also linked from the sidebar and `/account`). It is a stan
 | GET | `/_kittok/admin/audit?before=ID` | Admin actions, newest first, 50 per page |
 
 Settings stored in the database override the environment values for `REGISTRATION_MODE`, `INSTANCE_NAME`, `MAX_VIDEO_MB`, and `MAX_VIDEO_SECONDS`. Public routes `/brand/SLOT` serve the current brand images and `/rules` shows the rules.
+
+To manage verification, open **Admin → Accounts**, select an account, and choose **Verify account** or **Remove verification**. The `users.verified` flag defaults to false and persists in PostgreSQL. Registration and profile-edit requests cannot set it. Public user shapes expose `verified`; the original client's snake-case user shapes receive `custom_verify: "Verified account"` (the exact string its comment list checks) and `verification_type: 1` for verified accounts. This badge is granted by the local instance and does not represent verification by TikTok.
+
+The account page's **three-dot menu** groups secondary account actions, including **Edit profile badges** and verification. Community badges currently include `contributor`, `early_member`, and `supporter`. They are display badges, with no effect on roles or access. People choose a pride flag at signup or from **Profile → Profile badges** (also `/account#badges`). This selection is optional, public, editable, and removable; existing accounts receive no flag automatically. `/signup` links to the local registration form and respects the instance's registration mode.
+
+Public GET `/_kittok/badges/catalog` lists available flags and community badges; GET `/_kittok/badges?users=name1,name2` returns only badge descriptors for up to 50 distinct valid usernames. GET `/_kittok/badges/icon/ID.svg` serves the local vector artwork. User shapes include `prideFlag` and `kittokBadges`. The captured client ignores extra badge fields, so `/public/user-badges.js` decorates its profile and author name wrappers with the server's descriptors, after the native verified badge. Lookups are batched and briefly cached; a local edit updates the current page immediately, while other open tabs refresh on focus or their next 30-second check. Changes to the captured client's markup may require updating these selectors.
+
+## Privacy and direct messages
+
+Private accounts keep existing followers; new follows require approval. Switching back to public accepts pending requests. POST `/api/commit/follow/request/approve/` or `/reject/` with `user_id` (or `sec_user_id`) acts on the signed-in recipient’s request only. Native follow responses use `follow_status: 4` for requested; profile `relation` uses 3. Names, photos and bios remain public. A private account limits every post to approved followers even when its post audience is `public`; `friends` additionally requires mutual follows, and `only_me` is author-only. Account and post comment permissions intersect.
+
+Feeds, search, details, comments, activity and shared-video cards apply the same visibility check. Video and cover requests, including HEAD and ranges, authenticate before serving bytes and use `private, no-store`. An explicit `?review=1` is honored only for a signed-in admin; admin review URLs use it to inspect removed/private evidence.
+
+Native Settings exposes Private account, Comments, message audiences and Read status. Message audience values are 1 (inbox), 2 (requests), 3 (don’t receive). `message_read_status` is 0/1. Native updates require CSRF and return the refreshed settings so controls update immediately. Read indexes and live receipts are disclosed only when both users opt in, the request is accepted, and the pair is unblocked. Typing is also suppressed for pending or blocked chats. This follows TikTok’s documented [read-status and message-request behavior](https://support.tiktok.com/en/account-and-privacy/account-privacy-settings/direct-message).
+
+Pending senders may send three messages total, matching the captured client’s request notice; retries with the same client message ID do not consume another slot. Deleting a request hides its history and stops further pending sends. Acceptance moves it from native inbox 3 into inbox 0. Personal deletion (IM 701, legacy 1003) persists only for the deleting member. Unsend (IM 702 or the local DELETE route) requires the sender and a three-minute window, matching TikTok’s documented limit. Recalled content is blank in ordinary IM responses; the database retains the original for moderation evidence. The captured desktop menu’s Delete action is personal; Kittok adds Delete for everyone while the sender is eligible.
