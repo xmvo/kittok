@@ -1,5 +1,9 @@
-import { HttpError, ReadRaw } from '../http.mjs';
+import { randomUUID } from 'node:crypto';
+import { rm } from 'node:fs/promises';
+import { HttpError, Json, ReadRaw, RequireMethod } from '../http.mjs';
+import { RequireCsrf } from '../auth.mjs';
 import { Transaction } from '../db.mjs';
+import { ReceiveVideo, RemoveMedia, SaveMessageImage, ServeMedia, TranscodeVideo } from '../media.mjs';
 import { Misc } from '../settings.mjs';
 import { BlockedBetween } from '../store.mjs';
 import { Codec } from '../im/protobuf.mjs';
@@ -13,7 +17,7 @@ const Cmd = { SendMessage: 100, MessagesByUser: 200, MessagesByUserInitV2: 203, 
 	MarkConversationDelete: 603, MarkConversationRead: 604, ParticipantsList: 605, ConversationInfoV2: 608, CreateConversationV2: 609, ConversationInfoListV2: 610,
 	MgetParticipants: 654, InputStatus: 411, InputStatusNotify: 510, ReadIndexV3: 2000, MinIndexV3: 2001, UserConversationList: 2006, UnreadCount: 2030, BatchReadIndex: 2038,
 	DeleteMessage: 701, RecallMessage: 702, ModifyMessageProperty: 705, StrangerConversations: 1001, StrangerMessages: 1002, DeleteStrangerMessage: 1003, DeleteStrangerConversation: 1004, DeleteAllStrangerConversations: 1005,
-	MarkStrangerConversationRead: 1006, MarkAllStrangerConversationsRead: 1007, StrangerUnreadCount: 1008 };
+	MarkStrangerConversationRead: 1006, MarkAllStrangerConversationsRead: 1007, StrangerUnreadCount: 1008, MediaUploadConfig: 2059 };
 const Status = { Ok: 0, InvalidRequest: 4, InvalidCommand: 5, UserForbidden: 11, ResourceExhausted: 429, ConversationNotExist: 1001 };
 const SendStatus = { Succeeded: 0, NotInConversation: 1, NotAllowed: 2, CheckFailed: 3, Blocked: 5 };
 const BodyField = Object.fromEntries(Object.entries(Schema.ResponseBody).map(([Field, [Id]]) => [Id, Field]));
@@ -37,19 +41,35 @@ function ReferenceInfo(Row) {
 		root_message_id: Reference.root ?? Reference.id, root_message_conv_index: Reference.root_index ?? '0', sender: Reference.sender };
 }
 
+const MediaTypes = { 1802: 'image', 1803: 'video' };
+const MediaLimits = { image: 20 * 1024 * 1024, video: 50 * 1024 * 1024 }, MediaSeconds = 16;
+function MediaContent(Media) {
+	const Url = `/api/v1/im/media/${Media.uri}`, Resolution = { width: Media.width, height: Media.height };
+	const Hint = (Sent, Quote) => ({ sender_preview_text: { text: `You sent a ${Sent}` }, receiver_preview_text: { text: `sent a ${Sent}` }, quote_preview_text: { text: Quote } });
+	if (Media.kind === 'image') {
+		const Image = { image_id: Media.uri, url_list: [Url], resolution: Resolution };
+		return { picture_card: { image: Image, thumbnail: Image, preview_hint: Hint('\u{1F4F7}', '[Photo]') } };
+	}
+	return { video_card: { video: { video_id: Media.uri, video_type: 0, cover: { image_id: `${Media.uri}/cover`, url_list: [`${Url}/cover`], resolution: Resolution }, resolution: Resolution,
+		video_model: JSON.stringify({ video_list: [{ main_url: Url, video_meta: { codec_type: 'h264', width: Media.width, height: Media.height, duration: Media.duration } }] }) }, preview_hint: Hint('video', '[Video]') } };
+}
+
 function MessageShape(Row, RequestViewer) {
+	const Media = !Row.recalled_at && MediaTypes[Row.message_type] ? Row.media?.[0] : undefined;
 	return {
+		...(Media ? { content_pb: Proto.Encode('MessageContent', MediaContent(Media)) } : {}),
 		reference_info: ReferenceInfo(Row),
 		property_list: PropertyList(Row.properties),
 		conversation_id: Row.conversation_key, conversation_type: Row.conversation_type, conversation_short_id: Row.conversation_id, server_message_id: Row.id,
 		index_in_conversation: Row.index_in_conversation, index_in_conversation_v2: Row.index_in_conversation, index_in_conversation_v1: Row.index_in_conversation,
 		order_in_conversation: Row.index_in_conversation, message_type: Row.message_type, sender: Row.sender_id, sec_sender: Row.sender_id, content: Row.recalled_at ? '{"aweType":0,"text":""}' : Row.content,
-		ext: { ...Row.ext, ...(Row.recalled_at ? { 's:is_recalled': 'true' } : {}), 's:client_message_id': Row.client_message_id, ...(RequestViewer ? { stranger: RequestViewer } : {}) }, create_time: String(new Date(Row.created_at).getTime()), version: String(Row.property_version ?? 0), status: 0,
+		ext: { ...Row.ext, ...(Row.recalled_at ? { 's:is_recalled': 'true' } : {}), ...(Media ? { 'a:moderation_result': '2' } : {}), 's:client_message_id': Row.client_message_id, ...(RequestViewer ? { stranger: RequestViewer } : {}) }, create_time: String(new Date(Row.created_at).getTime()), version: String(Row.property_version ?? 0), status: 0,
 	};
 }
 
+const MediaColumns = "json_build_object('uri', mm.uri, 'kind', mm.kind, 'width', mm.width, 'height', mm.height, 'duration', mm.duration)";
 const MessageColumns = `m.*, c.conversation_key, c.conversation_type, (SELECT CASE WHEN quoted.recalled_at IS NOT NULL THEN 3 WHEN ${RemovedSql('message', 'quoted.id')} THEN 2 ELSE 0 END
-	FROM messages quoted WHERE quoted.id = (m.reference->>'id')::bigint) AS reference_status`;
+	FROM messages quoted WHERE quoted.id = (m.reference->>'id')::bigint) AS reference_status, (SELECT json_agg(${MediaColumns} ORDER BY mm.id) FROM message_media mm WHERE mm.message_id = m.id) AS media`;
 const Visible = `NOT ${RemovedSql('message', 'm.id')} AND NOT me.user_id = ANY(m.hidden_for)`;
 const RequestVisible = `EXISTS (SELECT 1 FROM messages visible_message WHERE visible_message.conversation_id=me.conversation_id AND visible_message.index_in_conversation>me.min_index AND NOT me.user_id = ANY(visible_message.hidden_for) AND NOT ${RemovedSql('message', 'visible_message.id')})
 	AND NOT EXISTS (SELECT 1 FROM conversation_members other JOIN users request_author ON request_author.id=other.user_id WHERE other.conversation_id=me.conversation_id AND other.user_id<>me.user_id AND (request_author.suspended_at IS NOT NULL OR ${BlockedBetween('other.user_id', 'me.user_id')}))`;
@@ -166,7 +186,9 @@ async function SendMessage(Context, Body) {
 	const Content = String(Body.content ?? '');
 	const ClientId = String(Body.client_message_id ?? '');
 	const Type = Number(Body.message_type ?? 0);
-	if (!ClientId || ClientId.length > 64 || !Content || Content.length > 20000 || Type <= 0 || Type >= 50000) throw new ImError(Status.InvalidRequest, 'InvalidMessage');
+	const Uris = [...new Set([...(Body.send_media_list ?? []).map(Item => Item.id), Body.content_pb?.picture_card?.image?.image_id, Body.content_pb?.video_card?.video?.video_id].filter(Uri => typeof Uri === 'string' && /^dm-[0-9a-f-]{36}$/.test(Uri)))];
+	if (!ClientId || ClientId.length > 64 || (!Content && !Uris.length) || Content.length > 20000 || Type <= 0 || Type >= 50000) throw new ImError(Status.InvalidRequest, 'InvalidMessage');
+	if (MediaTypes[Type] && (Uris.length !== 1 || !Misc.messageMedia)) throw new ImError(Status.InvalidRequest, 'InvalidMessage');
 	const Ext = Object.fromEntries(Object.entries(Body.ext ?? {}).filter(([Key]) => Key !== 'stranger' && !Key.startsWith('s:')).slice(0, 30).map(([Key, Value]) => [Key.slice(0, 100), String(Value).slice(0, 2000)]));
 	Limiter.Hit(`dm:${User.id}`, 60);
 	const Quoted = /^\d{1,19}$/.test(String(Body.ref_msg_info?.referenced_message_id ?? '')) ? (await Pool.query(`SELECT m.id, m.message_type, m.sender_id, m.index_in_conversation, m.reference FROM messages m
@@ -185,7 +207,9 @@ async function SendMessage(Context, Body) {
 		const Inserted = await Client.query(`INSERT INTO messages(conversation_id, sender_id, client_message_id, message_type, content, ext, index_in_conversation, reference)
 			SELECT $1, $2, $3, $4, $5, $6, coalesce(max(index_in_conversation), 0) + 1, $7 FROM messages WHERE conversation_id = $1 RETURNING *`, [Room.id, User.id, ClientId, Type, Content, Ext, Reference]);
 		await Client.query('UPDATE conversation_members SET request = false WHERE conversation_id = $1 AND user_id = $2', [Room.id, User.id]);
-		return { ...Inserted.rows[0], conversation_key: Room.conversation_key, conversation_type: Room.conversation_type };
+		const Media = MediaTypes[Type] ? (await Client.query(`UPDATE message_media mm SET message_id = $1 WHERE uri = $2 AND owner_id = $3 AND kind = $4 AND message_id IS NULL RETURNING ${MediaColumns} AS media`, [Inserted.rows[0].id, Uris[0], User.id, MediaTypes[Type]])).rows : [];
+		if (MediaTypes[Type] && !Media.length) throw new ImError(Status.InvalidRequest, 'InvalidMessage');
+		return { ...Inserted.rows[0], conversation_key: Room.conversation_key, conversation_type: Room.conversation_type, media: Media.length ? Media.map(Row => Row.media) : null };
 	});
 	if (Row.Limited) return { ...Fail(SendStatus.CheckFailed), check_code: '7195', check_message: JSON.stringify({ status_code: 7195, status_msg: { msg_content: { tips: 'You can send up to 3 messages until this person accepts your message request.', template: [] } } }) };
 	if (!Row.Repeated) {
@@ -208,6 +232,10 @@ const EmptyInbox = { [Cmd.MessagesByUserInitV2]: Body => ({ conversations: [], m
 	[Cmd.MessagesByUser]: Body => ({ messages: [], next_cursor: Body.cursor ?? '0', has_more: false }) };
 
 const Handlers = {
+	async [Cmd.MediaUploadConfig]({ Config }) {
+		const Host = new URL(Config.Origin).host, Now = Date.now();
+		return { configs: [1, 2].map(Type => ({ type: Type, resource_space: 'kittok', host: Host, current_time: String(Now), expiry_time: String(Now + 3600000), access_key: 'kittok', session_token: 'kittok', secret_access_key: 'kittok' })) };
+	},
 	async [Cmd.MessagesByUserInitV2]({ Pool, User, InboxType }) {
 		const RequestInbox = InboxType === 3;
 		const Rooms = RequestInbox ? await Requests(Pool, User.id) : await Conversations(Pool, User.id, 'true', []);
@@ -486,8 +514,43 @@ export async function HandleRequest(Context, Bytes) {
 	return Proto.Encode('Response', Response);
 }
 
+export async function SweepMessageMedia(Pool, Config) {
+	const Rows = (await Pool.query("DELETE FROM message_media WHERE message_id IS NULL AND created_at < now() - interval '1 day' RETURNING file_name, cover_name")).rows;
+	for (const Row of Rows) await Promise.all([RemoveMedia(Config, Row.file_name), Row.cover_name && RemoveMedia(Config, Row.cover_name)]);
+}
+
+async function MessageMedia(Context) {
+	const { Request, Response, Url, User, Pool, Config } = Context;
+	if (Url.pathname === '/api/v1/im/media') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		if (Config.Features?.messages === false || !Misc.messageMedia) throw new HttpError(403, 'MessageMediaDisabled');
+		if (await ActiveRestriction(Pool, User.id, 'message')) throw new HttpError(403, 'MessageRestricted');
+		Context.Limiter.Hit(`dmmedia:${User.id}`, 30, 600000);
+		const Kind = Url.searchParams.get('type') === 'video' ? 'video' : 'image';
+		const Input = await ReceiveVideo(Request, Config, MediaLimits[Kind], Kind === 'video' ? 'VideoTooLarge' : 'ImageTooLarge');
+		try {
+			const Saved = Kind === 'image' ? await SaveMessageImage(Config, Input) : await TranscodeVideo(Config, Input, MediaLimits.video, MediaSeconds);
+			const Uri = `dm-${randomUUID()}`;
+			await Pool.query('INSERT INTO message_media(uri, owner_id, kind, file_name, cover_name, width, height, duration, bytes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+				[Uri, User.id, Kind, Saved.Name ?? Saved.VideoName, Saved.CoverName ?? null, Saved.Width, Saved.Height, Saved.Duration ?? null, Saved.Bytes]);
+			Json(Response, { uri: Uri, width: Saved.Width, height: Saved.Height, duration: Saved.Duration ?? 0, cover: Saved.CoverName ? `${Uri}/cover` : '' });
+		} finally { await rm(Input, { force: true }); }
+		return true;
+	}
+	const Served = Url.pathname.match(/^\/api\/v1\/im\/media\/(dm-[0-9a-f-]{36})(\/cover)?$/);
+	if (!Served) return false;
+	RequireMethod(Request, ['GET', 'HEAD']);
+	const Row = User && (await Pool.query(`SELECT mm.file_name, mm.cover_name FROM message_media mm LEFT JOIN messages m ON m.id = mm.message_id
+		LEFT JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $2
+		WHERE mm.uri = $1 AND (mm.owner_id = $2 OR (me.user_id IS NOT NULL AND m.recalled_at IS NULL AND m.index_in_conversation > me.min_index AND ${Visible}))`, [Served[1], User.id])).rows[0];
+	if (!Row || (Served[2] && !Row.cover_name)) throw new HttpError(404, 'MediaNotFound');
+	await ServeMedia(Request, Response, Config, Served[2] ? Row.cover_name : Row.file_name, true);
+	return true;
+}
+
 export async function Im(Context) {
 	const { Request, Response, Url, User } = Context;
+	if (Url.pathname.startsWith('/api/v1/im/media')) return MessageMedia(Context);
 	if (!/^\/v[1-3]\/[a-z_/]+$/.test(Url.pathname) || Request.method !== 'POST' || !Request.headers['content-type']?.startsWith('application/x-protobuf')) return false;
 	if (!User) throw new HttpError(401, 'NotLoggedIn');
 	if (Context.Config.Features?.messages === false) throw new HttpError(403, 'MessagesDisabled');

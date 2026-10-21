@@ -32,12 +32,23 @@ function Run(Executable, Args, Failure = 'InvalidVideo', Timeout = 180000) {
 export async function ImportVideo(Pool, Config, UserId, Input, Description = '', Settings = { visibility: 'public', comment_permission: 'default' }) {
 	PostSettings(Settings.visibility, Settings.comment_permission);
 	if (typeof Description !== 'string' || Description.length > 2200) throw new HttpError(400, 'DescriptionTooLong');
+	const Video = await TranscodeVideo(Config, Input, Config.MaxVideoBytes, Config.MaxVideoSeconds);
+	try {
+		const Result = await Pool.query('INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes, visibility, comment_permission, category) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id', [UserId, Description, Video.VideoName, Video.CoverName, Video.Width, Video.Height, Video.Duration, Video.Bytes, Settings.visibility, Settings.comment_permission, Settings.category ?? GuessCategory(Description)]);
+		return Result.rows[0].id;
+	} catch (Error) {
+		await Promise.allSettled([RemoveMedia(Config, Video.VideoName), RemoveMedia(Config, Video.CoverName)]);
+		throw Error;
+	}
+}
+
+export async function TranscodeVideo(Config, Input, MaxBytes, MaxSeconds) {
 	const InputInfo = await stat(Input);
-	if (!InputInfo.size || InputInfo.size > Config.MaxVideoBytes) throw new HttpError(413, 'VideoTooLarge');
+	if (!InputInfo.size || InputInfo.size > MaxBytes) throw new HttpError(413, 'VideoTooLarge');
 	const Probe = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov,matroska,webm', '-show_streams', '-show_format', '-of', 'json', Input]));
 	const Track = Probe.streams.find(Track => Track.codec_type === 'video');
 	const Duration = Number(Probe.format.duration);
-	if (!Track || !Number.isFinite(Duration) || Duration <= 0 || Duration > Config.MaxVideoSeconds || Track.width > 4096 || Track.height > 4096) throw new HttpError(422, 'UnsupportedVideo');
+	if (!Track || !Number.isFinite(Duration) || Duration <= 0 || Duration > MaxSeconds || Track.width > 4096 || Track.height > 4096) throw new HttpError(422, 'UnsupportedVideo');
 	await mkdir(Config.MediaDir, { recursive: true });
 	const Key = randomUUID();
 	const VideoName = `${Key}.mp4`;
@@ -45,7 +56,7 @@ export async function ImportVideo(Pool, Config, UserId, Input, Description = '',
 	const Video = join(Config.MediaDir, VideoName);
 	const Cover = join(Config.MediaDir, CoverName);
 	const Input_ = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov,matroska,webm', '-i', Input, '-map', '0:v:0', '-map', '0:a:0?', '-map_metadata', '-1'];
-	const Output = ['-movflags', '+faststart', '-t', String(Config.MaxVideoSeconds), '-n', Video];
+	const Output = ['-movflags', '+faststart', '-t', String(MaxSeconds), '-n', Video];
 	const Audio = Probe.streams.find(Track => Track.codec_type === 'audio');
 	const Playable = Track.codec_name === 'h264' && Track.pix_fmt === 'yuv420p' && Track.width <= 1080 && (!Audio || Audio.codec_name === 'aac');
 	const Encode = () => Run(Config.FFmpeg, [...Input_, '-vf', "scale='min(1080,iw)':-2", '-c:v', 'libx264', '-preset', 'veryfast',
@@ -57,8 +68,7 @@ export async function ImportVideo(Pool, Config, UserId, Input, Description = '',
 		const OutputProbe = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', '-show_streams', '-of', 'json', Video]));
 		const OutputTrack = OutputProbe.streams.find(Track => Track.codec_type === 'video');
 		const Info = await stat(Video);
-		const Result = await Pool.query('INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes, visibility, comment_permission, category) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id', [UserId, Description, VideoName, CoverName, OutputTrack.width, OutputTrack.height, Duration, Info.size, Settings.visibility, Settings.comment_permission, Settings.category ?? GuessCategory(Description)]);
-		return Result.rows[0].id;
+		return { VideoName, CoverName, Width: OutputTrack.width, Height: OutputTrack.height, Duration: Math.min(Duration, MaxSeconds), Bytes: Info.size };
 	} catch (Error) {
 		await Promise.allSettled([rm(Video, { force: true }), rm(Cover, { force: true })]);
 		throw Error;
@@ -96,16 +106,29 @@ export async function SaveBrandImage(Config, Slot, Bytes) {
 	} finally { await rm(Input, { force: true }); }
 }
 
+export async function SaveMessageImage(Config, Input) {
+	const Whitelist = ['-protocol_whitelist', 'file', '-format_whitelist', 'png_pipe,jpeg_pipe,webp_pipe,gif'];
+	const Track = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', ...Whitelist, '-show_streams', '-of', 'json', Input], 'InvalidImage')).streams?.find(Track => Track.codec_type === 'video');
+	if (!Track || Track.width > 8192 || Track.height > 8192) throw new HttpError(422, 'InvalidImage');
+	const Name = `${randomUUID()}.jpg`, File = join(Config.MediaDir, Name);
+	try {
+		await Run(Config.FFmpeg, ['-hide_banner', '-loglevel', 'error', '-nostdin', ...Whitelist, '-i', Input, '-frames:v', '1', '-map_metadata', '-1',
+			'-vf', "scale='min(2048,iw)':'min(2048,ih)':force_original_aspect_ratio=decrease", '-q:v', '3', '-threads', '1', '-n', File], 'InvalidImage');
+		const Output = JSON.parse(await Run(Config.FFprobe, ['-v', 'error', '-show_streams', '-of', 'json', File], 'InvalidImage')).streams[0];
+		return { Name, Width: Output.width, Height: Output.height, Bytes: (await stat(File)).size };
+	} catch (Error) { await rm(File, { force: true }); throw Error; }
+}
+
 export const AvatarExists =async (Config, Name) => (await stat(join(Config.MediaDir, Name)).catch(() => null))?.isFile() ?? false;
 export const RemoveMedia = (Config, Name) => rm(join(Config.MediaDir, Name), { force: true });
 
-export async function ReceiveVideo(Request, Config) {
+export async function ReceiveVideo(Request, Config, MaxBytes = Config.MaxVideoBytes, TooLarge = 'VideoTooLarge') {
 	await mkdir(join(Config.MediaDir, '.incoming'), { recursive: true });
 	const File = join(Config.MediaDir, '.incoming', randomUUID());
 	let Bytes = 0;
 	const Limit = new Transform({ transform(Chunk, Encoding, Done) {
 		Bytes += Chunk.length;
-		Done(Bytes > Config.MaxVideoBytes ? new HttpError(413, 'VideoTooLarge') : null, Chunk);
+		Done(Bytes > MaxBytes ? new HttpError(413, TooLarge) : null, Chunk);
 	} });
 	try {
 		await pipeline(Request, Limit, createWriteStream(File, { flags: 'wx', mode: 0o600 }));

@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Send photos and short videos in direct messages with the native media button. They show up as TikTok's own photo and video cards, blurred for the recipient until tapped, and only people in the chat can open them. An admin switch turns it off.
 - Download your data from Settings: pick everything or just some of it, TXT or JSON, and get a ZIP laid out like TikTok's export that also has your own videos. Downloading asks for your password, and files expire after 4 days.
 - Deactivate or delete your account from the native Settings page, with TikTok's 30-day window to change your mind by logging back in. Deleting someone who made invites no longer fails, and banned or deactivated accounts stay out of user search.
 - Emoji reactions on direct messages through the client's own reaction picker, pushed live to the other person, and replies that keep their quoted message.

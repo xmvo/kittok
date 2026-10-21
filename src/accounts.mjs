@@ -7,8 +7,9 @@ export async function DeleteAccount(Pool, Config, UserId) {
 	if (!Account) return false;
 	await Pool.query('DELETE FROM invites WHERE created_by = $1', [UserId]);
 	const Videos = (await Pool.query('DELETE FROM videos WHERE author_id = $1 RETURNING file_name, cover_name', [UserId])).rows;
+	Videos.push(...(await Pool.query('DELETE FROM message_media WHERE owner_id = $1 RETURNING file_name, cover_name', [UserId])).rows);
 	await Pool.query('DELETE FROM users WHERE id = $1', [UserId]);
-	for (const Row of Videos) await Promise.all([RemoveMedia(Config, Row.file_name), RemoveMedia(Config, Row.cover_name)]);
+	for (const Row of Videos) await Promise.all([RemoveMedia(Config, Row.file_name), Row.cover_name && RemoveMedia(Config, Row.cover_name)]);
 	if (Account.avatar_name) await RemoveMedia(Config, Account.avatar_name);
 	return true;
 }
@@ -77,11 +78,11 @@ export async function ExportFiles(Pool, Config, Export) {
 	if (Export.sections.includes('messages')) {
 		const [Chats, Messages] = await Promise.all([
 			Query("SELECT me.conversation_id, coalesce(string_agg(u.username, ', ' ORDER BY u.username), '') AS names FROM conversation_members me LEFT JOIN conversation_members o ON o.conversation_id = me.conversation_id AND o.user_id <> me.user_id LEFT JOIN users u ON u.id = o.user_id WHERE me.user_id = $1 GROUP BY me.conversation_id"),
-			Query(`SELECT m.conversation_id, m.created_at, m.content, s.username FROM messages m JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1 JOIN users s ON s.id = m.sender_id
+			Query(`SELECT m.conversation_id, m.created_at, m.content, m.message_type, s.username FROM messages m JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1 JOIN users s ON s.id = m.sender_id
 				WHERE m.index_in_conversation > me.min_index AND m.recalled_at IS NULL AND NOT $1 = ANY(m.hidden_for) AND NOT ${RemovedSql('message', 'm.id')} ORDER BY m.conversation_id, m.index_in_conversation`)]);
 		const Names = new Map(Chats.map(Row => [Row.conversation_id, Row.names]));
 		const History = {};
-		for (const Row of Messages) (History[`Chat History with ${Names.get(Row.conversation_id) || 'yourself'}:`] ??= []).push({ Date: Stamp(Row.created_at), From: Row.username, Content: MessageText(Row.content) || Row.content });
+		for (const Row of Messages) (History[`Chat History with ${Names.get(Row.conversation_id) || 'yourself'}:`] ??= []).push({ Date: Stamp(Row.created_at), From: Row.username, Content: MessageText(Row.content) || ({ 1802: '[Photo]', 1803: '[Video]' })[Row.message_type] || Row.content });
 		Data['Direct Messages'] = { 'Chat History': { ChatHistory: History } };
 	}
 	if (Export.sections.includes('settings')) {

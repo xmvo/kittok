@@ -40,6 +40,8 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	for (const Name of ['pc_web_age_gate', 'browser_mode_encourage_login', 'browser_login_redirect', 'login_google_onetap', 'login_boost', 'webapp_nu_fyp_content']) {
 		Parameters[Name] = { vid: 'v0' };
 	}
+	if (Config?.Features?.messages !== false && Misc.messageMedia) Parameters.web_dm_multimedia_msg = { vid: 'v2', image_limit: 20, video_limit: 50 };
+	else delete Parameters.web_dm_multimedia_msg;
 	if (Legacy?.AppContext) Legacy.AppContext.appContext = App;
 	const Biz = Scope['webapp.biz-context'] ?? Legacy?.BizContext?.bizContext;
 	if (Biz) {

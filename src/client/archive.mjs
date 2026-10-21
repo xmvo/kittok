@@ -30,6 +30,13 @@ export function LocalAsset(Value) {
 }
 
 const Pending = new Map();
+export async function MessageUploader(Original) {
+	const Match = Original.toString('utf8', 0, 300).match(/^\(self\.(\w+)=self\.\1\|\|\[\]\)\.push\(\[\[([^\]]*)\],\{(\d+):/);
+	if (!Match) return Original;
+	const Shim = await readFile(join(Root, 'src/client/uploader.js'), 'utf8');
+	return Buffer.from(`(self.${Match[1]}=self.${Match[1]}||[]).push([[${Match[2]}],{${Match[3]}:function(e){e.exports=${Shim.trim()}}}]);`);
+}
+
 export async function Asset(Value, { Refresh = false } = {}) {
 	const Url = AssetUrl(Value);
 	const Key = createHash('sha256').update(Url.href).digest('hex');

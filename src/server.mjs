@@ -6,7 +6,7 @@ import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { Asset, AssetUrl, CaptureLoginPage, LoginManifestPath, LoginManifestUrl, ClientDir, Root, RewriteAssets } from './client/archive.mjs';
+import { Asset, AssetUrl, CaptureLoginPage, LoginManifestPath, LoginManifestUrl, ClientDir, MessageUploader, Root, RewriteAssets } from './client/archive.mjs';
 import { Shell } from './client/shell.mjs';
 import { LoadConfig } from './config.mjs';
 import { Database, Migrate } from './db.mjs';
@@ -19,7 +19,7 @@ import { Account } from './routes/account.mjs';
 import { Passport } from './routes/passport.mjs';
 import { Studio } from './routes/studio.mjs';
 import { Admin } from './routes/admin.mjs';
-import { Im, HandleRequest, Proto } from './routes/im.mjs';
+import { Im, HandleRequest, Proto, SweepMessageMedia } from './routes/im.mjs';
 import { Upgrade, Sweep } from './im/frontier.mjs';
 import { AssertVideoVisible } from './privacy.mjs';
 import { LoadSettings } from './settings.mjs';
@@ -41,6 +41,7 @@ const Cleanup = setInterval(() => {
 	Pool.query("UPDATE user_events SET ip = NULL WHERE ip IS NOT NULL AND created_at < now() - interval '90 days'").catch(() => console.error('EventCleanupFailed'));
 	Pool.query('DELETE FROM data_exports WHERE expires_at < now()').catch(() => console.error('ExportCleanupFailed'));
 	DeleteExpiredAccounts(Pool, Config).catch(() => console.error('AccountDeletionFailed'));
+	SweepMessageMedia(Pool, Config).catch(() => console.error('MessageMediaCleanupFailed'));
 }, 3600000).unref();
 
 const Server = createServer(async (Request, Response) => {
@@ -70,6 +71,7 @@ const Server = createServer(async (Request, Response) => {
 			try { AssetUrl(Upstream.href); } catch { throw new HttpError(403, 'AssetNotAllowed'); }
 			let Body = await Asset(Upstream.href);
 			const Ext = extname(Upstream.pathname);
+			if (Ext === '.js' && Body.includes('Action:"ApplyImageUpload"')) Body = await MessageUploader(Body);
 			if (['.js', '.css', '.json'].includes(Ext)) Body = Buffer.from(RewriteAssets(Body.toString('utf8'), Config.Origin));
 			Response.writeHead(200, { 'content-type': Mime[Ext] ?? 'application/octet-stream', 'cache-control': 'no-cache' });
 			return Response.end(Request.method === 'HEAD' ? undefined : Body);
