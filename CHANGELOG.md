@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Move pride flag editing into the native Edit profile dialog and drop the separate Profile badges button and the profile's three-dot menu.
 - Add avatar decorations: all 644 of Discord's presets, picked from a searchable Edit avatar panel in Edit profile and drawn animated around avatars. Images are cached locally after the first request.
 - Add an admin Misc page that switches Kittok's own features on and off. Show the verified check in the DM chat header, tell requesters when a private account approves them, replace the stuck You may like placeholders with "No suggestions yet", and hide chats with deleted accounts.
 - Show follow requests in the native inbox with Accept and Delete, offer Repost in the share sheet, link @mentions in comments to the right profile, keep pride and community badges after the verified check in comments, and stop the analytics SDK's once-a-second retries.

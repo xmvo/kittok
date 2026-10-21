@@ -5,65 +5,39 @@
 	const Check = '<svg viewBox="0 0 48 48" width="1em" height="1em" aria-label="Verified" role="img"><path d="M0 24a24 24 0 1 1 48 0 24 24 0 0 1-48 0Z" fill="#20D5EC"/><path fill-rule="evenodd" clip-rule="evenodd" d="M37.12 15.88a3 3 0 0 1 0 4.24l-13.5 13.5a3 3 0 0 1-4.24 0l-8.5-8.5a3 3 0 1 1 4.24-4.24l6.38 6.38 11.38-11.38a3 3 0 0 1 4.24 0Z" fill="#fff"/></svg>';
 	let Timer, Running = false;
 	const Handle = Value => /^\/@([a-z0-9_]{3,24})\/?$/i.exec(Value)?.[1].toLowerCase();
-	async function EditFlag() {
-		if (document.querySelector('.KittokBadgeDialog')) return;
-		const Dialog = document.createElement('dialog'); Dialog.className = 'KittokBadgeDialog'; Dialog.setAttribute('aria-label', 'Profile badges');
-		const Form = document.createElement('form'); Form.method = 'dialog';
-		const Heading = document.createElement('h2'); Heading.textContent = 'Profile badges';
-		const Help = document.createElement('p'); Help.textContent = 'Your pride flag is public beside your name. You can change or remove it anytime.';
-		const Label = document.createElement('label'); Label.textContent = 'Pride flag (optional)';
-		const Select = document.createElement('select'); Select.name = 'prideFlag'; Select.disabled = true; Label.append(Select);
-		const Preview = document.createElement('div'); Preview.className = 'KittokBadgePreview';
-		const Status = document.createElement('p'); Status.setAttribute('role', 'status'); Status.textContent = 'Loading…';
-		const Buttons = document.createElement('div'); Buttons.className = 'KittokBadgeButtons';
-		const Cancel = document.createElement('button'); Cancel.type = 'button'; Cancel.textContent = 'Cancel'; Cancel.addEventListener('click', () => Dialog.close());
-		const Save = document.createElement('button'); Save.type = 'submit'; Save.textContent = 'Save'; Save.disabled = true;
-		Buttons.append(Cancel, Save); Form.append(Heading, Help, Preview, Label, Status, Buttons); Dialog.append(Form);
-		Dialog.addEventListener('close', () => Dialog.remove());
-		document.body.append(Dialog); Dialog.showModal();
+	let Flags;
+	async function FlagRow() {
+		const Modal = Shown && Instance.account && document.querySelector('[data-e2e="edit-profile-popup"]');
+		const Name = Modal?.querySelector('[data-e2e="edit-profile-name"]')?.parentElement;
+		if (!Name || Modal.querySelector('[data-kittok-flag-row]')) return;
+		const Row = document.createElement('div'); Row.className = Name.className; Row.setAttribute('data-kittok-flag-row', '');
+		const Label = document.createElement('label'); Label.className = Name.children[0].className; Label.textContent = 'Pride flag'; Label.htmlFor = 'kittok-pride-flag';
+		const Area = document.createElement('div'); Area.className = Name.children[1]?.className ?? '';
+		const Select = document.createElement('select'); Select.id = 'kittok-pride-flag'; Select.className = (Name.querySelector('input')?.className ?? '') + ' KittokFlagSelect'; Select.disabled = true;
+		const Tip = document.createElement('p'); Tip.className = Name.querySelector('p')?.className ?? ''; Tip.setAttribute('role', 'status'); Tip.textContent = 'Optional. Shown beside your name.';
+		Area.append(Select, Tip); Row.append(Label, Area);
+		Name.after(Row);
 		try {
-			const [CatalogResponse, SessionResponse] = await Promise.all([fetch('/_kittok/badges/catalog'), fetch('/api/v1/session')]);
-			if (!CatalogResponse.ok || !SessionResponse.ok) throw new Error();
-			const Catalog = await CatalogResponse.json(), Session = await SessionResponse.json();
-			if (!Session.user) throw new Error();
-			for (const Flag of [{ id: '', label: 'None / prefer not to say' }, ...Catalog.pride]) {
+			Flags ??= fetch('/_kittok/badges/catalog').then(Response => { if (!Response.ok) throw new Error('CouldntLoad'); return Response.json(); }).catch(Error => { Flags = null; throw Error; });
+			const [Catalog, Session] = await Promise.all([Flags, fetch('/api/v1/session').then(Response => Response.json())]);
+			if (!Session.user) throw new Error('NotLoggedIn');
+			for (const Flag of [{ id: '', label: 'None' }, ...Catalog.pride]) {
 				const Option = document.createElement('option'); Option.value = Flag.id; Option.textContent = Flag.label; Select.append(Option);
 			}
-			Select.value = Session.user.prideFlag;
-			const Community = Session.user.kittokBadges.filter(Badge => Badge.type === 'community');
-			const Update = () => {
-				Preview.replaceChildren();
-				const Badges = [...Catalog.pride.filter(Badge => Badge.id === Select.value), ...Community];
-				if (Badges.length) Render(Preview, Session.user.uniqueId, Badges);
-				else Preview.textContent = 'No profile badges';
-			};
-			Select.addEventListener('change', Update); Update();
-			Status.textContent = ''; Select.disabled = false; Save.disabled = false; Select.focus();
-			Form.addEventListener('submit', async Event => {
-				Event.preventDefault(); Save.disabled = true; Status.textContent = 'Saving…';
+			Select.value = Session.user.prideFlag; Select.disabled = false;
+			Select.addEventListener('change', async () => {
+				Select.disabled = true; Tip.textContent = 'Saving';
 				try {
 					const Response = await fetch('/api/v1/profile/badges', { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-csrf-token': Session.csrfToken }, body: JSON.stringify({ prideFlag: Select.value }) });
-					if (!Response.ok) throw new Error();
+					if (!Response.ok) throw new Error('CouldntSave');
 					const Updated = await Response.json();
-					Cache.set(Session.user.uniqueId, { ...Cache.get(Session.user.uniqueId), at: Date.now(), badges: Updated.kittokBadges });
+					Cache.set(Session.user.uniqueId, { ...(Cache.get(Session.user.uniqueId) ?? { verified: false, decoration: null }), at: Date.now(), badges: Updated.kittokBadges });
 					for (const [Host, Username] of Targets()) if (Username === Session.user.uniqueId) Render(Host, Username, Updated.kittokBadges);
-					Dialog.close(); Schedule();
-				} catch { Status.textContent = 'Couldn’t save. Try again.'; Save.disabled = false; }
+					Tip.textContent = 'Saved';
+				} catch { Tip.textContent = 'CouldntSave'; }
+				Select.disabled = false;
 			});
-		} catch { Status.textContent = 'Couldn’t load your badges. Try again.'; }
-	}
-	function EditorButton() {
-		const Existing = document.querySelector('[data-kittok-badge-editor]');
-		const Edit = Shown && Handle(location.pathname) === Instance.account?.username && document.querySelector('[data-e2e="edit-profile-entrance"]');
-		if (!Edit) { Existing?.remove(); return; }
-		const Slot = Edit.parentElement;
-		if (Existing?.previousElementSibling === Slot) return;
-		Existing?.remove();
-		const Item = Slot.cloneNode(true); Item.setAttribute('data-kittok-badge-editor', '');
-		const Button = Item.querySelector('button'); Button.setAttribute('data-e2e', 'kittok-badges-entrance'); Button.removeAttribute('aria-expanded'); Button.removeAttribute('aria-haspopup');
-		const Text = Button.querySelector('[data-testid="tux-web-text"]');
-		if (Text) Text.textContent = 'Profile badges'; else Button.textContent = 'Profile badges';
-		Button.addEventListener('click', EditFlag); Slot.after(Item);
+		} catch { Tip.textContent = 'CouldntLoad'; }
 	}
 	function AvatarOwner(Span) {
 		if (Span.closest('[data-e2e="edit-profile-avatar"], .KittokDecorationPreview')) return Instance.account?.username;
@@ -263,7 +237,7 @@
 	async function Sync() {
 		Timer = null;
 		if (Running) return;
-		EditorButton();
+		FlagRow();
 		const Found = Targets(), Faces = Avatars(), Missing = new Set();
 		const Chat = ChatHeader();
 		if (Chat) {

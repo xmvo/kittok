@@ -46,18 +46,6 @@
 		if (ChatHeader && !ChatHeader.querySelector('[data-kittok-chat-back]')) {
 			const Back = document.createElement('button'); Back.type = 'button'; Back.textContent = '‹'; Back.setAttribute('data-kittok-chat-back', ''); Back.setAttribute('aria-label', 'Back to messages'); Back.addEventListener('click', () => { location.href = '/messages'; }); ChatHeader.prepend(Back);
 		}
-		const Edit = location.pathname === '/@' + Instance.account?.username && document.querySelector('[data-e2e="edit-profile-entrance"]');
-		const Actions = document.querySelector('[data-kittok-profile-actions]');
-		if (!Edit) Actions?.remove();
-		else if (!Actions) {
-			const Menu = document.createElement('details'); Menu.setAttribute('data-kittok-profile-actions', '');
-			const Toggle = document.createElement('summary'); Toggle.textContent = '•••'; Toggle.setAttribute('aria-label', 'Account options');
-			const Links = document.createElement('div');
-			for (const [Path, Name] of [['/account/posts','Manage posts'],['/account/requests','Follow requests'],['/account/privacy','Privacy settings']]) {
-				const Link = document.createElement('a'); Link.href = Path; Link.textContent = Name; Links.append(Link);
-			}
-			Menu.append(Toggle, Links); Edit.parentElement.after(Menu);
-		}
 		if (document.title !== Instance.name) document.title = Instance.name;
 		const LoginTitle = document.getElementById('login-modal-title');
 		if (LoginTitle?.textContent === 'Log in to TikTok' && LoginTitle.firstChild?.nodeType === 3) LoginTitle.firstChild.nodeValue = `Log in to ${Instance.name}`;
@@ -80,8 +68,6 @@
 		}
 	}
 	new MutationObserver(Brand).observe(document.documentElement, { childList: true, subtree: true });
-	document.addEventListener('click', Event => { for (const Menu of document.querySelectorAll('[data-kittok-profile-actions][open]')) if (!Menu.contains(Event.target)) Menu.open = false; });
-	document.addEventListener('keydown', Event => { if (Event.key === 'Escape') for (const Menu of document.querySelectorAll('[data-kittok-profile-actions][open]')) Menu.open = false; });
 	const NativeFetch = window.fetch.bind(window);
 	const NativeOpen = XMLHttpRequest.prototype.open;
 	function LocalUrl(Value) {
