@@ -575,7 +575,7 @@
 					El('td', {}, El('div', { class: 'Row' }, El('img', { class: 'Avatar', src: Row.avatar, alt: '' }), El('div', {}, El('div', { class: 'Row', style: 'font-weight:600' }, Row.display_name, Row.verified && VerifiedCheck(), AccountBadges(Row)), El('div', { class: 'Faint' }, `@${Row.username}`)))),
 					El('td', { class: 'Mono Faint' }, Row.id), El('td', {}, Row.role === 'admin' ? Chip('Admin', 'Info') : El('span', { class: 'Muted' }, 'Member')),
 					El('td', { class: 'Faint Num' }, Ago(Row.created_at)), El('td', { class: 'Num' }, Row.videos), El('td', { class: 'Num' }, Row.followers), El('td', { class: 'Num' }, Row.violations),
-					El('td', {}, Row.suspended_at ? Chip('Banned', 'Bad') : Chip('Active', 'Good'))))))
+					El('td', {}, Row.deactivated_at ? Chip(Row.delete_after ? 'Deleting' : 'Deactivated', 'Warn') : Row.suspended_at ? Chip('Banned', 'Bad') : Chip('Active', 'Good'))))))
 				: El('div', { class: 'Empty' }, El('span', {}, 'No accounts match.')))));
 		if (!Query) Field.focus();
 	}
@@ -588,7 +588,7 @@
 		const Refresh = () => Navigate(location.pathname + location.search, true);
 		const Owner = { id: U.id, username: U.username, standing: Data.standing };
 		const Actions = U.self ? [] : [
-			U.role !== 'admin' && (U.suspended_at ? Btn('Unban', () => AskReason({ Title: `Unban @${U.username}?`, Text: 'Reverses every active ban on the account.', Confirm: 'Unban', OnConfirm: async Reason => { await Api(`users/${U.id}/unsuspend`, { reason: Reason }); Toast('Account unbanned'); Refresh(); } }))
+			U.role !== 'admin' && !U.deactivated_at && (U.suspended_at ? Btn('Unban', () => AskReason({ Title: `Unban @${U.username}?`, Text: 'Reverses every active ban on the account.', Confirm: 'Unban', OnConfirm: async Reason => { await Api(`users/${U.id}/unsuspend`, { reason: Reason }); Toast('Account unbanned'); Refresh(); } }))
 				: Btn('Ban', () => AskReason({ Title: `Ban @${U.username}?`, Text: 'Permanent until reversed or appealed. Signs the account out everywhere and hides its content.', Confirm: 'Ban', Danger: true, OnConfirm: async Reason => { await Api(`users/${U.id}/suspend`, { reason: Reason }); Toast('Account banned'); Refresh(); } }), 'Danger')),
 			Btn(U.role === 'admin' ? 'Remove admin' : 'Make admin', () => Modal({ Title: U.role === 'admin' ? `Remove admin from @${U.username}?` : `Make @${U.username} an admin?`, Body: El('p', { class: 'Muted', style: 'margin:0' }, U.role === 'admin' ? 'They lose access to this console.' : 'They get full access to this console and instance settings.'), OnConfirm: async () => { await Api(`users/${U.id}/role`, { role: U.role === 'admin' ? 'member' : 'admin' }); Toast('Role updated'); Refresh(); } })),
 			Btn('Delete', () => { const Confirm = El('input', { class: 'Input', placeholder: U.username }); Modal({ Title: `Delete @${U.username}?`, Danger: true, Confirm: 'Delete forever', Body: [El('p', { class: 'Muted', style: 'margin:0' }, 'Deletes the account, its videos and files, and its avatar. This can’t be undone. Type the username to confirm.'), Confirm], OnConfirm: async () => { await Api(`users/${U.id}/delete`, { confirm: Confirm.value }); Toast('Account deleted'); Navigate('/admin/accounts'); } }); }, 'Ghost Danger'),
@@ -626,7 +626,7 @@
 		};
 		Fill(Body, El('div', { class: 'Page Stack' },
 			El('div', { class: 'Panel Profile' }, El('img', { class: 'Avatar Large', src: U.avatar, alt: '' }),
-				El('div', { class: 'Grow' }, El('div', { class: 'Row' }, El('h2', {}, U.display_name), U.verified && VerifiedCheck(), AccountBadges(U), StandingChip(Data.standing, U.suspended_at), U.role === 'admin' && Chip('Admin', 'Info')),
+				El('div', { class: 'Grow' }, El('div', { class: 'Row' }, El('h2', {}, U.display_name), U.verified && VerifiedCheck(), AccountBadges(U), StandingChip(Data.standing, U.suspended_at && !U.deactivated_at), U.deactivated_at && Chip(U.delete_after ? `Deleting ${new Date(U.delete_after).toLocaleDateString()}` : 'Deactivated', 'Warn'), U.role === 'admin' && Chip('Admin', 'Info')),
 					El('div', { class: 'Muted' }, `@${U.username}`), El('div', { class: 'Facts' }, El('span', { class: 'Mono' }, U.id), El('span', {}, `Joined ${new Date(U.created_at).toLocaleDateString()}`), El('span', {}, `${U.stats.followerCount} followers`), El('span', {}, `${U.stats.videoCount} videos`), El('span', {}, `${U.stats.heartCount} likes`)),
 					U.bio && El('p', { style: 'margin:8px 0 0;overflow-wrap:anywhere' }, U.bio)),
 				El('div', { class: 'ProfileActions' }, !U.self && U.role !== 'admin' && Btn('Take action', () => EnforceDrawer({ Type: 'user', Target: U.id, Owner, Title: `Act on @${U.username}`, OnDone: Refresh }), 'Primary'), Actions)),

@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import { Pns } from './routes/pns.mjs';
+import { DeleteExpiredAccounts } from './accounts.mjs';
 import { BackfillCategories } from './categories.mjs';
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
@@ -32,11 +34,12 @@ const Unknown = new Map();
 const Blocked = new Map();
 const Limiter = RateLimiter();
 const Uploading = { value: 0 };
-const Csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'";
+const Csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'";
 const Cleanup = setInterval(() => {
 	Pool.query('DELETE FROM sessions WHERE expires_at < now()').catch(() => console.error('SessionCleanupFailed'));
 	Pool.query("DELETE FROM video_views WHERE viewed_at < now() - interval '6 hours'").catch(() => console.error('ViewCleanupFailed'));
 	Pool.query("UPDATE user_events SET ip = NULL WHERE ip IS NOT NULL AND created_at < now() - interval '90 days'").catch(() => console.error('EventCleanupFailed'));
+	DeleteExpiredAccounts(Pool, Config).catch(() => console.error('AccountDeletionFailed'));
 }, 3600000).unref();
 
 const Server = createServer(async (Request, Response) => {
@@ -119,7 +122,7 @@ const Server = createServer(async (Request, Response) => {
 			if (Path === '/_debug/unknown') return Json(Response, Object.fromEntries(Unknown));
 			if (Path === '/_debug/blocked') return Json(Response, Object.fromEntries(Blocked));
 		}
-		if (await Admin(Context) || await Studio(Context) || await Account(Context) || await Api(Context) || await Passport(Context) || await Im(Context) || await Compatibility(Context)) return;
+		if (await Admin(Context) || await Studio(Context) || await Account(Context) || await Api(Context) || await Pns(Context) || await Passport(Context) || await Im(Context) || await Compatibility(Context)) return;
 		if (/^\/(?:api|passport|node-webapp|tiktok|tns-api|aweme|node|v[1-3])\//.test(Path)) {
 			const Key = `${Request.method} ${Path}`;
 			if (Unknown.size < 500) Unknown.set(Key, (Unknown.get(Key) ?? 0) + 1);

@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Deactivate or delete your account from the native Settings page, with TikTok's 30-day window to change your mind by logging back in. Deleting someone who made invites no longer fails, and banned or deactivated accounts stay out of user search.
 - Emoji reactions on direct messages through the client's own reaction picker, pushed live to the other person, and replies that keep their quoted message.
 - The Friends page, music pages, and search suggestions work; stories and playlists show their empty states; and the client's telemetry calls get quiet answers. Add a systemd user service for source installs.
 - Forgot password works through the native reset screen, admins can turn off the sign-up email code, and your own videos' menu gets Pin to profile, Post settings, and Manage posts.

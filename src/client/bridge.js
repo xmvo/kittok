@@ -77,6 +77,10 @@
 			if (CodeInput.value !== '000000') { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(CodeInput, '000000'); CodeInput.dispatchEvent(new Event('input', { bubbles: true })); }
 		}
 		if (Instance.registration === 'invite' && location.pathname.startsWith('/signup')) InviteField();
+		for (const Frame of document.querySelectorAll('iframe[src^="https://www.tiktok.com/tpp/inapp/"], iframe[src^="http://localhost:3001/pns_product_poseidon/"]')) {
+			const Source = new URL(Frame.src);
+			Frame.src = location.origin + (Source.pathname.startsWith('/tpp/inapp/') ? Source.pathname : '/tpp/inapp' + Source.pathname) + Source.search;
+		}
 		if (Instance.account?.role === 'admin') SyncAdmin();
 		for (const Logo of document.querySelectorAll('a[data-e2e="tiktok-logo"]:not([data-kittok-sized])')) { Logo.setAttribute('data-kittok-sized', ''); LogoSize.observe(Logo); }
 		for (const Item of document.querySelectorAll('[data-e2e="notice-list-item"]')) {

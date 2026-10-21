@@ -12,6 +12,7 @@ All routes are on the instance's configured public origin. Responses are JSON. I
 | GET | `/api/music/detail/`, `/api/music/item_list/` | Every video is its own Original sound, so `musicId` is a video id: the sound (playing the video's audio), its author, and that one video. 10219 when missing |
 | GET | `/api/discover/user/` | Accounts with a preview video each (`needItemList=true`): who you follow, or suggested accounts for guests and anyone who follows no one, which fills the Friends page's empty state |
 | GET | `/api/search/general/preview/`, `/api/search/user/preview/` | Suggestions while typing: public hashtags by use, then usernames, starting with the keyword |
+| POST | `/api/v1/account/deactivate` | JSON `{password, delete}` from the Settings deactivate and delete pages: hides the account and ends every session; `delete: true` also schedules permanent deletion 30 days out (`deleteAfter`). Logging in again cancels both. 403 `InvalidPassword`, 409 `LastAdmin` |
 | POST | `/api/v1/videos/ID/pin` | JSON `{pinned}` on your own video; 409 `PinLimit` past three. Used by the Pin to profile item Kittok adds to the native video menu |
 | POST | `/passport/web/account/set/` | Create username step: mixed `username`, with `x-tt-passport-csrf-token`. A placeholder nickname follows the new name |
 | POST | `/api/v1/users` | Register with `username`, `displayName`, `password`, optional `invite` and `prideFlag` (default `""`, no flag). Cannot choose verification, community badges, or roles |

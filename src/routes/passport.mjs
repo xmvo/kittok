@@ -192,6 +192,10 @@ export async function Passport(Context) {
 		}
 		return true;
 	}
+	if (Path === '/passport/web/org/account/permission_check/') {
+		RequireMethod(Request, ['POST']);
+		Json(Response, User ? { message: 'success', data: { allowed_operations: ['org_account.delete'] } } : { message: 'error', data: { error_code: 8, description: 'NotLoggedIn' } }); return true;
+	}
 	if (Path === '/passport/web/logout/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
 		await Pool.query('DELETE FROM sessions WHERE token_hash = $1', [User.token_hash]);

@@ -169,7 +169,7 @@ export async function RecordView(Pool, VideoId, Viewer) {
 }
 
 export async function FindUser(Pool, Value, ById = false) {
-	const Result = await Pool.query(`SELECT id, username, display_name, bio, role, avatar_name, verified, pride_flag, user_badges, private_account, comment_permission FROM users WHERE ${ById ? 'id' : 'username'} = $1`, [ById ? Id(Value) : String(Value).toLowerCase()]);
+	const Result = await Pool.query(`SELECT id, username, display_name, bio, role, avatar_name, verified, pride_flag, user_badges, private_account, comment_permission FROM users WHERE ${ById ? 'id' : 'username'} = $1 AND deactivated_at IS NULL`, [ById ? Id(Value) : String(Value).toLowerCase()]);
 	if (!Result.rowCount) throw new HttpError(404, 'UserNotFound');
 	return Result.rows[0];
 }

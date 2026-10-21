@@ -15,6 +15,7 @@ import { runInNewContext } from 'node:vm';
 import { DecodePassportValue } from '../src/routes/passport.mjs';
 import { Proto } from '../src/routes/im.mjs';
 import { BackfillCategories, Category, GuessCategory } from '../src/categories.mjs';
+import { DeleteExpiredAccounts } from '../src/accounts.mjs';
 import { request as HttpRequest } from 'node:http';
 import { createServer } from 'node:net';
 
@@ -1811,6 +1812,46 @@ test('direct message reactions and replies use the client\'s own commands, push 
 	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: { ...Settings, messageReactions: false } }, Auth())).status, 200);
 	assert.equal((await React(AsBeta, [{ operation: 0, key: 'e:😂', value: '' }])).body.modify_message_property_body.status, 3);
 	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: Settings }, Auth())).status, 200);
+});
+
+test('deactivating hides an account until its owner logs back in, and deletion requests run out after 30 days', async () => {
+	const Leaver = await CreateUser(Pool, { username: 'leaver', password: Password, email: 'leaver@example.com' }, 'closed', true);
+	const Signed = await Login(Pool, 'leaver', Password);
+	const As = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	const Page = await fetch(`${Origin}/tpp/inapp/pns_product_poseidon/account_deactivate_webapp.html?isDark=1`, { headers: { cookie: As.cookie } });
+	assert.equal(Page.status, 200); assert.match(Page.headers.get('content-security-policy'), /frame-ancestors 'self'/);
+	const Html = await Page.text(); assert.ok(Html.includes('Deactivate account?') && Html.includes(Signed.Csrf));
+	assert.ok((await (await fetch(`${Origin}/tpp/inapp/pns_product_poseidon/account_delete_new_webapp.html`)).text()).includes('Log in to continue'));
+	assert.equal((await fetch(`${Origin}/tpp/inapp/pns_product_poseidon/other.html`, { headers: { cookie: As.cookie } })).status, 404);
+	assert.ok((await (await Call('/tiktok/pns/bff/account/questionnaire/config')).json()).questionnaireOptions.length >= 3);
+	const Deactivate = (Body, Headers = As) => Call('/api/v1/account/deactivate', 'POST', Body, Headers);
+	assert.equal((await Deactivate({ password: Password }, { cookie: As.cookie })).status, 403);
+	assert.equal((await (await Deactivate({ password: 'wrong-password-here' })).json()).error, 'InvalidPassword');
+	assert.equal((await Pool.query("SELECT count(*)::int AS admins FROM users WHERE role = 'admin' AND suspended_at IS NULL")).rows[0].admins, 1);
+	assert.equal((await (await Deactivate({ password: Password }, Auth())).json()).error, 'LastAdmin');
+	const Done = await Deactivate({ password: Password });
+	assert.equal(Done.status, 200); assert.equal((await Done.json()).deleteAfter, null);
+	assert.equal((await Pool.query('SELECT count(*)::int AS live FROM sessions WHERE user_id = $1', [Leaver.id])).rows[0].live, 0);
+	assert.equal((await Call('/api/user/detail/?uniqueId=leaver')).status, 404);
+	assert.ok(!(await (await Call('/api/search/user/full/?keyword=leaver')).json()).user_list.length);
+	assert.equal((await fetch(`${Origin}/logout`, { redirect: 'manual' })).headers.get('location'), '/');
+	const Back = await Login(Pool, 'leaver', Password);
+	assert.ok(Back.Token); assert.equal((await Call('/api/user/detail/?uniqueId=leaver')).status, 200);
+	assert.deepEqual((await Pool.query("SELECT kind FROM user_events WHERE user_id = $1 AND kind IN ('deactivated', 'reactivated') ORDER BY id", [Leaver.id])).rows.map(Row => Row.kind), ['deactivated', 'reactivated']);
+	const AsBack = { cookie: `kittok_session=${Back.Token}`, 'x-csrf-token': Back.Csrf };
+	await Pool.query("INSERT INTO invites(token_hash, created_by, expires_at) VALUES ($1, $2, now() + interval '1 day')", [Hash(Token()), Leaver.id]);
+	await Pool.query("INSERT INTO videos(author_id, description, file_name, cover_name, width, height, duration, bytes) VALUES ($1, 'bye', 'leaver-test.mp4', 'leaver-test.jpg', 1, 1, 1, 1)", [Leaver.id]);
+	const Scheduled = await (await Deactivate({ password: Password, delete: true }, AsBack)).json();
+	assert.ok(new Date(Scheduled.deleteAfter) - Date.now() > 29 * 86400000);
+	assert.equal(await DeleteExpiredAccounts(Pool, Config), 0);
+	await Pool.query("UPDATE users SET delete_after = now() - interval '1 minute' WHERE id = $1", [Leaver.id]);
+	assert.equal(await DeleteExpiredAccounts(Pool, Config), 1);
+	assert.equal((await Pool.query('SELECT count(*)::int AS left FROM users WHERE id = $1', [Leaver.id])).rows[0].left, 0);
+	assert.equal((await Pool.query('SELECT count(*)::int AS left FROM videos WHERE author_id = $1', [Leaver.id])).rows[0].left, 0);
+	const Banned = await CreateUser(Pool, { username: 'banned_leaver', password: Password }, 'closed', true);
+	await Pool.query('UPDATE users SET deactivated_at = now(), suspended_at = now() WHERE id = $1', [Banned.id]);
+	assert.equal((await Call(`/_kittok/admin/users/${Banned.id}/suspend`, 'POST', { category: 'spam', reason: 'Banned while deactivated' }, Auth())).status, 200);
+	await assert.rejects(Login(Pool, 'banned_leaver', Password), /AccountSuspended/);
 });
 
 test('misc switches turn Kittok features off and back on without a restart', async () => {

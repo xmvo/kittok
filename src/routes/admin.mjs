@@ -11,6 +11,7 @@ import { Enforce, DecideReport, ReverseDecision, LiftRestriction, MessageText, R
 import { Transaction } from '../db.mjs';
 import { BadgeCatalog, PrideFlag, UserBadges, PublicBadges } from '../badges.mjs';
 import { Public, Shell } from '../client/shell.mjs';
+import { DeleteAccount } from '../accounts.mjs';
 
 let ClientPage;
 
@@ -75,7 +76,7 @@ export async function Admin(Context) {
 	if (Request.method === 'GET') {
 		if (Route === 'overview') {
 			const Stats = (await Pool.query(`SELECT (SELECT count(*)::int FROM users) AS users, (SELECT count(*)::int FROM users WHERE created_at > now() - interval '7 days') AS new_users,
-				(SELECT count(*)::int FROM users WHERE suspended_at IS NOT NULL) AS suspended, (SELECT count(*)::int FROM videos) AS videos, (SELECT coalesce(sum(view_count), 0)::int FROM videos) AS views,
+				(SELECT count(*)::int FROM users WHERE suspended_at IS NOT NULL AND deactivated_at IS NULL) AS suspended, (SELECT count(*)::int FROM videos) AS videos, (SELECT coalesce(sum(view_count), 0)::int FROM videos) AS views,
 				(SELECT count(*)::int FROM comments) AS comments, (SELECT count(*)::int FROM likes) AS likes, (SELECT count(*)::int FROM sessions WHERE expires_at > now()) AS sessions,
 				(SELECT count(*)::int FROM moderation_decisions WHERE reversed_at IS NULL AND account_action <> 'none' AND created_at > now() - interval '30 days') AS violations,
 				(SELECT count(*)::int FROM invites WHERE expires_at > now() AND uses < max_uses) AS invites, (SELECT count(*)::int FROM reports WHERE status = 'open') AS reports`)).rows[0];
@@ -87,7 +88,7 @@ export async function Admin(Context) {
 			const Query = (Params.get('q') ?? '').trim().slice(0, 64);
 			const Like = Query.replace(/^@/, '').replace(/[\\%_]/g, '\\$&');
 			const IsIp = /^[0-9a-fA-F:.]{3,45}$/.test(Query) && /[.:]/.test(Query);
-			const Rows = (await Pool.query(`SELECT u.id, u.username, u.display_name, u.role, u.verified, u.pride_flag, u.user_badges, u.created_at, u.suspended_at, u.avatar_name,
+			const Rows = (await Pool.query(`SELECT u.id, u.username, u.display_name, u.role, u.verified, u.pride_flag, u.user_badges, u.created_at, u.suspended_at, u.deactivated_at, u.delete_after, u.avatar_name,
 				(SELECT count(*)::int FROM videos v WHERE v.author_id = u.id) AS videos, (SELECT count(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
 				(SELECT count(*)::int FROM moderation_decisions x WHERE x.owner_id = u.id AND x.reversed_at IS NULL AND x.account_action IN ('strike', 'ban')) AS violations
 				FROM users u WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' ESCAPE '\\' OR u.display_name ILIKE '%' || $1 || '%' ESCAPE '\\' OR u.id::text = $1
@@ -98,7 +99,7 @@ export async function Admin(Context) {
 		const UserMatch = Route.match(/^users\/(\d+)$/);
 		if (UserMatch) {
 			const Target = Id(UserMatch[1]);
-			const Profile = (await Pool.query('SELECT id, username, display_name, bio, role, verified, pride_flag, user_badges, avatar_name, created_at, suspended_at, notices_read_at FROM users WHERE id = $1', [Target])).rows[0];
+			const Profile = (await Pool.query('SELECT id, username, display_name, bio, role, verified, pride_flag, user_badges, avatar_name, created_at, suspended_at, deactivated_at, delete_after, notices_read_at FROM users WHERE id = $1', [Target])).rows[0];
 			if (!Profile) throw new HttpError(404, 'UserNotFound');
 			const [Events, Sessions, Videos, Comments, Violations, Related, Seen, Against, Filed] = await Promise.all([
 				Pool.query('SELECT id, kind, host(ip) AS ip, country, language, user_agent, detail, created_at FROM user_events WHERE user_id = $1 ORDER BY id DESC LIMIT 100', [Target]),
@@ -168,7 +169,7 @@ export async function Admin(Context) {
 				(SELECT count(*)::int FROM moderation_appeals WHERE status = 'pending') AS appeals,
 				(SELECT count(*)::int FROM moderation_decisions WHERE created_at > now() - interval '24 hours') AS decisions_today,
 				(SELECT count(*)::int FROM moderation_restrictions WHERE lifted_at IS NULL AND (expires_at IS NULL OR expires_at > now())) AS restrictions,
-				(SELECT count(*)::int FROM users WHERE suspended_at IS NOT NULL) AS banned,
+				(SELECT count(*)::int FROM users WHERE suspended_at IS NOT NULL AND deactivated_at IS NULL) AS banned,
 				(SELECT min(created_at) FROM reports WHERE status = 'open') AS oldest_ticket,
 				(SELECT count(*)::int FROM moderation_appeals WHERE reviewed_at > now() - interval '30 days') AS appeals_reviewed,
 				(SELECT count(*)::int FROM moderation_appeals WHERE status = 'restored' AND reviewed_at > now() - interval '30 days') AS appeals_restored,
@@ -337,9 +338,7 @@ export async function Admin(Context) {
 			Detail = `${Category}: ${Reason}`;
 		} else {
 			if (Body.confirm !== Found.username) throw new HttpError(400, 'TypeTheUsernameToConfirm');
-			await DeleteVideos(Pool, Config, 'author_id = $1', [Target]);
-			await Pool.query('DELETE FROM users WHERE id = $1', [Target]);
-			if (Found.avatar_name) await RemoveMedia(Config, Found.avatar_name);
+			await DeleteAccount(Pool, Config, Target);
 		}
 		await Audit(Pool, User, `user.${Action.replace('/', '.')}`, `@${Found.username}`, Detail);
 		Json(Response, { ok: true }); return true;

@@ -75,6 +75,11 @@ export async function Login(Pool, Username, Password, Info = {}) {
 	const Valid = await PasswordMatches(Password, User?.password_hash ?? await Dummy);
 	if (User && !Valid) await RecordEvent(Pool, User.id, 'login_failed', Info);
 	if (!User || !Valid) throw new HttpError(401, 'InvalidLogin');
+	if (User.suspended_at && User.deactivated_at && !(await Pool.query("SELECT 1 FROM moderation_decisions WHERE owner_id = $1 AND account_action = 'ban' AND reversed_at IS NULL", [User.id])).rowCount) {
+		await Pool.query('UPDATE users SET suspended_at = NULL, deactivated_at = NULL, delete_after = NULL WHERE id = $1', [User.id]);
+		await RecordEvent(Pool, User.id, 'reactivated', Info, User.delete_after ? 'Deletion canceled' : '');
+		User.suspended_at = null;
+	}
 	if (User.suspended_at) {
 		await RecordEvent(Pool, User.id, 'login_failed', Info, 'Account suspended');
 		throw Object.assign(new HttpError(403, 'AccountSuspended'), { UserId: User.id });

@@ -542,7 +542,7 @@ export async function Compatibility(Context) {
 		if (Config.Features?.search === false) return [];
 		const Query = `%${(Params.get('keyword') ?? '').slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`;
 		const Result = await Pool.query(`SELECT u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, ${RelationSql('$3::bigint', 'u.id')} AS relation FROM users u
-			WHERE (u.username ILIKE $1 ESCAPE '\\' OR u.display_name ILIKE $1 ESCAPE '\\') AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = u.id AND b.blocked_id = $3::bigint) ORDER BY u.username LIMIT $2`, [Query, Limit, User?.id ?? null]);
+			WHERE (u.username ILIKE $1 ESCAPE '\\' OR u.display_name ILIKE $1 ESCAPE '\\') AND u.suspended_at IS NULL AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.blocker_id = u.id AND b.blocked_id = $3::bigint) ORDER BY u.username LIMIT $2`, [Query, Limit, User?.id ?? null]);
 		return Promise.all(Result.rows.map(async Row => {
 			const Stats = await UserStats(Pool, Row.id);
 			return { user_info: { ...ApiUser(Row, Config.Origin), follower_count: Stats.followerCount, following_count: Stats.followingCount, aweme_count: Stats.videoCount, total_favorited: Stats.heartCount } };
