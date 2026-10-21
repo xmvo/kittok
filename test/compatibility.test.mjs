@@ -357,11 +357,11 @@ test('original client follower, following, friend, and suggested lists page from
 	assert.deepEqual(await (await Call('/api/im/spotlight/relation?count=30&max_time=0')).json(), { status_code: 0, max_time: 0, min_time: 0, has_more: 0, followings: [] });
 });
 
-test('liked and favorites tabs stay private and collection lists return an empty native shape', async () => {
+test('liked and favorites tabs stay private and an account without collections returns the empty native shape', async () => {
 	assert.deepEqual((await (await Call(`/api/favorite/item_list/?secUid=${Owner.id}&count=30&cursor=0`, 'GET', undefined, Auth())).json()).itemList.map(Item => Item.id), [VideoId]);
 	assert.deepEqual((await (await Call(`/api/favorite/item_list/?secUid=${Owner.id}`)).json()).itemList, []);
 	assert.deepEqual((await (await Call(`/api/favorite/item_list/?secUid=${Friend.id}`, 'GET', undefined, Auth())).json()).itemList, []);
-	assert.deepEqual(await (await Call(`/api/user/collection_list/?secUid=${Owner.id}&count=30&cursor=0`, 'GET', undefined, Auth())).json(), { statusCode: 0, status_code: 0, collectionList: [], cursor: '0', hasMore: false });
+	assert.deepEqual(await (await Call(`/api/user/collection_list/?secUid=${Owner.id}&count=30&cursor=0`, 'GET', undefined, Auth())).json(), { statusCode: 0, status_code: 0, collectionList: [], cursor: '0', hasMore: false, total: '0' });
 });
 
 test('original client comment delete lets authors, video owners, and nobody else remove comments', async () => {
@@ -1468,4 +1468,86 @@ test('privacy changes and concurrent follow requests remain consistent without f
 	assert.equal((await Pool.query('SELECT 1 FROM follow_requests r JOIN follows f USING(follower_id, following_id) WHERE r.following_id = $1', [Host.id])).rowCount, 0);
 	await SetPrivateAccount(Pool, Host.id, false);
 	assert.equal((await Pool.query('SELECT 1 FROM follow_requests WHERE following_id = $1', [Host.id])).rowCount, 0);
+});
+
+test('hashtags, mentions, related and explore feeds, comment labels, merged likes and reposts use the native shapes', async () => {
+	await CreateUser(Pool, { username: 'third_fan', displayName: 'Third Fan', password: Password }, 'closed', true);
+	const As = async Name => { const Signed = await Login(Pool, Name, Password); return { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf }; };
+	const AsFriend = await As('friend'), AsThird = await As('third_fan');
+	const Get = async (Path, Headers = Auth()) => (await Call(Path, 'GET', undefined, Headers)).json();
+	const Post = async (Path, Headers = Auth()) => (await Call(Path, 'POST', undefined, Headers)).json();
+	const Detail = await Get('/api/challenge/detail/?challengeName=KitTok');
+	const Tag = Detail.challengeInfo.challenge;
+	assert.equal(Tag.title, 'kittok'); assert.ok(Detail.challengeInfo.stats.videoCount >= 1);
+	const Tagged = (await Get(`/api/challenge/item_list/?challengeID=${Tag.id}&count=30&cursor=0`)).itemList.find(Item => Item.id === VideoId);
+	assert.deepEqual(Tagged.textExtra.map(Entity => [Entity.type, Entity.start, Entity.end, Entity.hashtagName, Entity.hashtagId]), [[1, 6, 13, 'kittok', Tag.id]]);
+	assert.equal(Tagged.challenges[0].id, Tag.id); assert.deepEqual(Tagged.contents[0].textExtra, Tagged.textExtra);
+	assert.deepEqual((await Get('/api/challenge/item_list/?challengeID=1')).itemList, []);
+	assert.equal((await Get('/api/challenge/detail/?challengeName=bad-tag')).statusCode, 10205);
+	assert.ok((await Get(`/api/related/item_list/?itemID=${VideoId}&count=16`)).itemList.every(Item => Item.id !== VideoId));
+	assert.ok((await Get('/api/explore/item_list/?categoryType=120&count=8')).itemList.some(Item => Item.id === VideoId));
+	assert.deepEqual((await Get('/api/explore/item_list/?categoryType=104&count=8')).itemList, []);
+	const Page = await Get('/api/notice/multi/?group_list=' + encodeURIComponent(JSON.stringify([{ count: 20, is_mark_read: 1, group: 500, max_time: 0, min_time: 0 }])));
+	assert.equal(Page.status_code, 0);
+	const Publish = async (Text, Headers) => (await Post(`/api/comment/publish/?aweme_id=${VideoId}&text=${encodeURIComponent(Text)}&reply_id=0`, Headers)).comment;
+	const Mine = await Publish('Pinned thought from the creator', Auth());
+	const Mention = await Publish('@owner look at #KitTok and @nobody_here', AsThird);
+	assert.equal(Mine.label_type, 1);
+	assert.deepEqual(Mention.text_extra.map(Entity => [Entity.type, Entity.start, Entity.end, Entity.user_id ?? Entity.hashtag_name]), [[0, 0, 6, Owner.id], [1, 15, 22, 'kittok']]);
+	await Post(`/api/comment/digg/?aweme_id=${VideoId}&cid=${Mention.cid}&digg_type=1`);
+	const Listed = async () => (await Get(`/api/comment/list/?aweme_id=${VideoId}&count=50&cursor=0`)).comments.find(Comment => Comment.cid === Mention.cid);
+	assert.equal((await Listed()).is_author_digged, true); assert.equal((await Listed()).label_type, 0);
+	await Post(`/api/commit/follow/user/?user_id=${(await Get('/api/user/detail/?uniqueId=third_fan')).userInfo.user.id}&type=1`);
+	assert.equal((await Listed()).label_type, 2);
+	await Post(`/api/comment/digg/?aweme_id=${VideoId}&cid=${Mine.cid}&digg_type=1`, AsFriend);
+	await Post(`/api/comment/digg/?aweme_id=${VideoId}&cid=${Mine.cid}&digg_type=1`, AsThird);
+	const Counts = Object.fromEntries((await Get('/api/inbox/notice_count/')).notice_count.map(Entry => [Entry.group, Entry.count]));
+	assert.equal(Counts[3], 1); assert.equal(Counts[6], 1);
+	const List = async Group => (await Get('/api/notice/multi/?group_list=' + encodeURIComponent(JSON.stringify([{ count: 20, is_mark_read: 0, group: Group, max_time: 0, min_time: 0 }])))).notice_lists[0].notice_list;
+	const [Merged] = await List(3);
+	assert.equal(Merged.digg.merge_count, 2); assert.deepEqual(Merged.digg.from_user.map(User => User.unique_id), ['third_fan', 'friend']); assert.equal(Merged.digg.comment.cid, Mine.cid);
+	const [At] = await List(6);
+	assert.equal(At.type, 45); assert.equal(At.at.sub_type, 2); assert.equal(At.at.comment.cid, Mention.cid); assert.equal(At.at.user_info.unique_id, 'third_fan'); assert.equal(At.at.aweme.aweme_id, VideoId);
+	assert.equal((await Post(`/tiktok/v1/upvote/publish?item_id=${VideoId}`, AsThird)).status_code, 0);
+	const Reposted = (await Get(`/api/item/detail/?itemId=${VideoId}`, AsThird)).itemInfo.itemStruct;
+	assert.equal(Reposted.stats.repostCount, 1); assert.equal(Reposted.repostList[0].secUid, (await Get('/api/user/detail/?uniqueId=third_fan')).userInfo.user.secUid);
+	assert.deepEqual((await Get(`/api/item/detail/?itemId=${VideoId}`)).itemInfo.itemStruct.repostList, []);
+	assert.deepEqual((await Get('/api/repost/item_list/?uniqueId=third_fan&count=30&cursor=0')).itemList.map(Item => Item.id), [VideoId]);
+	assert.equal((await Call(`/tiktok/v1/upvote/publish?item_id=${VideoId}`, 'POST')).status, 401);
+	await Post(`/tiktok/v1/upvote/delete?item_id=${VideoId}`, AsThird);
+	assert.deepEqual((await Get('/api/repost/item_list/?uniqueId=third_fan&count=30&cursor=0')).itemList, []);
+});
+
+test('named collections hold your own favorites, respect privacy, and follow the native create, edit, move and delete calls', async () => {
+	const Signed = await Login(Pool, 'friend', Password);
+	const AsFriend = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	const Get = async (Path, Headers = Auth()) => (await Call(Path, 'GET', undefined, Headers)).json();
+	const Post = async (Path, Headers = Auth()) => (await Call(Path, 'POST', undefined, Headers)).json();
+	assert.equal((await Get('/api/playlist/name_check?name=Road%20trip')).isValid, true);
+	assert.equal((await Get(`/api/playlist/name_check?name=${'x'.repeat(31)}`)).isValid, false);
+	await Post(`/api/item/collect/?itemId=${VideoId}&action=1`);
+	assert.ok((await Get('/api/collection/candidate/item_list/?count=30&cursor=0')).itemList.some(Item => Item.id === VideoId));
+	const First = await Post('/api/collection/create/?collectionName=Road%20trip&collectionStatus=1');
+	const Second = await Post('/api/collection/create/?collectionName=Later&collectionStatus=3');
+	assert.equal(First.statusCode, 0); assert.equal(First.collectionIdString, First.collectionId);
+	assert.equal((await Post(`/api/collection/modify_items/?collectionId=${First.collectionId}&commitIds=${VideoId}`)).statusCode, 0);
+	const Mine = await Get(`/api/user/collection_list/?secUid=${Owner.id}&count=30&cursor=0`);
+	const Road = Mine.collectionList.find(Entry => Entry.collectionId === First.collectionId);
+	assert.deepEqual([Road.name, Road.status, Road.total, Road.userName], ['Road trip', 1, '1', 'owner']); assert.ok(Road.cover.startsWith(Origin + '/media/'));
+	assert.deepEqual((await Get(`/api/user/collection_list/?secUid=${Owner.id}&count=30&cursor=0`, AsFriend)).collectionList.map(Entry => Entry.name), ['Later']);
+	assert.deepEqual((await Get(`/api/collection/item_list/?collectionId=${First.collectionId}&count=30&cursor=0`)).itemList.map(Item => Item.id), [VideoId]);
+	assert.deepEqual((await Get(`/api/collection/item_list/?collectionId=${First.collectionId}&count=30&cursor=0`, AsFriend)).itemList, []);
+	assert.equal((await Get(`/api/collection/detail/?collectionId=${First.collectionId}`, AsFriend)).statusCode, 10201);
+	const Detail = await Get(`/api/collection/detail/?collectionId=${First.collectionId}`);
+	assert.equal(Detail.collectionInfo.userName, 'owner'); assert.equal(Detail.collectionInfo.cover.urlList.length, 1);
+	assert.equal((await Call(`/api/collection/modify_items/?collectionId=${First.collectionId}&commitIds=${VideoId}`, 'POST', undefined, AsFriend)).status, 404);
+	await Post(`/api/collection/move_items/?itemIDs=${VideoId}&fromCollectionID=${First.collectionId}&targetCollectionID=${Second.collectionId}`);
+	assert.deepEqual((await Get(`/api/collection/item_list/?collectionId=${First.collectionId}&count=30&cursor=0`)).itemList, []);
+	assert.deepEqual((await Get(`/api/collection/item_list/?collectionId=${Second.collectionId}&count=30&cursor=0`, AsFriend)).itemList.map(Item => Item.id), [VideoId]);
+	await Post(`/api/collection/modify_info/?collectionId=${Second.collectionId}&collectionName=Saved&collectionStatus=1`);
+	assert.deepEqual((await Get(`/api/user/collection_list/?secUid=${Owner.id}&count=30&cursor=0`, AsFriend)).collectionList, []);
+	await Post(`/api/item/collect/?itemId=${VideoId}&action=2`);
+	assert.deepEqual((await Get(`/api/collection/item_list/?collectionId=${Second.collectionId}&count=30&cursor=0`)).itemList, []);
+	await Post(`/api/collection/delete/?collectionId=${First.collectionId}`); await Post(`/api/collection/delete/?collectionId=${Second.collectionId}`);
+	assert.deepEqual((await Get(`/api/user/collection_list/?secUid=${Owner.id}&count=30&cursor=0`)).collectionList, []);
 });

@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from 'node:crypto';
+import { Transaction } from '../db.mjs';
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { RequireCsrf, RecordEvent, ClientInfo } from '../auth.mjs';
 import { SaveAvatar, AvatarExists, RemoveMedia } from '../media.mjs';
@@ -6,7 +7,7 @@ import { ActiveRestriction, RestrictionText, RemovedSql, ModerationNotices, Unre
 import { AcceptRequest } from './im.mjs';
 import { AssertVideoVisible, VideoVisibleSql, SetPrivateAccount, DecideFollowRequest, FollowRequests } from '../privacy.mjs';
 import { PublicBadges } from '../badges.mjs';
-import { FindUser, UserShape, UserStats, Videos, SetRelation, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
+import { FindUser, UserShape, UserStats, Videos, SetRelation, TagId, TagName, TagSql, MentionedUsers, CommentExtra, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
 
@@ -14,9 +15,15 @@ const FollowStatus = Value => ({ 1: 1, 2: 2, 3: 4 })[Value] ?? 0;
 const Offset = Value => Math.min(Math.max(Math.floor(Number(Value)) || 0, 0), 100000);
 const PageSize = (Value, Default) => Math.min(Math.max(Number(Value) || Default, 1), 50);
 
-function CommentShape(Row, Origin) {
+function CollectionShape(Row, Owner, Origin) {
+	return { collectionId: Row.id, name: Row.name, status: Row.public ? 3 : 1, total: String(Row.total ?? 0), cover: Row.cover_name ? `${Origin}/media/${Row.cover_name}` : '', userId: Owner.id, userSecUid: Owner.id, userName: Owner.username };
+}
+
+const CommentLabel = Row => Row.author_id === Row.video_author ? 1 : Row.relation === 2 ? 8 : Row.relation === 1 ? 2 : 0;
+
+function CommentShape(Row, Origin, Mentioned) {
 	return {
-		cid: Row.id, aweme_id: Row.video_id, text: Row.body, text_extra: [], create_time: Math.floor(new Date(Row.created_at).getTime() / 1000),
+		cid: Row.id, aweme_id: Row.video_id, text: Row.body, text_extra: CommentExtra(Row.body, Mentioned), label_type: CommentLabel(Row), is_author_digged: Boolean(Row.author_digged), create_time: Math.floor(new Date(Row.created_at).getTime() / 1000),
 		digg_count: Row.likes ?? 0, reply_comment_total: Row.replies ?? 0, user_digged: Row.liked ? 1 : 0, reply_id: Row.parent_id ?? '0', reply_to_reply_id: '0',
 		user: ApiUser({ ...Row, id: Row.author_id }, Origin),
 	};
@@ -27,20 +34,23 @@ function ApiUser(Row, Origin) {
 	return { uid: Row.id, sec_uid: Row.id, unique_id: Row.username, nickname: Row.display_name, signature: Row.bio ?? '', avatar_thumb: Avatar, avatar_medium: Avatar, follow_status: FollowStatus(Row.relation), follower_status: [2, 6].includes(Row.relation) ? 1 : 0, is_block: Row.relation === 4, kittokBadges: PublicBadges(Row), ...(Row.verified ? { custom_verify: 'Verified account', enterprise_verify_reason: '', verification_type: 1 } : {}) };
 }
 
-const NoticeKinds = { 500: ['like', 'comment_like', 'comment', 'follow'], 3: ['like', 'comment_like'], 505: ['like', 'comment_like'], 2: ['comment'], 7: ['follow'] };
+const NoticeKinds = { 500: ['like', 'comment_like', 'comment', 'follow', 'mention'], 3: ['like', 'comment_like'], 505: ['like', 'comment_like'], 2: ['comment'], 6: ['mention'], 7: ['follow'] };
 
 function NoticeShape(Row, Viewer, Origin) {
-	const Code = { like: 1, comment_like: 2, comment: 3, follow: 4 }[Row.kind];
-	const Nid = `${Code}${Row.video_id ?? 0}${Row.comment_id ?? 0}${Row.id}`;
+	const Code = { like: 1, comment_like: 2, comment: 3, follow: 4, mention: 5 }[Row.kind];
+	const Merged = ['like', 'comment_like'].includes(Row.kind);
+	const Nid = `${Code}${Row.video_id ?? 0}${Row.comment_id ?? 0}${Merged ? '' : Row.id}`;
 	const Notice = { nid: Nid, nid_str: Nid, create_time: Math.floor(Row.epoch), has_read: Row.read, user_id: Viewer };
 	const From = ApiUser(Row, Origin);
 	const Aweme = Row.video_id && { aweme_id: Row.video_id, aweme_type: 0, desc: Row.description, author: { uid: Row.video_author }, status: { private_status: 0 }, video: { cover: { url_list: [`${Origin}/media/${Row.cover_name}`] } } };
+	if (Row.kind === 'mention') return { ...Notice, type: 45, at: { sub_type: Row.comment_id ? 2 : 1, content: Row.comment_id ? Row.body : Row.description, aweme: Aweme, user_info: From,
+		...(Row.comment_id ? { comment: { cid: Row.comment_id, text: Row.body, text_extra: CommentExtra(Row.body), reply_id: Row.parent_id ?? '0', user: From } } : {}) } };
 	if (Row.kind === 'follow') return { ...Notice, type: 33, follow: { from_user: From, follow_button_type: Row.relation === 2 ? 0 : 1 } };
 	if (Row.kind === 'comment') {
 		const Reply = Row.parent_author === Viewer;
 		return { ...Notice, type: 31, comment: { comment_type: Reply ? 2 : 1, aweme: Aweme, comment: { cid: Row.comment_id, text: Row.body, text_extra: [], reply_id: Row.parent_id ?? '0', user: From }, ...(Reply ? { reply_comment: { user: { uid: Viewer } } } : {}) } };
 	}
-	return { ...Notice, type: 41, digg: { digg_type: Row.kind === 'like' ? 1 : 3, merge_count: 1, from_user: [From], aweme: Aweme, ...(Row.kind === 'comment_like' ? { comment: { cid: Row.comment_id, text: Row.body, text_extra: [] } } : {}) } };
+	return { ...Notice, type: 41, digg: { digg_type: Row.kind === 'like' ? 1 : 3, merge_count: Row.merge_count ?? 1, from_user: Row.second ? [From, ApiUser(Row.second, Origin)] : [From], aweme: Aweme, ...(Row.kind === 'comment_like' ? { comment: { cid: Row.comment_id, text: Row.body, text_extra: [] } } : {}) } };
 }
 
 const ReportReasons = [[101, 'spam', 'Spam or scams'], [102, 'harassment', 'Harassment or bullying'], [103, 'hate', 'Hate speech'], [104, 'nudity', 'Nudity or sexual content'], [105, 'violence', 'Violent or graphic content'],
@@ -53,15 +63,18 @@ async function CommentPage(Pool, Origin, Viewer, { video, parent, cursor, count 
 	await AssertVideoVisible(Pool, video, Viewer);
 	const Limit = PageSize(count, 20);
 	const After = cursor && cursor !== '0' ? Id(cursor) : null;
-	const Result = await Pool.query(`SELECT c.*, u.username, u.display_name, u.avatar_name, u.verified, u.pride_flag, u.user_badges,
+	const Result = await Pool.query(`SELECT c.*, u.username, u.display_name, u.avatar_name, u.verified, u.pride_flag, u.user_badges, v.author_id AS video_author,
+		${RelationSql('$1::bigint', 'c.author_id')} AS relation,
+		EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.user_id = v.author_id) AS author_digged,
 		(SELECT count(*)::int FROM comment_likes l WHERE l.comment_id = c.id) AS likes,
 		EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.user_id = $1::bigint) AS liked,
 		(SELECT count(*)::int FROM comments r WHERE r.parent_id = c.id) AS replies
-		FROM comments c JOIN users u ON u.id = c.author_id
+		FROM comments c JOIN users u ON u.id = c.author_id JOIN videos v ON v.id = c.video_id
 		WHERE ${parent ? 'c.parent_id = $2' : 'c.video_id = $2 AND c.parent_id IS NULL'} AND ($3::bigint IS NULL OR c.id ${parent ? '>' : '<'} $3) AND NOT ${BlockedBetween('$1::bigint', 'c.author_id')} AND NOT ${RemovedSql('comment', 'c.id')} AND u.suspended_at IS NULL
 		ORDER BY c.id ${parent ? 'ASC' : 'DESC'} LIMIT $4`, [Viewer ?? null, parent ?? video, After, Limit + 1]);
 	const Rows = Result.rows.slice(0, Limit);
-	return { status_code: 0, comments: Rows.map(Row => CommentShape(Row, Origin)), cursor: Rows.at(-1)?.id ?? cursor ?? '0', has_more: Result.rows.length > Limit ? 1 : 0 };
+	const Mentioned = await MentionedUsers(Pool, Rows.map(Row => Row.body));
+	return { status_code: 0, comments: Rows.map(Row => CommentShape(Row, Origin, Mentioned)), cursor: Rows.at(-1)?.id ?? cursor ?? '0', has_more: Result.rows.length > Limit ? 1 : 0 };
 }
 
 export async function Compatibility(Context) {
@@ -79,12 +92,25 @@ export async function Compatibility(Context) {
 			disableStandaloneAidLoginList: [], disableStandaloneAppFlags: {},
 		} }); return true;
 	}
-	if (['/api/preload/item_list/', '/api/recommend/item_list/', '/api/following/item_list/', '/api/post/item_list/', '/api/favorite/item_list/', '/api/collection/item_list/', '/api/user/collect/item_list/'].includes(Path)) {
+	if (['/api/preload/item_list/', '/api/recommend/item_list/', '/api/following/item_list/', '/api/post/item_list/', '/api/favorite/item_list/', '/api/collection/item_list/', '/api/user/collect/item_list/', '/api/related/item_list/', '/api/explore/item_list/', '/api/repost/item_list/', '/api/challenge/item_list/', '/api/collection/candidate/item_list/'].includes(Path)) {
 		RequireMethod(Request, ['GET', 'POST']);
-		const Filter = { viewer: User?.id, forYou: ['/api/preload/item_list/', '/api/recommend/item_list/'].includes(Path), before: Params.get('cursor') === '0' ? undefined : Params.get('cursor'), limit: Params.get('count') };
+		const Filter = { viewer: User?.id, forYou: ['/api/preload/item_list/', '/api/recommend/item_list/', '/api/related/item_list/', '/api/explore/item_list/'].includes(Path), before: Params.get('cursor') === '0' ? undefined : Params.get('cursor'), limit: Params.get('count') };
+		const Empty = () => Json(Response, { statusCode: 0, status_code: 0, itemList: [], cursor: '0', hasMore: false, extra: { logid: 'kittok' } });
+		if (Path.includes('/explore/') && (Params.get('categoryType') ?? '120') !== '120') { Empty(); return true; }
+		if (Path.includes('/repost/')) {
+			const Reposter = await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'));
+			if (Reposter.private_account && Reposter.id !== User?.id && !(await Pool.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [User?.id ?? null, Reposter.id])).rowCount) { Empty(); return true; }
+			Filter.repostedBy = Reposter.id;
+		}
+		if (Path.includes('/challenge/')) { Filter.tag = await TagName(Pool, String(Params.get('challengeID') ?? '')); if (!Filter.tag) { Empty(); return true; } }
+		if (Path.includes('/related/')) Filter.exclude = Params.get('itemID') || Params.get('itemId');
 		if (Path.includes('/following/')) { if (!User) throw new HttpError(401, 'NotLoggedIn'); Filter.following = User.id; }
 		if (Path.includes('/post/')) Filter.author = (await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'))).id;
-		if (Path.includes('/collection/')) { if (!User) throw new HttpError(401, 'NotLoggedIn'); Filter.savedBy = User.id; }
+		if (Path === '/api/collection/item_list/') {
+			const Collection = (await Pool.query('SELECT id FROM collections WHERE id = $1 AND (public OR user_id = $2::bigint)', [Id(Params.get('collectionId')), User?.id ?? null])).rows[0];
+			if (!Collection) { Empty(); return true; }
+			Filter.collection = Collection.id;
+		} else if (Path.includes('/collection/')) { if (!User) throw new HttpError(401, 'NotLoggedIn'); Filter.savedBy = User.id; }
 		if (Path.includes('/favorite/') || Path.includes('/user/collect/')) {
 			if (!User || (Params.get('secUid') && Params.get('secUid') !== User.id)) { Json(Response, { statusCode: 0, status_code: 0, itemList: [], cursor: '0', hasMore: false, extra: { logid: 'kittok' } }); return true; }
 			Filter[Path.includes('/favorite/') ? 'likedBy' : 'savedBy'] = User.id;
@@ -102,6 +128,29 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']);
 		const Result = await Videos(Pool, Config.Origin, { id: Params.get('itemId'), viewer: User?.id });
 		Json(Response, Result.items.length ? { statusCode: 0, status_code: 0, itemInfo: { itemStruct: Result.items[0] } } : { statusCode: 10204, status_code: 10204, status_msg: 'Video unavailable' }); return true;
+	}
+	if (Path === '/api/playlist/name_check') {
+		RequireMethod(Request, ['GET']);
+		const Name = String(Params.get('name') ?? '').trim();
+		Json(Response, { statusCode: 0, status_code: 0, isValid: Name.length > 0 && Name.length <= 30 }); return true;
+	}
+	if (Path === '/api/challenge/detail/') {
+		RequireMethod(Request, ['GET']);
+		const Name = Params.get('challengeName') ? String(Params.get('challengeName')).replace(/^#/, '').toLowerCase() : await TagName(Pool, String(Params.get('challengeId') ?? ''));
+		if (!Name || !/^[\p{L}\p{N}_]{1,100}$/u.test(Name)) { Json(Response, { statusCode: 10205, status_code: 10205, statusMsg: 'HashtagNotFound' }); return true; }
+		const Stats = (await Pool.query(`SELECT count(*)::int AS videos, coalesce(sum(v.view_count), 0)::bigint AS views FROM videos v JOIN users u ON u.id = v.author_id
+			WHERE ${TagSql('v.description').replace('?', '$2')} AND ${VideoVisibleSql('$1::bigint')} AND NOT ${BlockedBetween('$1', 'v.author_id')}`, [User?.id ?? null, Name])).rows[0];
+		const Counts = { videoCount: Stats.videos, viewCount: Number(Stats.views) };
+		Json(Response, { statusCode: 0, status_code: 0, challengeInfo: {
+			challenge: { id: TagId(Name), title: Name, desc: '', profileThumb: '', profileMedium: '', profileLarger: '', coverThumb: '', coverMedium: '', coverLarger: '', isCommerce: false },
+			stats: Counts, statsV2: { videoCount: String(Counts.videoCount), viewCount: String(Counts.viewCount) },
+		}, shareMeta: { title: `#${Name}`, desc: '' } }); return true;
+	}
+	if (Path === '/tiktok/v1/upvote/publish' || Path === '/tiktok/v1/upvote/delete') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		await SetRelation(Pool, 'reposts', ['user_id', 'video_id'], [User.id, Id(Body.item_id)], Path.endsWith('/publish'));
+		Json(Response, { status_code: 0, status_msg: '' }); return true;
 	}
 	if (Path === '/api/user/detail/') {
 		RequireMethod(Request, ['GET']);
@@ -371,7 +420,58 @@ export async function Compatibility(Context) {
 	}
 	if (Path === '/api/user/collection_list/') {
 		RequireMethod(Request, ['GET']);
-		Json(Response, { statusCode: 0, status_code: 0, collectionList: [], cursor: '0', hasMore: false }); return true;
+		const Owner = await FindUser(Pool, Params.get('secUid') || User?.id, true).catch(() => null);
+		if (!Owner) { Json(Response, { statusCode: 0, status_code: 0, collectionList: [], cursor: '0', hasMore: false, total: '0' }); return true; }
+		const Start = Offset(Params.get('cursor')), Limit = PageSize(Params.get('count'), 30);
+		const Rows = (await Pool.query(`SELECT c.id, c.user_id, c.name, c.public, count(*) OVER ()::int AS all_count,
+			(SELECT count(*)::int FROM collection_items i WHERE i.collection_id = c.id) AS total,
+			(SELECT v.cover_name FROM collection_items i JOIN videos v ON v.id = i.video_id WHERE i.collection_id = c.id ORDER BY i.added_at DESC LIMIT 1) AS cover_name
+			FROM collections c WHERE c.user_id = $1 AND (c.public OR c.user_id = $2::bigint) ORDER BY c.id DESC OFFSET $3 LIMIT $4`, [Owner.id, User?.id ?? null, Start, Limit])).rows;
+		Json(Response, { statusCode: 0, status_code: 0, collectionList: Rows.map(Row => CollectionShape(Row, Owner, Config.Origin)), cursor: String(Start + Rows.length), hasMore: Start + Rows.length < (Rows[0]?.all_count ?? 0), total: String(Rows[0]?.all_count ?? 0) }); return true;
+	}
+	if (Path === '/api/collection/create/') {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		const Name = String(Body.collectionName ?? '').trim();
+		if (!Name || Name.length > 30) throw new HttpError(400, 'InvalidCollectionName');
+		const Created = (await Pool.query('INSERT INTO collections(user_id, name, public) VALUES ($1, $2, $3) RETURNING id', [User.id, Name, String(Body.collectionStatus) === '3'])).rows[0];
+		Json(Response, { statusCode: 0, status_code: 0, collectionId: Created.id, collectionIdString: Created.id }); return true;
+	}
+	if (['/api/collection/modify_items/', '/api/collection/move_items/', '/api/collection/modify_info/', '/api/collection/delete/'].includes(Path.replace(/\/?$/, '/'))) {
+		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);
+		const Body = { ...Object.fromEntries(Params), ...await ReadBody(Request) };
+		const Ids = Value => String(Value ?? '').split(',').filter(Boolean).slice(0, 200).map(Id);
+		const Own = async Value => {
+			const Found = (await Pool.query('SELECT id FROM collections WHERE id = $1 AND user_id = $2', [Id(Value), User.id])).rows[0];
+			if (!Found) throw new HttpError(404, 'CollectionNotFound');
+			return Found.id;
+		};
+		const Add = (Collection, Videos, Client = Pool) => Client.query('INSERT INTO collection_items(collection_id, user_id, video_id) SELECT $1, $2, f.video_id FROM favorites f WHERE f.user_id = $2 AND f.video_id = ANY($3::bigint[]) ON CONFLICT DO NOTHING', [Collection, User.id, Videos]);
+		const Remove = (Collection, Videos, Client = Pool) => Client.query('DELETE FROM collection_items WHERE collection_id = $1 AND video_id = ANY($2::bigint[])', [Collection, Videos]);
+		if (Path.startsWith('/api/collection/modify_items')) {
+			const Collection = await Own(Body.collectionId);
+			await Add(Collection, Ids(Body.commitIds)); await Remove(Collection, Ids(Body.deleteIds));
+		} else if (Path.startsWith('/api/collection/move_items')) {
+			const From = await Own(Body.fromCollectionID ?? Body.fromCollectionId), Target = await Own(Body.targetCollectionID ?? Body.targetCollectionId);
+			const Videos = Ids(Body.itemIDs ?? Body.itemIds);
+			if (From !== Target) await Transaction(Pool, async Client => { await Add(Target, Videos, Client); await Remove(From, Videos, Client); });
+		} else if (Path.startsWith('/api/collection/modify_info')) {
+			const Collection = await Own(Body.collectionId ?? Body.collectionID);
+			const Name = Body.collectionName ?? Body.name;
+			if (Name !== undefined && (!String(Name).trim() || String(Name).trim().length > 30)) throw new HttpError(400, 'InvalidCollectionName');
+			const Status = Body.collectionStatus ?? Body.status;
+			await Pool.query('UPDATE collections SET name = coalesce($2, name), public = coalesce($3, public) WHERE id = $1', [Collection, Name === undefined ? null : String(Name).trim(), Status === undefined ? null : String(Status) === '3']);
+		} else await Pool.query('DELETE FROM collections WHERE id = $1', [await Own(Body.collectionId ?? Body.collectionID)]);
+		Json(Response, { statusCode: 0, status_code: 0 }); return true;
+	}
+	if (Path === '/api/collection/detail/') {
+		RequireMethod(Request, ['GET']);
+		const Row = (await Pool.query(`SELECT c.id, c.user_id, c.name, c.public, (SELECT count(*)::int FROM collection_items i WHERE i.collection_id = c.id) AS total,
+			(SELECT v.cover_name FROM collection_items i JOIN videos v ON v.id = i.video_id WHERE i.collection_id = c.id ORDER BY i.added_at DESC LIMIT 1) AS cover_name
+			FROM collections c WHERE c.id = $1 AND (c.public OR c.user_id = $2::bigint)`, [Id(Params.get('collectionId')), User?.id ?? null])).rows[0];
+		if (!Row) { Json(Response, { statusCode: 10201, status_code: 10201, statusMsg: 'CollectionNotFound' }); return true; }
+		const Owner = await FindUser(Pool, Row.user_id, true);
+		Json(Response, { statusCode: 0, status_code: 0, collectionInfo: { ...CollectionShape(Row, Owner, Config.Origin), cover: { urlList: Row.cover_name ? [`${Config.Origin}/media/${Row.cover_name}`] : [] } }, userInfo: { user: UserShape(Owner, Config.Origin) } }); return true;
 	}
 	async function SearchUsers(Limit) {
 		if (Config.Features?.search === false) return [];
@@ -443,7 +543,8 @@ export async function Compatibility(Context) {
 		const Restricted = await ActiveRestriction(Pool, User.id, 'comment');
 		if (Restricted) { Json(Response, { status_code: 22, statusCode: 22, status_msg: RestrictionText(Restricted) }); return true; }
 		const Added = await AddComment(Pool, VideoId, User.id, Body.text, Body.reply_id && Body.reply_id !== '0' ? Id(Body.reply_id) : null);
-		Json(Response, { status_code: 0, status_msg: '', comment: CommentShape({ ...User, ...Added, video_id: VideoId, author_id: User.id }, Config.Origin) }); return true;
+		const VideoAuthor = (await Pool.query('SELECT author_id FROM videos WHERE id = $1', [VideoId])).rows[0]?.author_id;
+		Json(Response, { status_code: 0, status_msg: '', comment: CommentShape({ ...User, ...Added, video_id: VideoId, author_id: User.id, video_author: VideoAuthor, relation: 0 }, Config.Origin, await MentionedUsers(Pool, [Added.body])) }); return true;
 	}
 	if (Path === '/api/commit/item/digg/' || Path === '/api/item/collect/') {
 		RequireMethod(Request, ['POST']); RequireCsrf(Request, User);

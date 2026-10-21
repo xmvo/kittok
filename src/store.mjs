@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { HttpError, Id } from './http.mjs';
 import { Transaction } from './db.mjs';
 import { RemovedSql, ForYouIneligibleSql } from './moderation.mjs';
@@ -15,6 +16,46 @@ export function UserShape(User, Origin) {
 		avatarThumb: Avatar, avatarMedium: Avatar, avatarLarger: Avatar,
 		following: 0, relation: User.relation ?? 0,
 	};
+}
+
+const TagNames = new Map();
+const TagPattern = /#([\p{L}\p{N}_]{1,100})/gu;
+const MentionPattern = /(?<![\p{L}\p{N}_])@([a-z0-9_]{3,24})(?![a-z0-9_])/giu;
+export function TagId(Name) {
+	const Lower = Name.toLowerCase();
+	const Value = BigInt('0x' + createHash('sha256').update(Lower).digest('hex').slice(0, 15)).toString();
+	TagNames.set(Value, Lower);
+	return Value;
+}
+export async function TagName(Pool, Value) {
+	if (TagNames.has(Value)) return TagNames.get(Value);
+	const Result = await Pool.query(`SELECT DISTINCT lower(m[1]) AS name FROM videos v, regexp_matches(v.description, '#([[:alnum:]_]+)', 'g') m`);
+	for (const Row of Result.rows) TagId(Row.name);
+	return TagNames.get(Value) ?? null;
+}
+export const TagSql = Column => `${Column} ~* ('#' || ? || '([^[:alnum:]_]|$)')`;
+
+export function Entities(Text, Mentioned = new Map()) {
+	const List = [];
+	for (const Match of String(Text ?? '').matchAll(TagPattern)) List.push({ start: Match.index, end: Match.index + Match[0].length, type: 1, name: Match[1].toLowerCase() });
+	for (const Match of String(Text ?? '').matchAll(MentionPattern)) {
+		const User = Mentioned.get(Match[1].toLowerCase());
+		if (User) List.push({ start: Match.index, end: Match.index + Match[0].length, type: 0, user: User });
+	}
+	return List.sort((A, B) => A.start - B.start);
+}
+
+export async function MentionedUsers(Pool, Texts) {
+	const Names = [...new Set(Texts.flatMap(Text => [...String(Text ?? '').matchAll(MentionPattern)].map(Match => Match[1].toLowerCase())))];
+	if (!Names.length) return new Map();
+	const Result = await Pool.query('SELECT id, username FROM users WHERE username = ANY($1) AND suspended_at IS NULL', [Names]);
+	return new Map(Result.rows.map(Row => [Row.username, Row]));
+}
+
+export function CommentExtra(Text, Mentioned) {
+	return Entities(Text, Mentioned).map(Entity => Entity.type === 1
+		? { start: Entity.start, end: Entity.end, type: 1, hashtag_name: Entity.name, hashtag_id: TagId(Entity.name), is_commerce: false }
+		: { start: Entity.start, end: Entity.end, type: 0, user_id: Entity.user.id, sec_uid: Entity.user.id, hashtag_name: '', is_commerce: false });
 }
 
 export const BlockedBetween = (A, B) => `EXISTS (SELECT 1 FROM blocks WHERE (blocker_id = ${A} AND blocked_id = ${B}) OR (blocker_id = ${B} AND blocked_id = ${A}))`;
@@ -83,23 +124,33 @@ const ActivitySql = `
 	SELECT 'like' AS kind, l.created_at AS at, l.user_id AS actor, v.id AS video_id, NULL::bigint AS comment_id FROM likes l JOIN videos v ON v.id = l.video_id WHERE v.author_id = $1 AND l.user_id <> $1
 	UNION ALL SELECT 'comment_like', cl.created_at, cl.user_id, c.video_id, c.id FROM comment_likes cl JOIN comments c ON c.id = cl.comment_id WHERE c.author_id = $1 AND cl.user_id <> $1
 	UNION ALL SELECT 'comment', c.created_at, c.author_id, c.video_id, c.id FROM comments c JOIN videos v ON v.id = c.video_id LEFT JOIN comments p ON p.id = c.parent_id WHERE c.author_id <> $1 AND (v.author_id = $1 OR p.author_id = $1)
-	UNION ALL SELECT 'follow', f.created_at, f.follower_id, NULL, NULL FROM follows f WHERE f.following_id = $1`;
+	UNION ALL SELECT 'follow', f.created_at, f.follower_id, NULL, NULL FROM follows f WHERE f.following_id = $1
+	UNION ALL SELECT 'mention', c.created_at, c.author_id, c.video_id, c.id FROM comments c JOIN users m ON m.id = $1 WHERE c.author_id <> $1 AND c.body ~* ('(^|[^[:alnum:]_])@' || m.username || '([^[:alnum:]_]|$)')
+	UNION ALL SELECT 'mention', v.created_at, v.author_id, v.id, NULL FROM videos v JOIN users m ON m.id = $1 WHERE v.author_id <> $1 AND v.description ~* ('(^|[^[:alnum:]_])@' || m.username || '([^[:alnum:]_]|$)')`;
+const Merged = "a.kind IN ('like', 'comment_like')";
+const NoticeKey = `CASE WHEN ${Merged} THEN a.kind || ':' || a.video_id || ':' || coalesce(a.comment_id, 0) ELSE a.kind || ':' || a.actor || ':' || a.at || ':' || coalesce(a.comment_id, 0) END`;
 const VisibleActivity = `(a.video_id IS NULL OR EXISTS (SELECT 1 FROM videos pv JOIN users pu ON pu.id = pv.author_id WHERE pv.id = a.video_id AND ${VideoVisibleSql('$1', 'pv', 'pu')})) AND (a.comment_id IS NULL OR NOT ${RemovedSql('comment', 'a.comment_id')}) AND (a.video_id IS NULL OR NOT ${RemovedSql('video', 'a.video_id')})
 	AND NOT EXISTS (SELECT 1 FROM users banned WHERE banned.id = a.actor AND banned.suspended_at IS NOT NULL)`;
 
 export async function Activity(Pool, UserId, Kinds, { Before = null, After = null }, Limit) {
-	const Result = await Pool.query(`SELECT a.kind, a.at, extract(epoch FROM a.at)::float8 AS epoch, a.at <= me.notices_read_at AS read,
+	const Result = await Pool.query(`WITH Grouped AS (
+			SELECT a.kind, max(a.at) AS at, (array_agg(a.actor ORDER BY a.at DESC))[1] AS actor, (array_agg(a.actor ORDER BY a.at DESC))[2] AS second_actor,
+				count(*)::int AS merge_count, a.video_id, a.comment_id
+			FROM (${ActivitySql}) a WHERE a.kind = ANY($2) AND NOT ${BlockedBetween('$1', 'a.actor')} AND ${VisibleActivity}
+			GROUP BY ${NoticeKey}, a.kind, a.video_id, a.comment_id)
+		SELECT a.kind, a.at, extract(epoch FROM a.at)::float8 AS epoch, a.at <= me.notices_read_at AS read, a.merge_count,
 		u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, ${RelationSql('$1', 'u.id')} AS relation,
+		CASE WHEN s.id IS NOT NULL THEN json_build_object('id', s.id, 'username', s.username, 'display_name', s.display_name, 'bio', s.bio, 'avatar_name', s.avatar_name, 'verified', s.verified, 'pride_flag', s.pride_flag, 'user_badges', s.user_badges, 'relation', ${RelationSql('$1', 's.id')}) END AS second,
 		a.video_id, v.author_id AS video_author, v.cover_name, v.description, a.comment_id, c.body, c.parent_id, p.author_id AS parent_author
-		FROM (${ActivitySql}) a JOIN users me ON me.id = $1 JOIN users u ON u.id = a.actor
+		FROM Grouped a JOIN users me ON me.id = $1 JOIN users u ON u.id = a.actor LEFT JOIN users s ON s.id = a.second_actor
 		LEFT JOIN videos v ON v.id = a.video_id LEFT JOIN comments c ON c.id = a.comment_id LEFT JOIN comments p ON p.id = c.parent_id
-		WHERE a.kind = ANY($2) AND NOT ${BlockedBetween('$1', 'a.actor')} AND ${VisibleActivity} AND ($3::float8 IS NULL OR a.at < to_timestamp($3)) AND ($5::float8 IS NULL OR a.at > to_timestamp($5))
+		WHERE ($3::float8 IS NULL OR a.at < to_timestamp($3)) AND ($5::float8 IS NULL OR a.at > to_timestamp($5))
 		ORDER BY a.at DESC LIMIT $4`, [UserId, Kinds, Before, Limit, After]);
 	return Result.rows;
 }
 
 export async function UnreadActivity(Pool, UserId) {
-	const Result = await Pool.query(`SELECT a.kind, count(*)::int AS count FROM (${ActivitySql}) a JOIN users me ON me.id = $1 WHERE a.at > me.notices_read_at AND NOT ${BlockedBetween('$1', 'a.actor')} AND ${VisibleActivity} GROUP BY a.kind`, [UserId]);
+	const Result = await Pool.query(`SELECT a.kind, count(DISTINCT ${NoticeKey})::int AS count FROM (${ActivitySql}) a JOIN users me ON me.id = $1 WHERE a.at > me.notices_read_at AND NOT ${BlockedBetween('$1', 'a.actor')} AND ${VisibleActivity} GROUP BY a.kind`, [UserId]);
 	return Object.fromEntries(Result.rows.map(Row => [Row.kind, Row.count]));
 }
 
@@ -131,7 +182,7 @@ export async function UserStats(Pool, UserId) {
 	return { ...Result.rows[0], heart: Result.rows[0].heartCount };
 }
 
-export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, id, viewer, query, forYou, limit = 20 } = {}) {
+export async function Videos(Pool, Origin, { before, author, following, likedBy, savedBy, repostedBy, collection, id, exclude, tag, viewer, query, forYou, limit = 20 } = {}) {
 	const Values = [viewer ?? null];
 	const Conditions = [];
 	function Where(Sql, Value) { Values.push(Value); Conditions.push(Sql.replace('?', `$${Values.length}`)); }
@@ -141,6 +192,10 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 	if (likedBy) Where('EXISTS (SELECT 1 FROM likes l WHERE l.user_id = ? AND l.video_id = v.id)', likedBy);
 	if (savedBy) Where('EXISTS (SELECT 1 FROM favorites f WHERE f.user_id = ? AND f.video_id = v.id)', savedBy);
 	if (id) Where('v.id = ?', Id(id));
+	if (exclude) Where('v.id <> ?', Id(exclude));
+	if (collection) Where('EXISTS (SELECT 1 FROM collection_items c WHERE c.collection_id = ? AND c.video_id = v.id)', collection);
+	if (repostedBy) Where('EXISTS (SELECT 1 FROM reposts r WHERE r.user_id = ? AND r.video_id = v.id)', repostedBy);
+	if (tag) Where(TagSql('v.description'), String(tag).toLowerCase());
 	if (query) Where("v.description ILIKE ? ESCAPE '\\'", `%${String(query).slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`);
 	Conditions.push(`NOT ${BlockedBetween('$1', 'v.author_id')}`);
 	Conditions.push(VideoVisibleSql('$1::bigint'));
@@ -150,6 +205,8 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 		(SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes,
 		(SELECT count(*)::int FROM comments c WHERE c.video_id = v.id AND NOT ${RemovedSql('comment', 'c.id')}) AS comments,
 		(SELECT count(*)::int FROM favorites f WHERE f.video_id = v.id) AS favorites,
+		(SELECT count(*)::int FROM reposts r WHERE r.video_id = v.id) AS reposts,
+		EXISTS (SELECT 1 FROM reposts r WHERE r.video_id = v.id AND r.user_id = $1) AS reposted,
 		EXISTS (SELECT 1 FROM likes l WHERE l.video_id = v.id AND l.user_id = $1) AS liked,
 		EXISTS (SELECT 1 FROM favorites f WHERE f.video_id = v.id AND f.user_id = $1) AS saved,
 		${RelationSql('$1', 'v.author_id')} AS relation, ${CommentsAllowedSql('$1::bigint')} AS can_comment
@@ -157,12 +214,19 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 		ORDER BY v.id DESC LIMIT $${Values.length}`, Values);
 	const HasMore = Result.rows.length === Values.at(-1);
 	const Rows = HasMore ? Result.rows.slice(0, -1) : Result.rows;
-	return { items: Rows.map(Row => VideoShape(Row, Origin)), hasMore: HasMore, cursor: Rows.at(-1)?.id ?? '0' };
+	const Mentioned = await MentionedUsers(Pool, Rows.map(Row => Row.description));
+	return { items: Rows.map(Row => VideoShape(Row, Origin, Mentioned, viewer)), hasMore: HasMore, cursor: Rows.at(-1)?.id ?? '0' };
 }
 
-export function VideoShape(Row, Origin) {
+export function VideoShape(Row, Origin, Mentioned, Viewer) {
 	const Author = UserShape({ ...Row, id: Row.author_id }, Origin);
-	const Stats = { diggCount: Row.likes, commentCount: Row.comments, collectCount: Row.favorites, shareCount: 0, playCount: Number(Row.view_count ?? 0) };
+	const Stats = { diggCount: Row.likes, commentCount: Row.comments, collectCount: Row.favorites, shareCount: 0, playCount: Number(Row.view_count ?? 0), repostCount: Row.reposts ?? 0 };
+	const Found = Entities(Row.description, Mentioned);
+	const TextExtra = Found.map(Entity => Entity.type === 1
+		? { awemeId: '', start: Entity.start, end: Entity.end, hashtagId: TagId(Entity.name), hashtagName: Entity.name, isCommerce: false, subType: 0, type: 1 }
+		: { awemeId: '', start: Entity.start, end: Entity.end, hashtagName: '', isCommerce: false, secUid: Entity.user.id, subType: 0, type: 0, userId: Entity.user.id, userUniqueId: Entity.user.username });
+	const Challenges = [...new Set(Found.filter(Entity => Entity.type === 1).map(Entity => Entity.name))]
+		.map(Name => ({ id: TagId(Name), title: Name, desc: '', profileThumb: '', profileMedium: '', profileLarger: '', coverThumb: '', coverMedium: '', coverLarger: '', isCommerce: false }));
 	return {
 		id: Row.id, desc: Row.description, createTime: Math.floor(new Date(Row.created_at).getTime() / 1000),
 		author: Author, stats: Stats, statsV2: Object.fromEntries(Object.entries(Stats).map(([Key, Value]) => [Key, String(Value)])),
@@ -175,9 +239,9 @@ export function VideoShape(Row, Origin) {
 		},
 		music: { id: Row.id, title: 'Original sound', authorName: Row.display_name, original: true, duration: Row.duration,
 			playUrl: '', coverThumb: Author.avatarThumb, coverMedium: Author.avatarMedium, coverLarge: Author.avatarLarger },
-		textExtra: [], challenges: [], digged: Row.liked, collected: Row.saved, itemCommentStatus: Row.can_comment === false ? 1 : 0,
+		textExtra: TextExtra, challenges: Challenges, repostList: Row.reposted && Viewer ? [{ secUid: Viewer, uid: Viewer }] : [], digged: Row.liked, collected: Row.saved, itemCommentStatus: Row.can_comment === false ? 1 : 0,
 		officalItem: false, secret: Row.visibility === 'only_me', privateItem: Row.visibility === 'only_me', shareEnabled: true, duetEnabled: false, stitchEnabled: false,
-		forFriend: Row.visibility === 'friends', originalItem: false, isAd: false, item_control: {}, contents: [],
+		forFriend: Row.visibility === 'friends', originalItem: false, isAd: false, item_control: {}, contents: [{ desc: Row.description, textExtra: TextExtra }],
 	};
 }
 
@@ -199,10 +263,10 @@ export async function AddComment(Pool, VideoId, AuthorId, Text, ParentId = null)
 }
 
 export async function SetRelation(Pool, Table, Columns, Values, Enabled) {
-	const Allowed = { likes: ['user_id', 'video_id'], favorites: ['user_id', 'video_id'], follows: ['follower_id', 'following_id'], comment_likes: ['user_id', 'comment_id'] };
+	const Allowed = { likes: ['user_id', 'video_id'], favorites: ['user_id', 'video_id'], reposts: ['user_id', 'video_id'], follows: ['follower_id', 'following_id'], comment_likes: ['user_id', 'comment_id'] };
 	if (JSON.stringify(Allowed[Table]) !== JSON.stringify(Columns)) throw new Error('InvalidRelation');
 	if (Table === 'follows') return SetFollow(Pool, Values[0], Values[1], Enabled);
-	if (Enabled && ['likes', 'favorites'].includes(Table)) await AssertVideoVisible(Pool, Values[1], Values[0]);
+	if (Enabled && ['likes', 'favorites', 'reposts'].includes(Table)) await AssertVideoVisible(Pool, Values[1], Values[0]);
 	if (Enabled && Table === 'comment_likes') {
 		const Comment = (await Pool.query('SELECT video_id FROM comments WHERE id = $1', [Values[1]])).rows[0];
 		if (!Comment) throw new HttpError(404, 'CommentNotFound');

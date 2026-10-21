@@ -124,7 +124,7 @@ const Server = createServer(async (Request, Response) => {
 			return Json(Response, { statusCode: 501, status_code: 501, error: 'NotImplemented', path: Path }, 501);
 		}
 		RequireMethod(Request, ['GET', 'HEAD']);
-		if (!/^\/(?:$|login(?:\/[a-z-]+)*\/?$|signup(?:\/[a-z-]+)*\/?$|explore\/?$|following\/?$|messages\/?$|setting(?:\/[a-z-]+)*\/?$|search(?:\/user|\/video)?\/?$|@[^/]+(?:\/video\/\d+)?\/?$|music\/[^/]+\/?$)/.test(Path)) throw new HttpError(404, 'NotImplemented');
+		if (!/^\/(?:$|login(?:\/[a-z-]+)*\/?$|signup(?:\/[a-z-]+)*\/?$|explore\/?$|following\/?$|messages\/?$|setting(?:\/[a-z-]+)*\/?$|search(?:\/user|\/video)?\/?$|@[^/]+(?:\/video\/\d+|\/collection\/[^/]+)?\/?$|music\/[^/]+\/?$|tag\/[^/]+\/?$)/.test(Path)) throw new HttpError(404, 'NotImplemented');
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
 		const Page = /^\/(login|signup)(\/|$)/.test(Path) ? await CaptureLoginPage() : Raw;
 		Response.end(Request.method === 'HEAD' ? undefined : Shell(Page, Config.Origin, { Config, User }));

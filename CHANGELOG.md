@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Fill the video page's related list and the Explore grid; Explore categories other than All stay empty because videos carry no topic labels.
+- Link hashtags and @mentions in captions and comments, serve hashtag pages with video and view counts, and add mention notices to the Mentions inbox tab.
+- Merge likes on the same video or comment into one notice with the newest two likers and a total, as the native inbox shows them.
+- Label comments from the creator, accounts you follow and friends, and mark comments the creator liked.
+- Add reposts with the native button, repost counts and the profile Reposts tab, and named Favorites collections with create, rename, privacy, add, move and delete.
 - Add private accounts, pending follow requests with confirm/delete, per-post audiences, and account/post comment permissions. Enforce visibility in feeds, search, comments, activity, shared-video cards, and media requests; preserve explicit admin review access.
 - Add native inbox 3 message requests with live delivery, acceptance, deletion, a three-message pending limit, and mutually enabled read receipts. Implement personal message deletion and sender-only unsending within three minutes.
 - Add a dedicated upload screen with preview, caption counter, progress, privacy controls and a post manager; add account options and narrow-screen settings/chat layouts.
