@@ -17,6 +17,8 @@ export const MiscFeatures = {
 	messageReactions: ['Message reactions', 'Emoji reactions on direct messages'],
 	messageMedia: ['Photos and videos in messages', 'Send photos and short videos in direct messages'],
 	groupChats: ['Group chats', 'Group direct messages with up to 32 friends'],
+	nameStyles: ['Name styles', 'Discord display name fonts and effects, picked in Edit profile'],
+	nameplates: ['Nameplates', 'Discord nameplates behind names on comments and in messages'],
 };
 export const Misc = Object.fromEntries(Object.keys(MiscFeatures).map(Name => [Name, true]));
 export const BrandSlots = { wordmarkDark: '/public/logo.svg', wordmarkLight: '/public/logo-light.svg', icon: '/public/icon.svg', favicon: '/public/icon.svg' };

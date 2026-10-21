@@ -87,10 +87,10 @@ const Server = createServer(async (Request, Response) => {
 		if (Path.startsWith('/public/')) {
 			RequireMethod(Request, ['GET', 'HEAD']);
 			const Name = Path.slice('/public/'.length);
-			if (!/^[a-z0-9_-]+\.(?:svg|css|js)$/.test(Name)) throw new HttpError(404, 'NotFound');
+			if (!/^(?:[a-z0-9_-]+\.(?:svg|css|js)|fonts\/[a-z0-9-]+\.woff2)$/.test(Name)) throw new HttpError(404, 'NotFound');
 			const Body = await readFile(join(Root, 'public', Name)).catch(() => { throw new HttpError(404, 'NotFound'); });
 			Response.setHeader('content-type', Mime[extname(Name)]);
-			Response.setHeader('cache-control', 'no-cache');
+			Response.setHeader('cache-control', Name.startsWith('fonts/') ? 'public, max-age=31536000, immutable' : 'no-cache');
 			return Response.end(Request.method === 'HEAD' ? undefined : Body);
 		}
 		if (Path.startsWith('/media/')) {

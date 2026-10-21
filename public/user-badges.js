@@ -2,6 +2,8 @@
 	const Instance = JSON.parse(document.getElementById('kittok-instance')?.textContent ?? '{}');
 	const Cache = new Map();
 	const Shown = Instance.misc?.profileBadges !== false, Checked = Instance.misc?.verifiedBadges !== false, Decorated = Instance.misc?.avatarDecorations !== false;
+	const Names = window.KittokNames, Styled = Boolean(Names) && Instance.misc?.nameStyles !== false, Plated = Boolean(Names) && Instance.misc?.nameplates !== false;
+	const Blank = { badges: [], verified: false, decoration: null, style: null, plate: null };
 	const Check = '<svg viewBox="0 0 48 48" width="1em" height="1em" aria-label="Verified" role="img"><path d="M0 24a24 24 0 1 1 48 0 24 24 0 0 1-48 0Z" fill="#20D5EC"/><path fill-rule="evenodd" clip-rule="evenodd" d="M37.12 15.88a3 3 0 0 1 0 4.24l-13.5 13.5a3 3 0 0 1-4.24 0l-8.5-8.5a3 3 0 1 1 4.24-4.24l6.38 6.38 11.38-11.38a3 3 0 0 1 4.24 0Z" fill="#fff"/></svg>';
 	let Timer, Running = false;
 	const Handle = Value => /^\/@([a-z0-9_]{3,24})\/?$/i.exec(Value)?.[1].toLowerCase();
@@ -69,7 +71,7 @@
 					const Response = await fetch('/api/v1/profile/badges', { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-csrf-token': Session.csrfToken }, body: JSON.stringify({ prideFlag: Current }) });
 					if (!Response.ok) throw new Error('CouldntSave');
 					const Updated = await Response.json();
-					Cache.set(Session.user.uniqueId, { ...(Cache.get(Session.user.uniqueId) ?? { verified: false, decoration: null }), at: Date.now(), badges: Updated.kittokBadges });
+					Cache.set(Session.user.uniqueId, { ...(Cache.get(Session.user.uniqueId) ?? Blank), at: Date.now(), badges: Updated.kittokBadges });
 					for (const [Host, Username] of Targets()) if (Username === Session.user.uniqueId) Render(Host, Username, Updated.kittokBadges);
 					Tip.textContent = 'Saved';
 				} catch { Current = Previous; Show(); Tip.textContent = 'CouldntSave'; }
@@ -221,7 +223,7 @@
 					const Response = await fetch('/api/v1/profile/decoration', { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-csrf-token': Instance.csrfToken }, body: JSON.stringify({ decoration: Selected?.id ?? '' }) });
 					if (!Response.ok) throw new Error('CouldntSave');
 					const Updated = await Response.json();
-					Cache.set(Own, { ...(Cache.get(Own) ?? { badges: [], verified: false }), at: Date.now(), decoration: Updated.decoration });
+					Cache.set(Own, { ...(Cache.get(Own) ?? Blank), at: Date.now(), decoration: Updated.decoration });
 					PaintAvatars(); Close();
 				} catch { Status.textContent = 'CouldntSave'; Apply.disabled = false; }
 			});
@@ -299,11 +301,102 @@
 		}
 		if (Badge) Badge.after(Row); else Host.append(Row);
 	}
+	let Partners = {}, PartnersAt = 0;
+	const Partner = Item => {
+		const Key = Item.dataset.convId ?? '';
+		if (!/^0:1:/.test(Key)) return null;
+		if (!Object.hasOwn(Partners, Key) && Date.now() - PartnersAt > 10000) {
+			PartnersAt = Date.now();
+			fetch('/_kittok/dm-partners').then(Response => Response.ok ? Response.json() : null).then(Data => { if (Data) { Partners = Data.partners; Schedule(); } }).catch(() => {});
+		}
+		return Partners[Key] ?? null;
+	};
+	const Texty = Node => !Node.closest('[data-kittok-badges], .KittokGummy, .KittokVerified, .KittokDecorationPanel, svg') && [...Node.childNodes].some(Child => Child.nodeType === Node.TEXT_NODE && Child.nodeValue.trim());
+	const Within = (Root, Username, Live = false) => [Root, ...Root.querySelectorAll('*')].filter(Texty).map(Node => [Node, Username, Live]);
+	function Labels() {
+		const Found = [];
+		if (!Styled) return Found;
+		for (const Link of document.querySelectorAll('a[href*="/@"]')) {
+			const Url = new URL(Link.getAttribute('href'), location.origin);
+			const Username = Url.origin === location.origin && Handle(Url.pathname);
+			if (Username) Found.push(...Within(Link, Username));
+		}
+		const Title = document.querySelector('[data-e2e="user-title"]'), Profile = Handle(location.pathname);
+		if (Title && Profile) Found.push(...Within(Title, Profile, true));
+		const Chat = ChatHeader();
+		if (Chat) Found.push(...Within(Chat[0], Chat[1]));
+		for (const Item of document.querySelectorAll('[data-e2e="dm-new-conversation-item"]')) {
+			const Username = Partner(Item), Nickname = Item.querySelector('[data-e2e="dm-new-conversation-nickname"]');
+			if (Username && Nickname) Found.push(...Within(Nickname, Username));
+		}
+		return Found;
+	}
+	function Plates() {
+		const Found = [];
+		if (!Plated) return Found;
+		for (const Label of document.querySelectorAll('[data-e2e^="comment-username-"]')) {
+			const Href = Label.querySelector('a[href*="/@"]')?.getAttribute('href') ?? '', Username = Handle(Href);
+			let Row = Label.parentElement;
+			while (Username && Row && Row !== document.body && !Row.querySelector(`a[href="${CSS.escape(Href)}"] img`)) Row = Row.parentElement;
+			if (Username && Row && Row !== document.body) Found.push([Row, Username, 'Comment']);
+		}
+		for (const Item of document.querySelectorAll('[data-e2e="dm-new-conversation-item"]')) { const Username = Partner(Item); if (Username) Found.push([Item, Username, 'Chat']); }
+		return Found;
+	}
+	const Plain = '[data-e2e*="subtitle"], [data-e2e*="uniqueid" i], [data-e2e*="unique-id"]';
+	function PaintNames(Found = Labels(), Rows = Plates()) {
+		for (const [Node, Username, Live] of Found) {
+			const Style = Cache.get(Username)?.style;
+			if (!Cache.has(Username)) continue;
+			const Text = [...Node.childNodes].filter(Child => Child.nodeType === Node.TEXT_NODE).map(Child => Child.nodeValue).join('').trim();
+			Names.Name(Node, Style && Text === (Style.name || Username) && !Node.closest(Plain) ? Style : null, Live);
+		}
+		for (const [Row, Username, Kind] of Rows) if (Cache.has(Username)) Names.Plate(Row, Cache.get(Username).plate, Kind);
+	}
+	function NameRows() {
+		const Modal = (Styled || Plated) && Instance.account && document.querySelector('[data-e2e="edit-profile-popup"]');
+		const Name = Modal?.querySelector('[data-e2e="edit-profile-name"]')?.parentElement;
+		if (!Name || Modal.querySelector('[data-kittok-name-row]')) return;
+		const Own = Instance.account.username;
+		const Fresh = async () => {
+			if (Date.now() - (Cache.get(Own)?.at ?? 0) > 5000) {
+				const Data = await (await fetch('/_kittok/badges?users=' + encodeURIComponent(Own))).json();
+				Cache.set(Own, { ...(Cache.get(Own) ?? Blank), at: Date.now(), style: Data.styles?.[Own] ?? null, plate: Data.nameplates?.[Own] ?? null });
+			}
+			return Cache.get(Own);
+		};
+		const Rows = [];
+		const Row = (Title, Open) => {
+			const Line = document.createElement('div'); Line.className = Name.className; Line.setAttribute('data-kittok-name-row', '');
+			const Label = document.createElement('div'); Label.className = Name.children[0].className; Label.textContent = Title;
+			const Area = document.createElement('div'); Area.className = Name.children[1]?.className ?? '';
+			const Button = document.createElement('button'); Button.type = 'button'; Button.className = (Name.querySelector('input')?.className ?? '') + ' KittokNamesRowButton'; Button.setAttribute('aria-label', Title);
+			const Text = document.createElement('span'); Text.className = 'KittokNamesRowName';
+			Button.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="flex:none;opacity:.7"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>'; Button.prepend(Text);
+			Button.addEventListener('click', async () => { try { Open(await Fresh()); } catch { Text.textContent = 'CouldntLoad'; } });
+			Area.append(Button); Line.append(Label, Area); Rows.push(Line);
+			return [Button, Text];
+		};
+		const Saved = Change => { Cache.set(Own, { ...(Cache.get(Own) ?? Blank), at: Date.now(), ...Change }); Show(); Schedule(); };
+		const Style = Styled && Row('Name style', Entry => Names.EditStyle(Modal, Entry.style, Entry.plate, Value => Saved({ style: Value })));
+		const Plate = Plated && Row('Nameplate', Entry => Names.EditPlate(Modal, Entry.plate, Entry.style, Value => Saved({ plate: Value })));
+		function Show() {
+			const Entry = Cache.get(Own) ?? Blank, Shown = Instance.account.displayName || Own;
+			if (Style) { Style[1].textContent = Shown; Names.Name(Style[1], Entry.style, true); }
+			if (Plate) { Plate[1].textContent = Entry.plate?.name ?? 'None'; Names.Plate(Plate[0], Entry.plate, 'Row'); }
+		}
+		Name.after(...Rows);
+		Show();
+		Fresh().then(Show).catch(() => {});
+	}
 	async function Sync() {
 		Timer = null;
 		if (Running) return;
-		FlagRow();
+		FlagRow(); NameRows();
 		const Found = Targets(), Faces = Avatars(), Missing = new Set();
+		const Named = Labels(), Rows = Plates();
+		PaintNames(Named, Rows);
+		for (const [, Username] of [...Named, ...Rows]) { const Entry = Cache.get(Username); if (!Entry || Date.now() - Entry.at > 30000) Missing.add(Username); }
 		const Chat = ChatHeader();
 		if (Chat) {
 			const Entry = Cache.get(Chat[1]);
@@ -331,15 +424,16 @@
 				const Response = await fetch('/_kittok/badges?users=' + encodeURIComponent(Batch.join(',')));
 				if (!Response.ok) throw new Error('CouldntLoadBadges');
 				const Data = await Response.json();
-				for (const Username of Batch) if (!Cache.has(Username) || Cache.get(Username).at <= Started) Cache.set(Username, { at: Date.now(), badges: Object.hasOwn(Data.users, Username) ? Data.users[Username] : [], verified: Data.verified?.includes(Username) ?? false, decoration: Data.decorations?.[Username] ?? null });
+				for (const Username of Batch) if (!Cache.has(Username) || Cache.get(Username).at <= Started) Cache.set(Username, { at: Date.now(), badges: Object.hasOwn(Data.users, Username) ? Data.users[Username] : [], verified: Data.verified?.includes(Username) ?? false, decoration: Data.decorations?.[Username] ?? null, style: Data.styles?.[Username] ?? null, plate: Data.nameplates?.[Username] ?? null });
 			}
 			while (Cache.size > 500) Cache.delete(Cache.keys().next().value);
 			for (const [Host, Username] of Targets()) if (Cache.has(Username)) Render(Host, Username, Cache.get(Username).badges);
 			PaintAvatars();
+			if (Names) PaintNames();
 			const Header = ChatHeader();
 			if (Header && Cache.has(Header[1])) MarkChat(...Header);
 		} catch {
-			for (const Username of Missing) Cache.set(Username, { at: Date.now(), badges: Cache.get(Username)?.badges ?? [], verified: Cache.get(Username)?.verified ?? false, decoration: Cache.get(Username)?.decoration ?? null });
+			for (const Username of Missing) Cache.set(Username, { ...Blank, ...Cache.get(Username), at: Date.now() });
 		} finally { Running = false; }
 	}
 	function Schedule() { if (!Timer && !Running) Timer = setTimeout(Sync, 80); }

@@ -1624,6 +1624,50 @@ test('avatar decorations come from the Discord catalog, are owner-editable, and 
 	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).decorations, {});
 });
 
+test('display name styles and nameplates use Discord ids, show in the badge lookup, and follow their switches', async () => {
+	const Signed = await Login(Pool, 'pride_kitten', Password);
+	const As = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	const Style = (Body, Headers = As) => Call('/api/v1/profile/name-style', 'PATCH', Body, Headers);
+	const Plate = (Body, Headers = As) => Call('/api/v1/profile/nameplate', 'PATCH', Body, Headers);
+	assert.equal((await Style({ style: null }, {})).status, 401);
+	assert.equal((await Style({ style: null }, { cookie: As.cookie })).status, 403);
+	for (const Invalid of [{ font: 1, effect: 1, colors: [1] }, { font: 11, effect: 6, colors: [1] }, { font: 11, effect: 2, colors: [1, 2, 3] }, { font: 11, effect: 2, colors: [] }, { font: 11, effect: 1, colors: [0x1000000] }, { font: 11, effect: 1, colors: ['#fff'] }, 'Gradient'])
+		assert.equal((await Style({ style: Invalid })).status, 400);
+	const Name = (await Pool.query("SELECT display_name FROM users WHERE username = 'pride_kitten'")).rows[0].display_name;
+	assert.deepEqual((await (await Style({ style: { font: 3, effect: 8, colors: [1, 2, 3, 4] } })).json()).style, { font: 3, effect: 8, colors: [1, 2, 3, 4], name: Name });
+	assert.equal((await Style({ style: { font: 16, effect: 1, colors: [] } })).status, 200);
+	const Items = (await (await Call('/_kittok/nameplates/catalog')).json()).collections.flatMap(Collection => Collection.items);
+	assert.equal(Items.length, 256); assert.equal(new Set(Items.map(Item => Item.id)).size, 256);
+	const Pick = Items[0];
+	assert.deepEqual(Object.keys(Pick).sort(), ['id', 'image', 'label', 'name', 'palette', 'video']);
+	for (const Invalid of ['1', '<script>', [], true, 5]) assert.equal((await Plate({ nameplate: Invalid })).status, 400);
+	assert.deepEqual((await (await Plate({ nameplate: Pick.id })).json()).nameplate, Pick);
+	const Lookup = await (await Call('/_kittok/badges?users=pride_kitten,owner')).json();
+	assert.deepEqual(Lookup.styles, { pride_kitten: { font: 16, effect: 1, colors: [], name: Name } });
+	assert.deepEqual(Lookup.nameplates, { pride_kitten: Pick });
+	await mkdir(join(Directory, 'nameplates'), { recursive: true });
+	await writeFile(join(Directory, 'nameplates', `${Pick.id}.png`), 'cached');
+	const Art = await Call(Pick.image);
+	assert.equal(Art.status, 200); assert.equal(Art.headers.get('content-type'), 'image/png'); assert.equal(await Art.text(), 'cached');
+	assert.equal((await Call('/_kittok/nameplates/12345678901234567.png')).status, 404);
+	const [Kitten, Owner] = (await Pool.query("SELECT id::text FROM users WHERE username IN ('pride_kitten', 'owner') ORDER BY username = 'owner'")).rows.map(Row => Row.id);
+	const Key = `0:1:${[Kitten, Owner].sort((A, B) => (BigInt(A) < BigInt(B) ? -1 : 1)).join(':')}`;
+	await Pool.query(`WITH C AS (INSERT INTO conversations(conversation_key, conversation_type) VALUES ($1, 1) ON CONFLICT (conversation_key) DO UPDATE SET conversation_type = 1 RETURNING id)
+		INSERT INTO conversation_members(conversation_id, user_id) SELECT C.id, Member::bigint FROM C, unnest($2::text[]) Member ON CONFLICT DO NOTHING`, [Key, [Kitten, Owner]]);
+	assert.equal((await Call('/_kittok/dm-partners')).status, 401);
+	assert.equal((await (await Call('/_kittok/dm-partners', 'GET', undefined, As)).json()).partners[Key], 'owner');
+	const Settings = (await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json()).misc;
+	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: { ...Settings, nameStyles: false, nameplates: false } }, Auth())).status, 200);
+	assert.equal((await Call('/_kittok/nameplates/catalog')).status, 404);
+	const Hidden = await (await Call('/_kittok/badges?users=pride_kitten')).json();
+	assert.deepEqual([Hidden.styles, Hidden.nameplates], [{}, {}]);
+	assert.equal((await Style({ style: null })).status, 403); assert.equal((await Plate({ nameplate: '' })).status, 403);
+	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: Settings }, Auth())).status, 200);
+	assert.equal((await Style({ style: null })).status, 200); assert.equal((await Plate({ nameplate: '' })).status, 200);
+	const Cleared = await (await Call('/_kittok/badges?users=pride_kitten')).json();
+	assert.deepEqual([Cleared.styles, Cleared.nameplates], [{}, {}]);
+});
+
 test('native email sign-up checks age, sends real codes, needs an invite here, and lets the person pick a username', async () => {
 	const Mix = Value => Buffer.from(Value).map(Byte => Byte ^ 5).toString('hex');
 	const Form = (Path, Fields, Headers = {}) => fetch(Origin + Path, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', ...Headers }, body: new URLSearchParams(Fields) });

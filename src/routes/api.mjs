@@ -6,7 +6,7 @@ import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment, SetBlo
 import { DownloadCopy, ImportVideo, ReceiveVideo, ServeMedia, WarmDownloads } from '../media.mjs';
 import { AssertAllowed, RemovedSql } from '../moderation.mjs';
 import { BadgeCatalog, BadgeSvg, PrideFlag, PublicBadges } from '../badges.mjs';
-import { AvatarDecoration, DecorationCatalog, DecorationImage, PublicDecoration } from '../decorations.mjs';
+import { AvatarDecoration, DecorationCatalog, DecorationImage, Nameplate, NameplateCatalog, NameplateFile, NameStyle, PublicDecoration, PublicNameplate, PublicNameStyle } from '../decorations.mjs';
 import { Misc } from '../settings.mjs';
 import { Category } from '../categories.mjs';
 import { UnsendMessage } from './im.mjs';
@@ -43,8 +43,45 @@ export async function Api(Context) {
 		RequireMethod(Request, ['GET']);
 		const Names = [...new Set((Url.searchParams.get('users') ?? '').split(','))];
 		if (Names.length > 50 || Names.some(Name => !/^[a-z0-9_]{3,24}$/.test(Name))) throw new HttpError(400, 'InvalidUsernames');
-		const Rows = (await Pool.query('SELECT username, pride_flag, user_badges, verified, avatar_decoration FROM users WHERE username = ANY($1::text[]) AND suspended_at IS NULL', [Names])).rows;
-		Json(Response, { users: Object.fromEntries(Rows.map(Row => [Row.username, PublicBadges(Row)])), verified: Misc.verifiedBadges ? Rows.filter(Row => Row.verified).map(Row => Row.username) : [], decorations: Object.fromEntries(Rows.map(Row => [Row.username, PublicDecoration(Row)]).filter(Pair => Pair[1])) }); return true;
+		const Rows = (await Pool.query('SELECT username, display_name, pride_flag, user_badges, verified, avatar_decoration, name_style, nameplate FROM users WHERE username = ANY($1::text[]) AND suspended_at IS NULL', [Names])).rows;
+		Json(Response, { users: Object.fromEntries(Rows.map(Row => [Row.username, PublicBadges(Row)])), verified: Misc.verifiedBadges ? Rows.filter(Row => Row.verified).map(Row => Row.username) : [], decorations: Object.fromEntries(Rows.map(Row => [Row.username, PublicDecoration(Row)]).filter(Pair => Pair[1])),
+			styles: Object.fromEntries(Rows.filter(Row => PublicNameStyle(Row)).map(Row => [Row.username, { ...PublicNameStyle(Row), name: Row.display_name }])), nameplates: Object.fromEntries(Rows.map(Row => [Row.username, PublicNameplate(Row)]).filter(Pair => Pair[1])) }); return true;
+	}
+	if (Path === '/_kittok/nameplates/catalog') {
+		RequireMethod(Request, ['GET']);
+		if (!Misc.nameplates) throw new HttpError(404, 'NameplatesDisabled');
+		Response.setHeader('cache-control', 'public, max-age=3600'); Json(Response, NameplateCatalog); return true;
+	}
+	const PlateArt = Path.match(/^\/_kittok\/nameplates\/(\d{17,20})\.(png|webm)$/);
+	if (PlateArt) {
+		RequireMethod(Request, ['GET', 'HEAD']);
+		const Data = await NameplateFile(Config, PlateArt[1], PlateArt[2]);
+		Response.writeHead(200, { 'content-type': PlateArt[2] === 'png' ? 'image/png' : 'video/webm', 'content-length': Data.length, 'cache-control': 'public, max-age=31536000, immutable' });
+		Response.end(Request.method === 'HEAD' ? undefined : Data); return true;
+	}
+	if (Path === '/_kittok/dm-partners') {
+		RequireMethod(Request, ['GET']);
+		if (!User) throw new HttpError(401, 'NotLoggedIn');
+		const Rows = (await Pool.query(`SELECT c.conversation_key, u.username FROM conversation_members me JOIN conversations c ON c.id = me.conversation_id AND c.conversation_type = 1
+			JOIN conversation_members o ON o.conversation_id = me.conversation_id AND o.user_id <> me.user_id JOIN users u ON u.id = o.user_id WHERE me.user_id = $1 AND u.suspended_at IS NULL LIMIT 1000`, [User.id])).rows;
+		Json(Response, { partners: Object.fromEntries(Rows.map(Row => [Row.conversation_key, Row.username])) }); return true;
+	}
+	if (Path === '/api/v1/profile/name-style' || Path === '/api/v1/profile/nameplate') {
+		RequireMethod(Request, ['PATCH']); RequireCsrf(Request, User);
+		const Style = Path.endsWith('name-style');
+		if (!(Style ? Misc.nameStyles : Misc.nameplates)) throw new HttpError(403, Style ? 'NameStylesDisabled' : 'NameplatesDisabled');
+		await AssertAllowed(Pool, User, 'profile');
+		const Body = await ReadBody(Request);
+		if (Style) {
+			const Chosen = NameStyle(Body.style ?? null);
+			await Pool.query('UPDATE users SET name_style = $2 WHERE id = $1', [User.id, Chosen]);
+			Json(Response, { style: Chosen && { ...Chosen, name: User.display_name } });
+		} else {
+			const Chosen = Nameplate(Body.nameplate);
+			await Pool.query('UPDATE users SET nameplate = $2 WHERE id = $1', [User.id, Chosen]);
+			Json(Response, { nameplate: PublicNameplate({ nameplate: Chosen }) });
+		}
+		return true;
 	}
 	if (Path === '/_kittok/decorations/catalog') {
 		RequireMethod(Request, ['GET']);
