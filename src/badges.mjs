@@ -26,7 +26,6 @@ export const CommunityBadges = [
 const Badge = ([Id, Label], Type) => ({ id: Id, label: Label, type: Type, icon: `/_kittok/badges/icon/${Id}.svg` });
 export const BadgeCatalog = {
 	pride: PrideFlags.map(Entry => Badge(Entry, 'pride')),
-	community: CommunityBadges.map(Entry => Badge(Entry, 'community')),
 };
 
 export function PrideFlag(Value) {
@@ -41,7 +40,7 @@ export function UserBadges(Value) {
 
 export function PublicBadges(User) {
 	if (!Misc.profileBadges) return [];
-	return [...BadgeCatalog.pride.filter(Badge => Badge.id === User.pride_flag), ...BadgeCatalog.community.filter(Badge => User.user_badges?.includes(Badge.id))];
+	return BadgeCatalog.pride.filter(Badge => Badge.id === User.pride_flag);
 }
 
 export function BadgeSvg(Id) {

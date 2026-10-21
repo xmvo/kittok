@@ -1,6 +1,12 @@
 (() => {
 	const Instance = JSON.parse(document.getElementById('kittok-instance')?.textContent ?? '{}');
 	document.documentElement.style.setProperty('--kittok-name', JSON.stringify(Instance.name ?? 'Kittok'));
+	const AdminPage = Value => /^\/admin(?:\/|$)/.test(Value);
+	if (Instance.account?.role === 'admin' && AdminPage(location.pathname)) {
+		window.__KittokAdminPath = location.pathname + location.search + location.hash;
+		history.replaceState(null, '', '/tag/kittokadmin');
+		addEventListener('popstate', Event => { if (AdminPage(location.pathname)) { Event.stopImmediatePropagation(); dispatchEvent(new Event('kittok-admin-route')); } });
+	}
 	let ShopPromo;
 	function ShopPromoText() {
 		if (ShopPromo) return ShopPromo;

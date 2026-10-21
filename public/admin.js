@@ -1,6 +1,8 @@
 (() => {
 	const Boot = JSON.parse(document.getElementById('kittok-admin-boot').textContent);
-	const Root = document.getElementById('kittok-admin');
+	const Root = document.createElement('div'); Root.id = 'kittok-admin';
+	const Layer = document.createElement('div'); Layer.id = 'kittok-admin-layer';
+	const IsAdminPath = () => /^\/admin(?:\/|$)/.test(location.pathname);
 
 	const Policies = [
 		['spam', 'Spam', 'spam'], ['harassment', 'Harassment', 'harassment and bullying'], ['hate', 'Hate', 'hateful behavior'], ['nudity', 'Nudity', 'nudity and sexual content'],
@@ -45,7 +47,6 @@
 	let Counts = { tickets: 0, appeals: 0 };
 	let Teardown = [];
 	let PageKeys = {};
-	let Theme = document.documentElement.dataset.theme;
 
 	function El(Tag, Props = {}, ...Children) {
 		const Node = document.createElement(Tag);
@@ -58,6 +59,37 @@
 			else Node.setAttribute(Key, Value === true ? '' : Value);
 		}
 		for (const Child of Children.flat(4)) if (Child !== null && Child !== undefined && Child !== false) Node.append(Child instanceof window.Node ? Child : String(Child));
+		return Native(Node);
+	}
+	let TuxNames;
+	function Tux(...Names) {
+		if (!TuxNames) {
+			TuxNames = new Map();
+			for (const Sheet of document.styleSheets) {
+				let Rules; try { Rules = Sheet.cssRules; } catch { continue; }
+				const Walk = List => { for (const Rule of List) { if (Rule.cssRules) Walk(Rule.cssRules); for (const Match of (Rule.selectorText ?? '').matchAll(/\.(tux-[A-Za-z0-9_-]+?)__([A-Za-z0-9_-]{6})_(v\d+_\d+_\d+)(?![A-Za-z0-9_-])/g)) if (!TuxNames.has(Match[1])) TuxNames.set(Match[1], Match[0].slice(1)); } };
+				Walk(Rules);
+			}
+		}
+		return Names.filter(Boolean).map(Name => TuxNames.get(Name) ?? '').filter(Boolean).join(' ');
+	}
+	function Native(Node) {
+		const Has = Name => Node.classList.contains(Name);
+		if (Has('Btn')) Node.className += ' tux-web-canary ' + Tux('tux-interaction-container', 'tux-button', Has('Small') ? 'tux-button--small' : 'tux-button--medium');
+		else if (Has('Chip')) Node.className += ' tux-web-canary P3-Semibold ' + Tux('tux-tag', Has('Brand') ? 'tux-tag--primary' : 'tux-tag--subtle');
+		else if (Has('Tabs')) Node.className += ' ' + Tux('tux-segmented-control', 'tux-segmented-control--capsule', 'tux-segmented-control--small');
+		else if (Has('Switch')) {
+			const Input = Node.querySelector('input'), Track = Node.querySelector('span');
+			if (Input && Track) {
+				Node.className += ' tux-web-canary ' + Tux('tux-interaction-container', 'tux-switch', 'tux-switch--small');
+				Input.className = Tux('tux-switch__input');
+				const Holder = Object.assign(document.createElement('div'), { className: Tux('tux-switch__indicator__container') });
+				Holder.append(Object.assign(document.createElement('div'), { className: Tux('tux-switch__indicator', 'tux-switch__indicator--small') }));
+				Track.replaceWith(Holder);
+				const Checked = Tux('tux-switch--checked'), Sync = () => { for (const Name of Checked.split(' ').filter(Boolean)) Node.classList.toggle(Name, Input.checked); };
+				Input.addEventListener('change', Sync); queueMicrotask(Sync);
+			}
+		}
 		return Node;
 	}
 	const Fill = (Node, ...Children) => Node.replaceChildren(...Children.flat(4).filter(Child => Child !== null && Child !== undefined && Child !== false));
@@ -72,43 +104,13 @@
 	const Chip = (Text, Class = '') => El('span', { class: `Chip ${Class}` }, Text);
 	const Spinner = () => El('div', { class: 'Loading' }, El('div', { class: 'Spinner' }));
 	function AccountBadges(User) {
-		const Badges = [...Boot.badges.pride.filter(Badge => Badge.id === User.pride_flag), ...Boot.badges.community.filter(Badge => User.user_badges?.includes(Badge.id))];
+		const Badges = Boot.badges.pride.filter(Badge => Badge.id === User.pride_flag);
 		return Badges.length ? El('span', { class: 'AccountBadges', 'aria-label': 'Profile badges' }, Badges.map(Badge => El('img', { src: Badge.icon, alt: Badge.label, title: Badge.label, class: Badge.type }))) : null;
 	}
-	function ActionMenu(Items) {
-		const Trigger = Btn('•••', () => Toggle(), 'Icon', { 'aria-label': 'More account actions', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
-		const Popup = El('div', { class: 'ActionPopover', role: 'menu', 'aria-label': 'Account actions', hidden: true }, Items);
-		const Menu = El('div', { class: 'ActionMenu' }, Trigger, Popup);
-		const Entries = () => [...Popup.querySelectorAll('button,a')];
-		for (const Item of Entries()) { Item.setAttribute('role', 'menuitem'); Item.tabIndex = -1; }
-		function Close(Focus = false) { Popup.hidden = true; Trigger.setAttribute('aria-expanded', 'false'); if (Focus) Trigger.focus(); }
-		function Toggle() { if (!Popup.hidden) Close(); else { Popup.hidden = false; Trigger.setAttribute('aria-expanded', 'true'); Entries()[0]?.focus(); } }
-		const Outside = Event => { if (!Menu.contains(Event.target)) Close(); };
-		const FocusAway = Event => { if (!Menu.contains(Event.target)) Close(); };
-		document.addEventListener('pointerdown', Outside); document.addEventListener('focusin', FocusAway);
-		Teardown.push(() => { document.removeEventListener('pointerdown', Outside); document.removeEventListener('focusin', FocusAway); });
-		Popup.addEventListener('click', Event => { if (Event.target.closest('button,a')) Close(); });
-		Menu.addEventListener('keydown', Event => {
-			if (Event.key === 'Escape') { Event.preventDefault(); Event.stopPropagation(); Close(true); }
-			if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(Event.key)) return;
-			Event.preventDefault();
-			if (Popup.hidden) { Toggle(); if (Event.key === 'ArrowUp') Entries().at(-1)?.focus(); return; }
-			const Buttons = Entries(), Current = Buttons.indexOf(document.activeElement);
-			Buttons[Event.key === 'Home' ? 0 : Event.key === 'End' ? Buttons.length - 1 : (Current + (Event.key === 'ArrowDown' ? 1 : -1) + Buttons.length) % Buttons.length]?.focus();
-		});
-		return Menu;
-	}
-	function EditBadges(User, Refresh) {
-		const Flag = El('select', { class: 'Select', 'aria-label': 'Pride flag' }, El('option', { value: '' }, 'None / prefer not to say'), Boot.badges.pride.map(Badge => El('option', { value: Badge.id }, Badge.label)));
-		Flag.value = User.pride_flag;
-		const Choices = Boot.badges.community.map(Badge => El('label', { class: 'BadgeChoice' }, El('input', { type: 'checkbox', value: Badge.id, checked: User.user_badges.includes(Badge.id) }), El('img', { src: Badge.icon, alt: '' }), El('span', {}, Badge.label)));
-		const Preview = El('div', { class: 'BadgeEditorPreview' });
-		const Update = () => Fill(Preview, AccountBadges({ pride_flag: Flag.value, user_badges: Choices.filter(Choice => Choice.querySelector('input').checked).map(Choice => Choice.querySelector('input').value) }) ?? El('span', { class: 'Faint' }, 'No profile badges'));
-		Flag.addEventListener('change', Update); for (const Choice of Choices) Choice.addEventListener('change', Update); Update();
-		Modal({ Title: `Profile badges · @${User.username}`, Confirm: 'Save badges', Body: [Preview, El('label', { class: 'Field' }, El('span', {}, 'Pride flag'), Flag, El('small', {}, 'Public beside their name. Choose None to remove it.')), El('div', { class: 'Field' }, El('span', {}, 'Community badges'), El('div', { class: 'BadgeChoices' }, Choices)), El('p', { class: 'Faint', style: 'margin:0;font-size:12px' }, 'Community badges are assigned by admins and do not change account permissions.')], OnConfirm: async () => {
-			await Api(`users/${User.id}/badges`, { prideFlag: Flag.value, userBadges: Choices.filter(Choice => Choice.querySelector('input').checked).map(Choice => Choice.querySelector('input').value) });
-			Toast('Profile badges updated'); Refresh();
-		} });
+	function VerifiedCheck() {
+		const Mark = El('span', { class: 'VerifiedCheck', role: 'img', 'aria-label': 'Verified', title: 'Verified' });
+		Mark.innerHTML = '<svg viewBox="0 0 48 48" width="1em" height="1em" aria-hidden="true"><path d="M0 24a24 24 0 1 1 48 0 24 24 0 0 1-48 0Z" fill="#20D5EC"/><path fill-rule="evenodd" clip-rule="evenodd" d="M37.12 15.88a3 3 0 0 1 0 4.24l-13.5 13.5a3 3 0 0 1-4.24 0l-8.5-8.5a3 3 0 1 1 4.24-4.24l6.38 6.38 11.38-11.38a3 3 0 0 1 4.24 0Z" fill="#fff"/></svg>';
+		return Mark;
 	}
 
 	async function Api(Path, Body, Method) {
@@ -123,7 +125,7 @@
 	function Toast(Message, Error = false) {
 		document.querySelector('.Toast')?.remove();
 		const Node = El('div', { class: `Toast${Error ? ' Error' : ''}`, role: 'status' }, Message);
-		document.body.append(Node); setTimeout(() => Node.remove(), 3200);
+		Layer.append(Node); setTimeout(() => Node.remove(), 3200);
 	}
 	const Fail = Error => Toast(Error.message, true);
 	function Ago(Value) {
@@ -150,7 +152,7 @@
 		const Action = Btn(Confirm, async () => { Action.disabled = true; try { await OnConfirm(); Close(); } catch (Error) { Fail(Error); Action.disabled = false; } }, Danger ? 'Danger' : 'Primary');
 		const Shade = El('div', { class: 'Modal', onclick: Event => { if (Event.target === Shade) Close(); } },
 			El('div', { class: 'Panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': Title }, El('div', { class: 'PanelHead' }, Title), El('div', { class: 'PanelBody' }, Body), El('div', { class: 'Foot' }, Btn('Cancel', Close, 'Ghost'), Action)));
-		document.body.append(Shade); document.addEventListener('keydown', Escape, true);
+		Layer.append(Shade); document.addEventListener('keydown', Escape, true);
 		(Shade.querySelector('input,textarea,select') ?? Action).focus();
 	}
 	function AskReason({ Title, Text, Confirm, Danger, Placeholder = 'Reason', OnConfirm }) {
@@ -294,7 +296,7 @@
 		const Shade = El('div', { class: 'Drawer', onclick: Event => { if (Event.target === Shade) Close(); } }, Shell);
 		const Escape = Event => { if (Event.key === 'Escape') Close(); };
 		Close = () => { Shade.remove(); delete PageKeys.__drawer; document.removeEventListener('keydown', Escape); };
-		document.body.append(Shade); document.addEventListener('keydown', Escape);
+		Layer.append(Shade); document.addEventListener('keydown', Escape);
 		Load().catch(Error => { Fail(Error); Close(); });
 	}
 
@@ -308,28 +310,48 @@
 		['Community'], ['/admin/accounts', 'Accounts', 'accounts'], ['/admin/content', 'Content', 'content'],
 		['Configure'], ['/admin/policies', 'Policies', 'policies'], ['/admin/instance', 'Instance', 'instance'], ['/admin/misc', 'Misc', 'misc'], ['/admin/invites', 'Invites', 'invites'], ['/admin/audit', 'Audit log', 'audit'],
 	];
-	const Frame = El('div', { class: `App${localStorage.getItem('kittok-admin-rail') === 'collapsed' ? ' Collapsed' : ''}` });
-	const Rail = El('nav', { class: 'Rail', 'aria-label': 'Admin' });
+	const Frame = El('div', { class: 'App' });
 	const Title = El('h1');
 	const SearchBox = El('input', { type: 'search', placeholder: 'Search accounts, @handles, or IDs', 'aria-label': 'Search', onkeydown: Event => { if (Event.key === 'Enter') Lookup(Event.target.value.trim()); if (Event.key === 'Escape') Event.target.blur(); } });
 	const Body = El('main', { class: 'Body', tabindex: '-1' });
-	Frame.append(Rail, El('div', { class: 'Main' }, El('header', { class: 'Top' }, Title, El('div', { class: 'Search' }, Icon('search', 16), SearchBox, El('kbd', {}, '/'))), Body));
+	Frame.append(El('header', { class: 'Top' }, Title, El('div', { class: 'Search' }, Icon('search', 16), SearchBox, El('kbd', {}, '/'))), Body);
 	Root.append(Frame);
 
-	function DrawRail() {
+	let NavSignature = '';
+	function NavContainer() { return document.querySelector('[class*="DivMainNavContainer"]'); }
+	function NavTemplate(Container) { return [...Container.children].find(Child => !Child.hasAttribute('data-kittok-admin-nav') && Child.querySelector(':scope > a[data-e2e="nav-foryou"]')); }
+	function DrawSections() {
+		const Container = NavContainer(), Template = Container && NavTemplate(Container);
+		if (!Template || !Root.isConnected) return;
 		const Current = location.pathname.replace(/\/$/, '') || '/admin';
 		const Active = Href => Href === '/admin' ? Current === '/admin' || Current.startsWith('/admin/review') : Current.startsWith(Href);
-		Fill(Rail, 
-			El('div', { class: 'Brand' }, El('img', { src: '/brand/icon', alt: '' }), El('span', {}, Boot.name, El('small', {}, 'Trust & Safety'))),
-			Nav.map(([Href, Label, Name, Count]) => Label === undefined ? El('div', { class: 'Section' }, Href) : Link(Href, { class: `NavItem${Active(Href) ? ' Active' : ''}`, title: Label, 'aria-current': Active(Href) ? 'page' : null }, Icon(Name), El('span', { class: 'Label' }, Label), Count && Counts[Count] ? El('span', { class: 'Badge' }, Counts[Count] > 99 ? '99+' : Counts[Count]) : null)),
-			El('div', { class: 'RailFoot' },
-				El('button', { class: 'NavItem', type: 'button', onclick: () => { Frame.classList.toggle('Collapsed'); try { localStorage.setItem('kittok-admin-rail', Frame.classList.contains('Collapsed') ? 'collapsed' : 'open'); } catch {} }, title: 'Collapse sidebar' }, Icon('collapse'), El('span', { class: 'Label' }, 'Collapse')),
-				El('button', { class: 'NavItem', type: 'button', onclick: () => { Theme = Theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = Theme; try { localStorage.setItem('kittok-admin-theme', Theme); } catch {} }, title: 'Switch theme' }, Icon('theme'), El('span', { class: 'Label' }, 'Switch theme')),
-				El('a', { class: 'NavItem', href: '/', title: `Back to ${Boot.name}` }, Icon('back'), El('span', { class: 'Label' }, `Back to ${Boot.name}`)),
-				El('div', { class: 'Me' }, El('img', { src: Boot.me.avatar, alt: '' }), El('span', { class: 'Label Clip' }, `@${Boot.me.username}`))));
+		NavSignature = Template.outerHTML.length + ':' + Template.className + ':' + Template.querySelector('button')?.className;
+		const Items = [...Nav.filter(Entry => Entry[1] !== undefined), ['/', `Back to ${Boot.name}`]].map(([Href, Label, Name, Count]) => {
+			const Item = Template.cloneNode(true); Item.setAttribute('data-kittok-admin-nav', '');
+			const Anchor = Item.querySelector('a'), Button = Item.querySelector('button'), Text = Item.querySelector('.TUXButton-label');
+			Anchor.href = Href; Anchor.setAttribute('data-e2e', `nav-kittok-admin-${Name ?? 'back'}`);
+			Button.setAttribute('aria-label', Label); Anchor.title = Label;
+			if (Text) Text.textContent = Label;
+			if (Name) {
+				Item.querySelector('svg')?.replaceWith(Object.assign(Icon(Name, '1em'), { classList: 'KittokAdminNavIcon' }));
+				Anchor.addEventListener('click', Event => { if (Event.metaKey || Event.ctrlKey || Event.button) return; Event.preventDefault(); Navigate(Href); });
+				if (Active(Href)) { Item.setAttribute('data-active', ''); Button.setAttribute('aria-current', 'page'); }
+				const Total = Count && Counts[Count];
+				if (Total) Item.querySelector('[class*="DivIconWithRedDot"]')?.append(El('span', { class: 'KittokAdminNavCount' }, Total > 99 ? '99+' : String(Total)));
+			}
+			return Item;
+		});
+		for (const Old of Container.querySelectorAll(':scope > [data-kittok-admin-nav]')) Old.remove();
+		Container.append(...Items);
 	}
+	new MutationObserver(() => {
+		const Container = NavContainer(), Template = Container && NavTemplate(Container);
+		if (!Template || !Root.isConnected) return;
+		const Signature = Template.outerHTML.length + ':' + Template.className + ':' + Template.querySelector('button')?.className;
+		if (Signature !== NavSignature || !Container.querySelector(':scope > [data-kittok-admin-nav]')) DrawSections();
+	}).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 	async function RefreshCounts() {
-		try { const Data = await Api('console'); Counts = { tickets: Data.counts.tickets, appeals: Data.counts.appeals }; DrawRail(); return Data; } catch { return null; }
+		try { const Data = await Api('console'); Counts = { tickets: Data.counts.tickets, appeals: Data.counts.appeals }; DrawSections(); return Data; } catch { return null; }
 	}
 	function SetTitle(Parts) {
 		Fill(Title, ...Parts.flatMap((Part, Index) => [Index ? El('span', { class: 'Crumb' }, ' / ') : null, Index < Parts.length - 1 && Array.isArray(Part) ? El('span', { class: 'Crumb' }, Link(Part[1], {}, Part[0])) : Array.isArray(Part) ? Part[0] : Part]));
@@ -350,11 +372,13 @@
 		if (Replace) history.replaceState(null, '', Href); else history.pushState(null, '', Href);
 		Route();
 	}
+	let Routed = '';
 	async function Route() {
+		Routed = location.pathname + location.search;
 		for (const Clean of Teardown) Clean();
 		Teardown = []; PageKeys = {};
 		document.querySelectorAll('.Drawer,.Modal').forEach(Node => Node.remove());
-		DrawRail();
+		DrawSections();
 		const Path = location.pathname.replace(/\/$/, '');
 		const Params = new URLSearchParams(location.search);
 		Fill(Body, Spinner()); Body.scrollTop = 0;
@@ -377,7 +401,6 @@
 			Fill(Body, El('div', { class: 'Empty' }, El('strong', {}, 'Couldn’t load this page'), El('span', {}, Error.message), Btn('Try again', Route)));
 		}
 	}
-	addEventListener('popstate', Route);
 	document.addEventListener('keydown', Event => {
 		const Typing = /^(INPUT|TEXTAREA|SELECT)$/.test(Event.target.tagName) || Event.target.isContentEditable;
 		const Keys = PageKeys.__drawer ?? PageKeys;
@@ -549,7 +572,7 @@
 			El('div', { class: 'Toolbar' }, Field, Query && El('span', { class: 'Faint' }, `${Data.users.length}${Data.hasMore ? '+' : ''} matches`)),
 			El('div', { class: 'Panel', style: 'overflow-x:auto' }, Data.users.length ? El('table', { class: 'Table' }, El('thead', {}, El('tr', {}, ['Account', 'ID', 'Role', 'Joined', 'Videos', 'Followers', 'Strikes', 'Status'].map(Head => El('th', {}, Head)))),
 				El('tbody', {}, Data.users.map(Row => El('tr', { onclick: () => Navigate(`/admin/accounts/${Row.id}`) },
-					El('td', {}, El('div', { class: 'Row' }, El('img', { class: 'Avatar', src: Row.avatar, alt: '' }), El('div', {}, El('div', { class: 'Row', style: 'font-weight:600' }, Row.display_name, Row.verified && Chip('Verified', 'Info'), AccountBadges(Row)), El('div', { class: 'Faint' }, `@${Row.username}`)))),
+					El('td', {}, El('div', { class: 'Row' }, El('img', { class: 'Avatar', src: Row.avatar, alt: '' }), El('div', {}, El('div', { class: 'Row', style: 'font-weight:600' }, Row.display_name, Row.verified && VerifiedCheck(), AccountBadges(Row)), El('div', { class: 'Faint' }, `@${Row.username}`)))),
 					El('td', { class: 'Mono Faint' }, Row.id), El('td', {}, Row.role === 'admin' ? Chip('Admin', 'Info') : El('span', { class: 'Muted' }, 'Member')),
 					El('td', { class: 'Faint Num' }, Ago(Row.created_at)), El('td', { class: 'Num' }, Row.videos), El('td', { class: 'Num' }, Row.followers), El('td', { class: 'Num' }, Row.violations),
 					El('td', {}, Row.suspended_at ? Chip('Banned', 'Bad') : Chip('Active', 'Good'))))))
@@ -576,7 +599,6 @@
 			Confirm: U.verified ? 'Remove verification' : 'Verify account',
 			OnConfirm: async () => { await Api(`users/${U.id}/verification`, { verified: !U.verified }); Toast(U.verified ? 'Verification removed' : 'Account verified'); Refresh(); },
 		})));
-		Actions.unshift(Btn('Edit profile badges', () => EditBadges(U, Refresh)));
 		Actions.unshift(El('a', { href: '/@' + U.username, target: '_blank', rel: 'noopener', class: 'Btn' }, 'View profile'));
 		const Panels = {
 			enforcement: () => El('div', { class: 'Columns' },
@@ -604,10 +626,10 @@
 		};
 		Fill(Body, El('div', { class: 'Page Stack' },
 			El('div', { class: 'Panel Profile' }, El('img', { class: 'Avatar Large', src: U.avatar, alt: '' }),
-				El('div', { class: 'Grow' }, El('div', { class: 'Row' }, El('h2', {}, U.display_name), U.verified && Chip('Verified', 'Info'), AccountBadges(U), StandingChip(Data.standing, U.suspended_at), U.role === 'admin' && Chip('Admin', 'Info')),
+				El('div', { class: 'Grow' }, El('div', { class: 'Row' }, El('h2', {}, U.display_name), U.verified && VerifiedCheck(), AccountBadges(U), StandingChip(Data.standing, U.suspended_at), U.role === 'admin' && Chip('Admin', 'Info')),
 					El('div', { class: 'Muted' }, `@${U.username}`), El('div', { class: 'Facts' }, El('span', { class: 'Mono' }, U.id), El('span', {}, `Joined ${new Date(U.created_at).toLocaleDateString()}`), El('span', {}, `${U.stats.followerCount} followers`), El('span', {}, `${U.stats.videoCount} videos`), El('span', {}, `${U.stats.heartCount} likes`)),
 					U.bio && El('p', { style: 'margin:8px 0 0;overflow-wrap:anywhere' }, U.bio)),
-				El('div', { class: 'Row', style: 'flex-wrap:wrap;justify-content:flex-end' }, !U.self && U.role !== 'admin' && Btn('Take action', () => EnforceDrawer({ Type: 'user', Target: U.id, Owner, Title: `Act on @${U.username}`, OnDone: Refresh }), 'Primary'), ActionMenu(Actions))),
+				El('div', { class: 'ProfileActions' }, !U.self && U.role !== 'admin' && Btn('Take action', () => EnforceDrawer({ Type: 'user', Target: U.id, Owner, Title: `Act on @${U.username}`, OnDone: Refresh }), 'Primary'), Actions)),
 			El('div', { class: 'Tabs' }, [['enforcement', 'Enforcement'], ['content', 'Content'], ['reports', 'Reports'], ['security', 'Security']].map(([Key, Label]) => Link(`/admin/accounts/${U.id}?tab=${Key}`, { class: `Tab${Tab === Key ? ' Active' : ''}` }, Label))),
 			Panels[Tab]()));
 	}
@@ -734,6 +756,41 @@
 		await Load(null);
 	}
 
-	setInterval(() => { if (document.visibilityState === 'visible') RefreshCounts(); }, 60000);
-	Route();
+	setInterval(() => { if (document.visibilityState === 'visible' && Root.isConnected) RefreshCounts(); }, 60000);
+
+	function Column() { return document.querySelector('[id^="main-content"]'); }
+	function Mount() {
+		const Main = Column();
+		if (!Main) return false;
+		if (Root.parentElement !== Main) Main.append(Root);
+		if (!Layer.isConnected) document.body.append(Layer);
+		document.documentElement.dataset.kittokAdmin = '';
+		return true;
+	}
+	function Unmount() {
+		for (const Clean of Teardown) Clean();
+		Teardown = []; PageKeys = {};
+		Root.remove(); Layer.replaceChildren(); delete document.documentElement.dataset.kittokAdmin;
+		for (const Item of document.querySelectorAll('[data-kittok-admin-nav]')) Item.remove();
+	}
+	for (const Method of ['pushState', 'replaceState']) {
+		const Native = history[Method].bind(history);
+		history[Method] = (...Arguments) => { Native(...Arguments); if (!IsAdminPath() && Root.isConnected) Unmount(); };
+	}
+	addEventListener('kittok-admin-route', () => { if (Root.isConnected) Route(); else location.reload(); });
+	setInterval(() => {
+		if (Root.isConnected && IsAdminPath() && location.pathname + location.search !== Routed) Route();
+		else if (Routed && Root.isConnected !== IsAdminPath()) location.reload();
+	}, 150);
+	const Start = () => {
+		if (!Mount()) return false;
+		history.replaceState(null, '', window.__KittokAdminPath ?? '/admin');
+		Route();
+		return true;
+	};
+	if (!Start()) {
+		const Waiting = new MutationObserver(() => { if (Start()) Waiting.disconnect(); });
+		Waiting.observe(document.documentElement, { childList: true, subtree: true });
+	}
+	new MutationObserver(() => { if (IsAdminPath() && !Root.isConnected && Column()) Mount(); }).observe(document.documentElement, { childList: true, subtree: true });
 })();

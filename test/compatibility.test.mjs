@@ -524,7 +524,7 @@ test('admin panel is admin-only and its actions suspend, change roles, manage in
 	assert.equal((await Admin('overview', undefined, AsFriend())).status, 404);
 	assert.equal((await Admin('overview', undefined, {})).status, 404);
 	const AdminPage = await (await Call('/admin/users/1', 'GET', undefined, { cookie: Cookie })).text();
-	assert.ok(AdminPage.includes('/public/admin.js') && AdminPage.includes(`"csrf":"${Session.csrfToken}"`) && /\/_client\/[^"]+\.css/.test(AdminPage));
+	assert.ok(AdminPage.includes('/public/admin.js') && AdminPage.includes(`"csrf":"${Session.csrfToken}"`) && AdminPage.includes('__UNIVERSAL_DATA_FOR_REHYDRATION__') && AdminPage.includes('/_kittok/bridge.js'));
 	assert.ok((await (await Call('/', 'GET', undefined, { cookie: Cookie })).text()).includes('"role":"admin"'));
 	const Overview = await (await Admin('overview')).json();
 	assert.equal(Overview.stats.users, (await Pool.query('SELECT count(*)::int AS count FROM users')).rows[0].count); assert.equal(Overview.registration, 'invite');
@@ -1148,8 +1148,8 @@ test('pride flags are optional at signup, public, editable by their owner, and c
 	assert.equal((await Call('/_kittok/badges?users=invalid!')).status, 400);
 	assert.equal((await Call('/_kittok/badges?users=' + Array.from({ length: 51 }, (_, Index) => 'user_' + Index).join(','))).status, 400);
 	const Catalog = await (await Call('/_kittok/badges/catalog')).json();
-	assert.equal(Catalog.pride.length, 13); assert.deepEqual(Catalog.community.map(Badge => Badge.id), ['contributor', 'early_member', 'supporter']);
-	for (const Badge of [...Catalog.pride, ...Catalog.community]) {
+	assert.equal(Catalog.pride.length, 13); assert.deepEqual(Object.keys(Catalog), ['pride']);
+	for (const Badge of Catalog.pride) {
 		const Icon = await Call(Badge.icon); assert.equal(Icon.status, 200); assert.match(Icon.headers.get('content-type'), /image\/svg\+xml/);
 		const Svg = await Icon.text(); assert.match(Svg, /^<svg/); assert.ok(!/script|onload|foreignObject|href=/.test(Svg));
 	}
@@ -1165,7 +1165,7 @@ test('pride flags are optional at signup, public, editable by their owner, and c
 	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).users.pride_kitten, []);
 	assert.equal((await Call(`/_kittok/admin/users/${Owner.id}/badges`, 'POST', { prideFlag: 'rainbow', userBadges: ['early_member'] }, Auth())).status, 200);
 	const VideoAuthor = (await (await Call(`/api/item/detail/?itemId=${VideoId}`)).json()).itemInfo.itemStruct.author;
-	assert.deepEqual(VideoAuthor.kittokBadges.map(Badge => Badge.id), ['rainbow', 'early_member']);
+	assert.deepEqual(VideoAuthor.kittokBadges.map(Badge => Badge.id), ['rainbow']);
 	assert.equal((await Call(`/_kittok/admin/users/${Owner.id}/badges`, 'POST', { prideFlag: '', userBadges: [] }, Auth())).status, 200);
 	const GuestSignup = await (await Call('/account?register=1')).text();
 	assert.ok(GuestSignup.includes('None / prefer not to say') && GuestSignup.includes('Shown publicly beside your name'));
@@ -1173,7 +1173,7 @@ test('pride flags are optional at signup, public, editable by their owner, and c
 	await assert.rejects(CreateUser(Pool, { username: 'bad_flag', password: Password, prideFlag: 'fake' }, 'closed', true), /InvalidPrideFlag/);
 });
 
-test('admins manage profile flags and community badges without changing permissions or leaking identity into audit details', async () => {
+test('admins manage profile flags and stored community badges without changing permissions or leaking identity into audit details', async () => {
 	const Target = (await Pool.query("SELECT id FROM users WHERE username='pride_kitten'")).rows[0];
 	const Signed = await Login(Pool, 'pride_kitten', Password);
 	const As = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
@@ -1194,16 +1194,16 @@ test('admins manage profile flags and community badges without changing permissi
 	assert.deepEqual(List.users[0].user_badges, ['contributor', 'supporter']);
 	assert.equal((await Call(`/api/v1/users/pride_kitten/follow`, 'PUT', undefined, Auth())).status, 200);
 	const Following = await (await Call(`/api/user/list/?scene=21&secUid=${Owner.id}`)).json();
-	assert.deepEqual(Following.userList.find(Entry => Entry.user.id === Target.id).user.kittokBadges.map(Badge => Badge.id), ['transgender', 'contributor', 'supporter']);
+	assert.deepEqual(Following.userList.find(Entry => Entry.user.id === Target.id).user.kittokBadges.map(Badge => Badge.id), ['transgender']);
 	const Comment = await (await Call(`/api/comment/publish/?aweme_id=${VideoId}&text=Badge%20order`, 'POST', undefined, As)).json();
-	assert.deepEqual(Comment.comment.user.kittokBadges.map(Badge => Badge.id), ['transgender', 'contributor', 'supporter']);
+	assert.deepEqual(Comment.comment.user.kittokBadges.map(Badge => Badge.id), ['transgender']);
 	const Search = await (await Call('/api/search/user/full/?keyword=pride_kitten')).json();
-	assert.deepEqual(Search.user_list[0].user_info.kittokBadges.map(Badge => Badge.id), ['transgender', 'contributor', 'supporter']);
+	assert.deepEqual(Search.user_list[0].user_info.kittokBadges.map(Badge => Badge.id), ['transgender']);
 	assert.equal((await Call('/api/v1/profile/badges', 'PATCH', { prideFlag: '' }, As)).status, 200);
-	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).users.pride_kitten.map(Badge => Badge.id), ['contributor', 'supporter']);
+	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).users.pride_kitten, []);
 	assert.equal((await Write({ prideFlag: 'nonbinary' })).status, 200);
 	await Stop(); await Start();
-	assert.deepEqual((await (await Call('/api/user/detail/?uniqueId=pride_kitten')).json()).userInfo.user.kittokBadges.map(Badge => Badge.id), ['nonbinary', 'contributor', 'supporter']);
+	assert.deepEqual((await (await Call('/api/user/detail/?uniqueId=pride_kitten')).json()).userInfo.user.kittokBadges.map(Badge => Badge.id), ['nonbinary']);
 	assert.equal((await Write({ userBadges: [] })).status, 200);
 	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).users.pride_kitten.map(Badge => Badge.id), ['nonbinary']);
 	assert.equal((await Write({ prideFlag: '', userBadges: [] })).status, 200);

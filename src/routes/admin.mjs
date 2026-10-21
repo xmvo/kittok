@@ -1,16 +1,18 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Escape, HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { Hash, RequireCsrf, Token } from '../auth.mjs';
 import { RemoveMedia, SaveBrandImage } from '../media.mjs';
 import { AvatarUrl, UserStats } from '../store.mjs';
-import { Asset, ClientDir, LocalAsset, Root } from '../client/archive.mjs';
+import { ClientDir, Root } from '../client/archive.mjs';
 import { BrandSlots, Features, MiscFeatures, SaveSetting, Settings } from '../settings.mjs';
 import { Page } from './account.mjs';
 import { Enforce, DecideReport, ReverseDecision, LiftRestriction, MessageText, ReviewAppeal, Standing } from '../moderation.mjs';
 import { Transaction } from '../db.mjs';
 import { BadgeCatalog, PrideFlag, UserBadges, PublicBadges } from '../badges.mjs';
-import { Public } from '../client/shell.mjs';
+import { Public, Shell } from '../client/shell.mjs';
+
+let ClientPage;
 
 const Categories = ['spam', 'harassment', 'hate', 'nudity', 'violence', 'self_harm', 'misinformation', 'impersonation', 'copyright', 'other'];
 const Before = Value => Value ? Id(Value) : null;
@@ -20,26 +22,6 @@ const ReportSql = `SELECT r.*, rep.username AS reporter, own.username AS owner, 
 	FROM reports r LEFT JOIN users rep ON rep.id = r.reporter_id LEFT JOIN users own ON own.id = r.owner_id LEFT JOIN users res ON res.id = r.resolved_by
 	LEFT JOIN videos v ON r.target_type = 'video' AND v.id = r.target_id LEFT JOIN comments c ON r.target_type = 'comment' AND c.id = r.target_id
 	LEFT JOIN messages mc ON r.target_type = 'message' AND mc.id = r.target_id`;
-
-let Styles;
-function TikTokStyles() {
-	Styles ??= (async () => {
-		const Build = JSON.parse(await readFile(join(ClientDir, 'build.json'), 'utf8'));
-		const Names = new Set();
-		for (const File of await readdir(join(ClientDir, 'assets'))) {
-			for (const Match of (await readFile(join(ClientDir, 'assets', File), 'latin1')).matchAll(/static\/assets\/((?:index|styles)\.[0-9a-f]{8}\.css)/g)) Names.add(Match[1]);
-		}
-		const Found = [];
-		for (const Name of Names) {
-			const Url = `https:${Build.publicPath}/static/assets/${Name}`;
-			const Css = (await Asset(Url).catch(() => Buffer.alloc(0))).toString('utf8');
-			if (Css.includes('--tux-colorTextPrimary')) Found.unshift(LocalAsset(Url));
-			else if (Css.includes('.TUXButton')) Found.push(LocalAsset(Url));
-		}
-		return Found;
-	})().catch(Error => { Styles = undefined; throw Error; });
-	return Styles;
-}
 
 async function Audit(Pool, User, Action, Target, Detail = '') {
 	await Pool.query('INSERT INTO admin_actions(admin_id, action, target, detail) VALUES ($1, $2, $3, $4)', [User.id, Action, Target, Detail.slice(0, 500)]);
@@ -77,12 +59,11 @@ export async function Admin(Context) {
 		RequireMethod(Request, ['GET']);
 		if (!User) { Response.writeHead(303, { location: '/login' }); Response.end(); return true; }
 		if (User.role !== 'admin') throw new HttpError(404, 'NotFound');
-		const Links = (await TikTokStyles().catch(() => [])).map(Href => `<link rel="stylesheet" href="${Escape(Href)}">`).join('');
 		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, misc: MiscFeatures, categories: Categories, badges: BadgeCatalog };
+		ClientPage ??= readFile(join(ClientDir, 'index.html'), 'utf8');
+		const Html = Shell(await ClientPage, Config.Origin, { Config, User }).replace('</head>', `<link rel="stylesheet" href="${Public('admin.css')}"><script id="kittok-admin-boot" type="application/json">${JSON.stringify(Boot).replaceAll('<', '\\u003c')}</script><script src="${Public('admin.js')}" defer></script></head>`);
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-		Response.end(`<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon">
-<script>try{const T=localStorage.getItem('kittok-admin-theme');document.documentElement.dataset.theme=T||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')}catch{}</script>
-${Links}<link rel="stylesheet" href="${Public('admin.css')}"><script id="kittok-admin-boot" type="application/json">${JSON.stringify(Boot).replaceAll('<', '\\u003c')}</script><script src="${Public('admin.js')}" defer></script></head><body><div id="kittok-admin"></div></body></html>`);
+		Response.end(Html);
 		return true;
 	}
 
