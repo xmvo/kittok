@@ -81,11 +81,22 @@
 		}
 		return Found;
 	}
+	function Verified(Host) {
+		if (!Host.closest('a')) return null;
+		for (let Node = Host; Node; Node = Node.parentElement) {
+			if (Node.nextElementSibling?.tagName.toLowerCase() === 'svg') return Node.nextElementSibling;
+			if (Node.tagName === 'A') return null;
+		}
+		return null;
+	}
 	function Render(Host, Username, Badges) {
-		let Row = [...Host.children].find(Child => Child.hasAttribute('data-kittok-badges'));
+		const Badge = Verified(Host);
+		const Inner = [...Host.children].find(Child => Child.hasAttribute('data-kittok-badges'));
+		let Row = Badge ? (Badge.nextElementSibling?.hasAttribute('data-kittok-badges') ? Badge.nextElementSibling : null) : Inner;
+		if (Badge) Inner?.remove();
 		if (!Badges.length) { Row?.remove(); return; }
 		const Signature = Username + ':' + Badges.map(Badge => Badge.id).join(',');
-		if (Row?.dataset.signature === Signature) { if (Row !== Host.lastElementChild) Host.append(Row); return; }
+		if (Row?.dataset.signature === Signature) { if (!Badge && Row !== Host.lastElementChild) Host.append(Row); return; }
 		Row?.remove();
 		Row = document.createElement('span'); Row.className = 'KittokBadges'; Row.dataset.kittokBadges = Username; Row.dataset.signature = Signature;
 		for (const Badge of Badges) {
@@ -93,7 +104,7 @@
 			Image.className = Badge.type; Image.width = Badge.type === 'pride' ? 22 : 17; Image.height = 16;
 			Row.append(Image);
 		}
-		Host.append(Row);
+		if (Badge) Badge.after(Row); else Host.append(Row);
 	}
 	async function Sync() {
 		Timer = null;
