@@ -5,6 +5,7 @@ export const Features = { shop: 'Shop', explore: 'Explore', following: 'Followin
 export const MiscFeatures = {
 	verifiedBadges: ['Verified badges', 'Blue checks on accounts admins verify'],
 	profileBadges: ['Profile badges', 'Pride flags and community badges beside names'],
+	avatarDecorations: ['Avatar decorations', 'Animated frames around avatars, picked from the profile photo editor'],
 	reposts: ['Reposts', 'Repost in the share sheet and the profile Reposts tab'],
 	collections: ['Collections', 'Named collections of favorites'],
 	hashtags: ['Hashtags and mentions', 'Linked #tags and @mentions, tag pages, and mention notices'],

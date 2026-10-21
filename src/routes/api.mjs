@@ -6,6 +6,7 @@ import { UserShape, UserStats, FindUser, Videos, SetRelation, AddComment, SetBlo
 import { ImportVideo, ReceiveVideo } from '../media.mjs';
 import { AssertAllowed, RemovedSql } from '../moderation.mjs';
 import { BadgeCatalog, BadgeSvg, PrideFlag, PublicBadges } from '../badges.mjs';
+import { AvatarDecoration, DecorationCatalog, DecorationImage, PublicDecoration } from '../decorations.mjs';
 import { Misc } from '../settings.mjs';
 import { UnsendMessage } from './im.mjs';
 
@@ -41,8 +42,28 @@ export async function Api(Context) {
 		RequireMethod(Request, ['GET']);
 		const Names = [...new Set((Url.searchParams.get('users') ?? '').split(','))];
 		if (Names.length > 50 || Names.some(Name => !/^[a-z0-9_]{3,24}$/.test(Name))) throw new HttpError(400, 'InvalidUsernames');
-		const Rows = (await Pool.query('SELECT username, pride_flag, user_badges, verified FROM users WHERE username = ANY($1::text[]) AND suspended_at IS NULL', [Names])).rows;
-		Json(Response, { users: Object.fromEntries(Rows.map(Row => [Row.username, PublicBadges(Row)])), verified: Misc.verifiedBadges ? Rows.filter(Row => Row.verified).map(Row => Row.username) : [] }); return true;
+		const Rows = (await Pool.query('SELECT username, pride_flag, user_badges, verified, avatar_decoration FROM users WHERE username = ANY($1::text[]) AND suspended_at IS NULL', [Names])).rows;
+		Json(Response, { users: Object.fromEntries(Rows.map(Row => [Row.username, PublicBadges(Row)])), verified: Misc.verifiedBadges ? Rows.filter(Row => Row.verified).map(Row => Row.username) : [], decorations: Object.fromEntries(Rows.map(Row => [Row.username, PublicDecoration(Row)]).filter(Pair => Pair[1])) }); return true;
+	}
+	if (Path === '/_kittok/decorations/catalog') {
+		RequireMethod(Request, ['GET']);
+		if (!Misc.avatarDecorations) throw new HttpError(404, 'AvatarDecorationsDisabled');
+		Response.setHeader('cache-control', 'public, max-age=3600'); Json(Response, DecorationCatalog); return true;
+	}
+	const Decoration = Path.match(/^\/_kittok\/decorations\/((?:a_)?[0-9a-f]{32})\.png$/);
+	if (Decoration) {
+		RequireMethod(Request, ['GET', 'HEAD']);
+		const Data = await DecorationImage(Config, Decoration[1], Url.searchParams.has('static'));
+		Response.writeHead(200, { 'content-type': 'image/png', 'content-length': Data.length, 'cache-control': 'public, max-age=31536000, immutable' });
+		Response.end(Request.method === 'HEAD' ? undefined : Data); return true;
+	}
+	if (Path === '/api/v1/profile/decoration') {
+		RequireMethod(Request, ['PATCH']); RequireCsrf(Request, User);
+		if (!Misc.avatarDecorations) throw new HttpError(403, 'AvatarDecorationsDisabled');
+		await AssertAllowed(Pool, User, 'profile');
+		const Chosen = AvatarDecoration((await ReadBody(Request)).decoration);
+		await Pool.query('UPDATE users SET avatar_decoration=$2 WHERE id=$1', [User.id, Chosen]);
+		Json(Response, { decoration: PublicDecoration({ avatar_decoration: Chosen }) }); return true;
 	}
 	if (Path === '/api/v1/profile/badges') {
 		RequireMethod(Request, ['PATCH']); RequireCsrf(Request, User);

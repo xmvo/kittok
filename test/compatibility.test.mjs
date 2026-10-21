@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { readFile, readdir, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, readdir, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AssetUrl, ClientDir, LocalAsset, ReadJsonScript, Root, LoginManifestUrl, RewriteAssets } from '../src/client/archive.mjs';
@@ -1568,6 +1568,37 @@ test('the native inbox lists follow requests and approves them with from_user_id
 	const Approved = (await (await Call('/api/notice/multi/?group_list=' + encodeURIComponent(JSON.stringify([{ count: 20, is_mark_read: 0, group: 7, max_time: 0, min_time: 0 }])), 'GET', undefined, AsAsker)).json()).notice_lists[0].notice_list;
 	assert.deepEqual(Approved.map(Notice => [Notice.type, Notice.follow_request_approve?.from_user.unique_id]), [[23, 'owner']]);
 	await Pool.query('UPDATE users SET private_account = false WHERE id = $1', [Owner.id]);
+});
+
+test('avatar decorations come from the Discord catalog, are owner-editable, and serve cached images', async () => {
+	const Signed = await Login(Pool, 'pride_kitten', Password);
+	const As = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	const Catalog = await (await Call('/_kittok/decorations/catalog')).json();
+	const Items = Catalog.collections.flatMap(Collection => Collection.items);
+	assert.equal(Items.length, 644); assert.equal(new Set(Items.map(Item => Item.id)).size, 644);
+	const Pick = Items[0];
+	assert.deepEqual(Object.keys(Pick).sort(), ['id', 'image', 'label', 'name', 'still']);
+	const Update = (Body, Headers = As) => Call('/api/v1/profile/decoration', 'PATCH', Body, Headers);
+	assert.equal((await Update({ decoration: Pick.id }, {})).status, 401);
+	assert.equal((await Update({ decoration: Pick.id }, { cookie: As.cookie })).status, 403);
+	for (const Invalid of ['1', '<script>', [], true, 5]) assert.equal((await Update({ decoration: Invalid })).status, 400);
+	assert.deepEqual((await (await Update({ decoration: Pick.id })).json()).decoration, Pick);
+	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten,owner')).json()).decorations, { pride_kitten: Pick });
+	const Asset = Pick.image.match(/decorations\/(.+)\.png$/)[1];
+	await mkdir(join(Directory, 'decorations'), { recursive: true });
+	await writeFile(join(Directory, 'decorations', `${Asset}-static.png`), 'cached');
+	const Still = await Call(Pick.still);
+	assert.equal(Still.status, 200); assert.equal(Still.headers.get('content-type'), 'image/png'); assert.equal(await Still.text(), 'cached');
+	assert.equal((await Call('/_kittok/decorations/a_00000000000000000000000000000000.png')).status, 404);
+	assert.equal((await Call('/_kittok/decorations/..%2Fsecret.png')).status, 404);
+	const Settings = (await (await Call('/_kittok/admin/settings', 'GET', undefined, Auth())).json()).misc;
+	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: { ...Settings, avatarDecorations: false } }, Auth())).status, 200);
+	assert.equal((await Call('/_kittok/decorations/catalog')).status, 404);
+	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).decorations, {});
+	assert.equal((await Update({ decoration: '' })).status, 403);
+	assert.equal((await Call('/_kittok/admin/settings/misc', 'POST', { value: Settings }, Auth())).status, 200);
+	assert.equal((await Update({ decoration: '' })).status, 200);
+	assert.deepEqual((await (await Call('/_kittok/badges?users=pride_kitten')).json()).decorations, {});
 });
 
 test('misc switches turn Kittok features off and back on without a restart', async () => {
