@@ -6,37 +6,86 @@
 	let Timer, Running = false;
 	const Handle = Value => /^\/@([a-z0-9_]{3,24})\/?$/i.exec(Value)?.[1].toLowerCase();
 	let Flags;
+	const FlagIcon = Flag => {
+		const Icon = document.createElement(Flag.icon ? 'img' : 'span'); Icon.className = 'KittokFlagIcon'; Icon.setAttribute('aria-hidden', 'true');
+		if (Flag.icon) { Icon.src = Flag.icon; Icon.alt = ''; }
+		return Icon;
+	};
 	async function FlagRow() {
 		const Modal = Shown && Instance.account && document.querySelector('[data-e2e="edit-profile-popup"]');
 		const Name = Modal?.querySelector('[data-e2e="edit-profile-name"]')?.parentElement;
 		if (!Name || Modal.querySelector('[data-kittok-flag-row]')) return;
 		const Row = document.createElement('div'); Row.className = Name.className; Row.setAttribute('data-kittok-flag-row', '');
-		const Label = document.createElement('label'); Label.className = Name.children[0].className; Label.textContent = 'Pride flag'; Label.htmlFor = 'kittok-pride-flag';
+		const Label = document.createElement('div'); Label.className = Name.children[0].className; Label.textContent = 'Pride flag'; Label.id = 'kittok-pride-flag-label';
 		const Area = document.createElement('div'); Area.className = Name.children[1]?.className ?? '';
-		const Select = document.createElement('select'); Select.id = 'kittok-pride-flag'; Select.className = (Name.querySelector('input')?.className ?? '') + ' KittokFlagSelect'; Select.disabled = true;
+		const Picker = document.createElement('div'); Picker.className = 'KittokFlagPicker';
+		const Button = document.createElement('button'); Button.type = 'button'; Button.className = (Name.querySelector('input')?.className ?? '') + ' KittokFlagButton'; Button.disabled = true;
+		Button.setAttribute('aria-haspopup', 'listbox'); Button.setAttribute('aria-expanded', 'false'); Button.setAttribute('aria-labelledby', 'kittok-pride-flag-label kittok-pride-flag-value');
+		const Value = document.createElement('span'); Value.id = 'kittok-pride-flag-value'; Value.className = 'KittokFlagValue';
+		Button.innerHTML = '<svg class="KittokFlagCaret" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2"/></svg>'; Button.prepend(Value);
+		const List = document.createElement('ul'); List.className = 'KittokFlagList'; List.setAttribute('role', 'listbox'); List.setAttribute('aria-labelledby', 'kittok-pride-flag-label'); List.tabIndex = -1; List.hidden = true;
 		const Tip = document.createElement('p'); Tip.className = Name.querySelector('p')?.className ?? ''; Tip.setAttribute('role', 'status'); Tip.textContent = 'Optional. Shown beside your name.';
-		Area.append(Select, Tip); Row.append(Label, Area);
+		Picker.append(Button, List); Area.append(Picker, Tip); Row.append(Label, Area);
 		Name.after(Row);
 		try {
 			Flags ??= fetch('/_kittok/badges/catalog').then(Response => { if (!Response.ok) throw new Error('CouldntLoad'); return Response.json(); }).catch(Error => { Flags = null; throw Error; });
 			const [Catalog, Session] = await Promise.all([Flags, fetch('/api/v1/session').then(Response => Response.json())]);
 			if (!Session.user) throw new Error('NotLoggedIn');
-			for (const Flag of [{ id: '', label: 'None' }, ...Catalog.pride]) {
-				const Option = document.createElement('option'); Option.value = Flag.id; Option.textContent = Flag.label; Select.append(Option);
-			}
-			Select.value = Session.user.prideFlag; Select.disabled = false;
-			Select.addEventListener('change', async () => {
-				Select.disabled = true; Tip.textContent = 'Saving';
+			const Choices = [{ id: '', label: 'None' }, ...Catalog.pride];
+			let Current = Session.user.prideFlag, Active = 0;
+			const Options = Choices.map((Flag, Index) => {
+				const Option = document.createElement('li'); Option.id = 'kittok-pride-flag-' + (Flag.id || 'none'); Option.setAttribute('role', 'option'); Option.dataset.id = Flag.id;
+				const Text = document.createElement('span'); Text.textContent = Flag.label;
+				Option.append(FlagIcon(Flag), Text);
+				Option.addEventListener('pointerdown', Event => Event.preventDefault());
+				Option.addEventListener('click', () => Choose(Index));
+				List.append(Option);
+				return Option;
+			});
+			const Show = () => {
+				const Flag = Choices.find(Choice => Choice.id === Current) ?? Choices[0];
+				Value.replaceChildren(FlagIcon(Flag), Object.assign(document.createElement('span'), { textContent: Flag.label }));
+				for (const Option of Options) Option.setAttribute('aria-selected', String(Option.dataset.id === Current));
+			};
+			const Highlight = Index => {
+				Active = (Index + Options.length) % Options.length;
+				for (const [Position, Option] of Options.entries()) Option.classList.toggle('Active', Position === Active);
+				List.setAttribute('aria-activedescendant', Options[Active].id); Options[Active].scrollIntoView({ block: 'nearest' });
+			};
+			const Toggle = Open => {
+				List.hidden = !Open; Button.setAttribute('aria-expanded', String(Open));
+				if (Open) {
+					const Bounds = (Picker.closest('[class*="DivContentContainer"]') ?? document.documentElement).getBoundingClientRect(), Box = Button.getBoundingClientRect();
+					List.classList.toggle('Up', Bounds.bottom - Box.bottom < Math.min(260, List.scrollHeight) + 8 && Box.top - Bounds.top > Bounds.bottom - Box.bottom);
+					Highlight(Math.max(0, Choices.findIndex(Choice => Choice.id === Current))); List.focus();
+				}
+			};
+			async function Choose(Index) {
+				Toggle(false); Button.focus();
+				const Previous = Current; Current = Choices[Index].id; Show();
+				if (Current === Previous) return;
+				Button.disabled = true; Tip.textContent = 'Saving';
 				try {
-					const Response = await fetch('/api/v1/profile/badges', { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-csrf-token': Session.csrfToken }, body: JSON.stringify({ prideFlag: Select.value }) });
+					const Response = await fetch('/api/v1/profile/badges', { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-csrf-token': Session.csrfToken }, body: JSON.stringify({ prideFlag: Current }) });
 					if (!Response.ok) throw new Error('CouldntSave');
 					const Updated = await Response.json();
 					Cache.set(Session.user.uniqueId, { ...(Cache.get(Session.user.uniqueId) ?? { verified: false, decoration: null }), at: Date.now(), badges: Updated.kittokBadges });
 					for (const [Host, Username] of Targets()) if (Username === Session.user.uniqueId) Render(Host, Username, Updated.kittokBadges);
 					Tip.textContent = 'Saved';
-				} catch { Tip.textContent = 'CouldntSave'; }
-				Select.disabled = false;
+				} catch { Current = Previous; Show(); Tip.textContent = 'CouldntSave'; }
+				Button.disabled = false;
+				if (document.activeElement === document.body) Button.focus();
+			}
+			Button.addEventListener('click', () => Toggle(List.hidden));
+			Button.addEventListener('keydown', Event => { if (Event.key === 'ArrowDown' || Event.key === 'ArrowUp') { Event.preventDefault(); Toggle(true); } });
+			List.addEventListener('keydown', Event => {
+				const Keys = { ArrowDown: () => Highlight(Active + 1), ArrowUp: () => Highlight(Active - 1), Home: () => Highlight(0), End: () => Highlight(Options.length - 1), Enter: () => Choose(Active), ' ': () => Choose(Active), Escape: () => { Toggle(false); Button.focus(); }, Tab: () => Toggle(false) };
+				if (!Keys[Event.key]) return;
+				if (Event.key !== 'Tab') { Event.preventDefault(); Event.stopPropagation(); }
+				Keys[Event.key]();
 			});
+			List.addEventListener('focusout', Event => { if (!Picker.contains(Event.relatedTarget)) Toggle(false); });
+			Show(); Button.disabled = false;
 		} catch { Tip.textContent = 'CouldntLoad'; }
 	}
 	function AvatarOwner(Span) {
@@ -53,13 +102,27 @@
 			if (Image.classList.contains('KittokDecoration') || Image.offsetWidth < 20) continue;
 			let Span = Image;
 			for (let Depth = 0; Span && Depth < 4; Depth++, Span = Span.parentElement) {
+				if (Span !== Image && Span.offsetWidth > Image.offsetWidth + 2) { Span = null; break; }
 				const Style = getComputedStyle(Span);
-				if (Style.overflow !== 'visible' && Style.borderRadius === '50%') break;
+				const Radius = parseFloat(Style.borderRadius);
+				if (Style.overflow !== 'visible' && (Style.borderRadius.endsWith('%') ? Radius >= 50 : Radius >= Span.offsetWidth / 2 - 1)) break;
 			}
+			while (Span?.parentElement && Span.parentElement.offsetWidth === Span.offsetWidth && getComputedStyle(Span.parentElement).overflow !== 'visible') Span = Span.parentElement;
 			const Username = Span && Span.tagName !== 'A' && AvatarOwner(Span);
 			if (Username) Found.set(Span, Username);
 		}
 		return Found;
+	}
+	const Watched = new WeakMap();
+	const Resized = new ResizeObserver(Entries => { for (const Entry of Entries) { const Span = Watched.get(Entry.target); if (Span?.isConnected) Place(Span); } });
+	function Place(Span) {
+		const Frame = Span.nextElementSibling, Host = Span.parentElement;
+		if (!Frame?.classList.contains('KittokDecoration') || !Host) return;
+		const Face = Span.tagName === 'IMG' ? Span : Span.querySelector('img') ?? Span;
+		const Outer = Host.getBoundingClientRect(), Inner = Face.getBoundingClientRect();
+		const Scale = Outer.width / (Host.offsetWidth || 1) || 1, Size = Face.offsetWidth;
+		const Values = { width: Size * 1.2, height: Size * 1.2, left: (Inner.left - Outer.left) / Scale - Host.clientLeft - Size * 0.1, top: (Inner.top - Outer.top) / Scale - Host.clientTop - Size * 0.1 };
+		for (const [Property, Pixels] of Object.entries(Values)) Frame.style.setProperty(Property, Pixels + 'px', 'important');
 	}
 	function Decorate(Span, Decoration) {
 		const Host = Span.parentElement;
@@ -71,8 +134,9 @@
 		}
 		if (Frame.getAttribute('src') !== Decoration.image) Frame.src = Decoration.image;
 		if (getComputedStyle(Host).position === 'static') Host.style.position = 'relative';
-		const Size = Span.offsetWidth * 1.2, Offset = Span.offsetWidth * 0.1;
-		Object.assign(Frame.style, { width: Size + 'px', height: Size + 'px', left: Span.offsetLeft - Offset + 'px', top: Span.offsetTop - Offset + 'px' });
+		const Face = Span.tagName === 'IMG' ? Span : Span.querySelector('img') ?? Span;
+		if (!Watched.has(Face)) { Watched.set(Face, Span); Resized.observe(Face); }
+		Place(Span);
 	}
 	function PaintAvatars(Found = Avatars()) {
 		for (const [Span, Username] of Found) if (Cache.has(Username)) Decorate(Span, Cache.get(Username).decoration);
