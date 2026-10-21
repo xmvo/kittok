@@ -81,9 +81,9 @@ async function Decide(Client, Moderator, Input, Thresholds) {
 		video: 'SELECT author_id AS owner, description AS text, cover_name FROM videos WHERE id = $1',
 		comment: 'SELECT author_id AS owner, body AS text, video_id FROM comments WHERE id = $1',
 		user: 'SELECT id AS owner, display_name AS text, username FROM users WHERE id = $1',
-		message: 'SELECT sender_id AS owner, content, conversation_id FROM messages WHERE id = $1',
+		message: 'SELECT sender_id AS owner, content, message_type, conversation_id FROM messages WHERE id = $1',
 	}[Type], [TargetId])).rows[0];
-	if (Target && Type === 'message') { Target.text = MessageText(Target.content); delete Target.content; }
+	if (Target && Type === 'message') { Target.text = MessageText(Target.content) || { 1802: '[Photo]', 1803: '[Video]' }[Target.message_type] || ''; delete Target.content; delete Target.message_type; }
 	if (!Target) throw new HttpError(404, 'TargetNotFound');
 	const Owner = (await Client.query('SELECT id, role, username FROM users WHERE id = $1', [Target.owner])).rows[0];
 	if (Owner.id === Moderator.id || Owner.role === 'admin') throw new HttpError(400, 'CannotModerateAdmin');

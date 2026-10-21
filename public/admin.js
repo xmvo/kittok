@@ -430,7 +430,7 @@
 		let Selected = 0;
 		const Rows = Data.tickets.map((Ticket, Index) => El('tr', { class: Index === 0 ? 'Selected' : '', onclick: () => Navigate(`/admin/review/${Ticket.type}/${Ticket.id}`) },
 			El('td', { style: 'width:1%' }, El('div', { class: 'Row' }, El('span', { class: `Priority P${Math.floor(Ticket.priority / 10)}`, title: `Priority ${Math.floor(Ticket.priority / 10)}` }),
-				Ticket.thumb && Ticket.type === 'video' ? El('img', { class: 'Thumb', src: Ticket.thumb, alt: '', loading: 'lazy' }) : Ticket.type === 'user' ? El('img', { class: 'Avatar', src: Ticket.owner?.avatar, alt: '' }) : El('div', { class: 'Glyph' }, Icon(Ticket.type === 'video' ? 'video' : Ticket.type === 'message' ? 'message' : 'comment')))),
+				Ticket.thumb && ['video', 'message'].includes(Ticket.type) ? El('img', { class: 'Thumb', src: Ticket.thumb, alt: '', loading: 'lazy' }) : Ticket.type === 'user' ? El('img', { class: 'Avatar', src: Ticket.owner?.avatar, alt: '' }) : El('div', { class: 'Glyph' }, Icon(Ticket.type === 'video' ? 'video' : Ticket.type === 'message' ? 'message' : 'comment')))),
 			El('td', {}, El('div', { class: 'Faint', style: 'font-size:11px;margin-bottom:2px' }, `${Cap(TargetNoun[Ticket.type])} · `, El('span', { class: 'Mono' }, Ticket.id)), El('div', { class: 'Clamp' }, Ticket.preview || El('span', { class: 'Faint' }, 'No text'))),
 			El('td', {}, El('div', { class: 'Row', style: 'flex-wrap:wrap;gap:4px' }, Object.entries(Ticket.reasons).sort((A, B) => B[1] - A[1]).slice(0, 3).map(([Reason, Count]) => Chip([PolicyLabel(Reason), Count > 1 ? El('b', {}, ` ${Count}`) : null], Reason === Ticket.top ? 'Brand' : '')))),
 			El('td', { class: 'Num' }, El('b', {}, Ticket.reports)),
@@ -472,7 +472,9 @@
 			C.parent_text && El('div', { class: 'Quote' }, El('span', { class: 'Faint' }, `Replying to @${C.parent_author}`), C.parent_text),
 			El('div', { class: 'Quote Focus' }, El('span', { class: 'Faint' }, `@${Owner?.username} · ${Ago(C.created_at)} ago · ${C.likes} likes${Removed ? ' · Removed' : ''}`), C.text));
 		else if (Type === 'message') Stage = El('div', { class: 'Panel PanelBody Thread' }, El('div', { class: 'Faint', style: 'font-size:11px' }, 'Direct message conversation'),
-			C.thread.map(Row => El('div', { class: `Quote${Row.id === C.id ? ' Focus' : ''}` }, El('span', { class: 'Faint' }, `@${Row.username ?? 'deleted'} · ${Ago(Row.created_at)} ago${Row.id === C.id && Removed ? ' · Removed' : ''}`), Row.text || El('span', { class: 'Faint' }, 'Attachment'))));
+			C.thread.map(Row => El('div', { class: `Quote${Row.id === C.id ? ' Focus' : ''}` }, El('span', { class: 'Faint' }, `@${Row.username ?? 'deleted'} · ${Ago(Row.created_at)} ago${Row.id === C.id && Removed ? ' · Removed' : ''}`),
+				Row.media && (Row.media.kind === 'image' ? El('img', { class: 'MessageMedia', src: Row.media.url, alt: 'Photo', loading: 'lazy' }) : El('video', { class: 'MessageMedia', src: Row.media.url, poster: Row.media.cover, controls: true, muted: true, playsinline: true, preload: 'metadata' })),
+				Row.text || (!Row.media && El('span', { class: 'Faint' }, 'Attachment')))));
 		else Stage = El('div', { class: 'Panel Profile' }, El('img', { class: 'Avatar Large', src: Owner?.avatar, alt: '' }), El('div', {}, El('h2', {}, C.text), El('div', { class: 'Muted' }, `@${Owner?.username}`), El('p', { style: 'margin:8px 0 0;overflow-wrap:anywhere' }, C.bio || El('span', { class: 'Faint' }, 'No bio'))));
 		const Reasons = {}; for (const Report of Data.reports.filter(Row => Row.status === 'open')) Reasons[Report.category] = (Reasons[Report.category] ?? 0) + 1;
 		const MaxReason = Math.max(1, ...Object.values(Reasons));

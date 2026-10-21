@@ -1940,6 +1940,15 @@ test('photo and video messages upload through Kittok, render as native cards, an
 	assert.equal(JSON.parse(Movie.video_model).video_list[0].main_url, `/api/v1/im/media/${Video.uri}`);
 	assert.equal((await Media(AsAlpha, Movie.cover.url_list[0].split('/media/')[1])).headers.get('content-type'), 'image/jpeg');
 	assert.equal((await fetch(`${Origin}/api/v1/im/media/${Video.uri}`, { headers: { cookie: AsAlpha.cookie, range: 'bytes=0-9' } })).status, 206);
+	assert.equal((await Media(AsGamma, `${Video.uri}?review=1`)).status, 404);
+	assert.equal((await (await Call(`/aweme/v2/aweme/feedback/?${new URLSearchParams({ report_type: 'im', reason: 102, object_id: Chat.conversation_short_id, owner_id: Beta.id, msg_list: `${Reply.server_message_id},1` })}`, 'GET', undefined, AsAlpha)).json()).status_code, 0);
+	const Ticket = (await (await Call('/_kittok/admin/tickets?type=message', 'GET', undefined, Auth())).json()).tickets.find(Row => Row.id === Reply.server_message_id);
+	assert.equal(Ticket.preview, '[Video]'); assert.equal(Ticket.thumb, `${Origin}/api/v1/im/media/${Video.uri}/cover?review=1`);
+	const Review = await (await Call(`/_kittok/admin/tickets/message/${Reply.server_message_id}`, 'GET', undefined, Auth())).json();
+	const Shown = Review.content.thread.find(Row => Row.id === Reply.server_message_id).media;
+	assert.equal(Shown.kind, 'video'); assert.equal((await fetch(Shown.url, { headers: { cookie: Cookie } })).status, 200);
+	assert.equal((await fetch(Review.content.thread.find(Row => Row.id === Sent.server_message_id).media.url, { headers: { cookie: Cookie } })).status, 200);
+	assert.equal((await Media(AsGamma, `${Video.uri}?review=1`)).status, 404);
 	assert.equal((await Im(AsAlpha, 702, 'recall_message_body', { conversation_short_id: Chat.conversation_short_id, conversation_type: 1, server_message_id: Sent.server_message_id })).status_code, 0);
 	assert.equal((await Media(AsBeta, Image.uri)).status, 404);
 	assert.equal((await Thread(AsBeta)).find(Message => Message.server_message_id === Sent.server_message_id).content_pb, undefined);

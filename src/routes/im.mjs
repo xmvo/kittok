@@ -540,9 +540,11 @@ async function MessageMedia(Context) {
 	const Served = Url.pathname.match(/^\/api\/v1\/im\/media\/(dm-[0-9a-f-]{36})(\/cover)?$/);
 	if (!Served) return false;
 	RequireMethod(Request, ['GET', 'HEAD']);
+	const Review = Url.searchParams.get('review') === '1' && User?.role === 'admin';
 	const Row = User && (await Pool.query(`SELECT mm.file_name, mm.cover_name FROM message_media mm LEFT JOIN messages m ON m.id = mm.message_id
 		LEFT JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $2
-		WHERE mm.uri = $1 AND (mm.owner_id = $2 OR (me.user_id IS NOT NULL AND m.recalled_at IS NULL AND m.index_in_conversation > me.min_index AND ${Visible}))`, [Served[1], User.id])).rows[0];
+		WHERE mm.uri = $1 AND (mm.owner_id = $2 OR (me.user_id IS NOT NULL AND m.recalled_at IS NULL AND m.index_in_conversation > me.min_index AND ${Visible})
+			OR ($3 AND EXISTS (SELECT 1 FROM reports r JOIN messages reported ON reported.id = r.target_id WHERE r.target_type = 'message' AND reported.conversation_id = m.conversation_id)))`, [Served[1], User.id, Review])).rows[0];
 	if (!Row || (Served[2] && !Row.cover_name)) throw new HttpError(404, 'MediaNotFound');
 	await ServeMedia(Request, Response, Config, Served[2] ? Row.cover_name : Row.file_name, true);
 	return true;
