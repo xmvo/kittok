@@ -17,6 +17,12 @@ All routes are on the instance's configured public origin. Responses are JSON. I
 | POST | `/api/v1/account/data/download` | Form post `{id, csrf, password}` from the same page. Streams a ZIP (`user_data.json`, or one TXT file per list, plus your own videos and profile photo); a wrong password or expired request redirects back to `/ppp` with `error=InvalidPassword` or `ExportExpired` |
 | POST | `/api/v1/im/media?type=image` or `?type=video` | Raw photo (JPEG, PNG, WebP, up to 20 MB) or video (up to 50 MB and 16 seconds) for a direct message, with the CSRF header. Returns `{uri, width, height, duration, cover}`; the uri goes in the message's `send_media_list`. 403 `MessageMediaDisabled` or `MessageRestricted`, 413, 422 `InvalidImage` or `UnsupportedVideo` |
 | GET | `/api/v1/im/media/{uri}`, `/api/v1/im/media/{uri}/cover` | The file (byte ranges supported) or a video's cover, for its sender and for chat members who can still see the message; 404 for everyone else |
+| GET | `/api/v1/im/groups/friends` | Friends who can be added to a group: `{friends: [{id, username, name, avatar}]}` |
+| GET | `/api/v1/im/groups` | Your group chats: `{groups: [{id, title, members}]}` |
+| POST | `/api/v1/im/groups` | JSON `{members, name}`: starts a group with 2 to 31 friends. Returns `{id}`. 403 `OnlyFriendsCanBeAdded`, 400 `GroupNeeds2To31People` |
+| GET, PATCH | `/api/v1/im/groups/{id}` | The group's `{id, name, title, owner, you, limit, members}`; PATCH `{name}` renames it (50 characters, empty for the default name) |
+| POST | `/api/v1/im/groups/{id}/members` | JSON `{members}`: adds your friends; returns `{added, failed}` |
+| DELETE | `/api/v1/im/groups/{id}/members/{user}` | Removes someone (owner only, 403 `OnlyTheOwnerCanRemove`), or leaves when `{user}` is you |
 | POST | `/api/v1/videos/ID/pin` | JSON `{pinned}` on your own video; 409 `PinLimit` past three. Used by the Pin to profile item Kittok adds to the native video menu |
 | POST | `/passport/web/account/set/` | Create username step: mixed `username`, with `x-tt-passport-csrf-token`. A placeholder nickname follows the new name |
 | POST | `/api/v1/users` | Register with `username`, `displayName`, `password`, optional `invite` and `prideFlag` (default `""`, no flag). Cannot choose verification, community badges, or roles |

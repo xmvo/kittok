@@ -42,6 +42,8 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	}
 	if (Config?.Features?.messages !== false && Misc.messageMedia) Parameters.web_dm_multimedia_msg = { vid: 'v2', image_limit: 20, video_limit: 50 };
 	else delete Parameters.web_dm_multimedia_msg;
+	if (Config?.Features?.messages !== false && Misc.groupChats) Parameters.web_dm_group_chat = { vid: 'v2' };
+	else delete Parameters.web_dm_group_chat;
 	if (Legacy?.AppContext) Legacy.AppContext.appContext = App;
 	const Biz = Scope['webapp.biz-context'] ?? Legacy?.BizContext?.bizContext;
 	if (Biz) {
@@ -76,5 +78,5 @@ export function Shell(Raw, Origin, { Config, User } = {}) {
 	const Instance = { name: Config?.Name ?? 'Kittok', account: User ? { username: User.username, displayName: User.display_name, role: User.role } : null, csrfToken: User?.csrf_token ?? null, misc: { ...Misc }, registration: Config?.Registration ?? 'closed', mail: Boolean(Config?.SmtpUrl && Config?.MailFrom) && Config?.MailCodes !== false, announcement: Config?.Announcement?.text ? Config.Announcement : null };
 	const Hidden = Object.entries(Config?.Features ?? {}).filter(([, On]) => !On).flatMap(([Name]) => FeatureSelectors[Name] ?? []);
 	Html = Html.replace(/<title>[\s\S]*?<\/title>/, `<title>${Instance.name.replace(/[<&]/g, '')}</title>`);
-	return Html.replace('<head>', `<head><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="${Public('brand.css')}"><link rel="stylesheet" href="${Public('user-badges.css')}"><link rel="stylesheet" href="${Public('responsive.css')}"><script src="${Public('user-badges.js')}" defer></script><script src="${Public('message-actions.js')}" defer></script><script src="${Public('video-menu.js')}" defer></script>${Hidden.length ? `<style>${Hidden.join(',')}{display:none!important}</style>` : ''}<script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);
+	return Html.replace('<head>', `<head><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="${Public('brand.css')}"><link rel="stylesheet" href="${Public('user-badges.css')}"><link rel="stylesheet" href="${Public('responsive.css')}"><script src="${Public('user-badges.js')}" defer></script><script src="${Public('message-actions.js')}" defer></script><script src="${Public('group-chats.js')}" defer></script><script src="${Public('video-menu.js')}" defer></script>${Hidden.length ? `<style>${Hidden.join(',')}{display:none!important}</style>` : ''}<script id="kittok-instance" type="application/json">${JSON.stringify(Instance).replaceAll('<', '\\u003c')}</script><script src="/_kittok/bridge.js"></script>`);
 }

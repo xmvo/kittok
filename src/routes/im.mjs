@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
-import { HttpError, Json, ReadRaw, RequireMethod } from '../http.mjs';
-import { RequireCsrf } from '../auth.mjs';
+import { HttpError, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
+import { RequireCsrf, RequireUser } from '../auth.mjs';
 import { Transaction } from '../db.mjs';
 import { ReceiveVideo, RemoveMedia, SaveMessageImage, ServeMedia, TranscodeVideo } from '../media.mjs';
 import { Misc } from '../settings.mjs';
-import { BlockedBetween } from '../store.mjs';
+import { AvatarUrl, BlockedBetween } from '../store.mjs';
 import { Codec } from '../im/protobuf.mjs';
 import { Schema } from '../im/schema.mjs';
 import { Push } from '../im/frontier.mjs';
@@ -17,7 +17,8 @@ const Cmd = { SendMessage: 100, MessagesByUser: 200, MessagesByUserInitV2: 203, 
 	MarkConversationDelete: 603, MarkConversationRead: 604, ParticipantsList: 605, ConversationInfoV2: 608, CreateConversationV2: 609, ConversationInfoListV2: 610,
 	MgetParticipants: 654, InputStatus: 411, InputStatusNotify: 510, ReadIndexV3: 2000, MinIndexV3: 2001, UserConversationList: 2006, UnreadCount: 2030, BatchReadIndex: 2038,
 	DeleteMessage: 701, RecallMessage: 702, ModifyMessageProperty: 705, StrangerConversations: 1001, StrangerMessages: 1002, DeleteStrangerMessage: 1003, DeleteStrangerConversation: 1004, DeleteAllStrangerConversations: 1005,
-	MarkStrangerConversationRead: 1006, MarkAllStrangerConversationsRead: 1007, StrangerUnreadCount: 1008, MediaUploadConfig: 2059 };
+	MarkStrangerConversationRead: 1006, MarkAllStrangerConversationsRead: 1007, StrangerUnreadCount: 1008, MediaUploadConfig: 2059,
+	AddParticipants: 650, RemoveParticipants: 651, LeaveConversation: 652, CoreInfo: 901, SetCoreInfo: 902 };
 const Status = { Ok: 0, InvalidRequest: 4, InvalidCommand: 5, UserForbidden: 11, ResourceExhausted: 429, ConversationNotExist: 1001 };
 const SendStatus = { Succeeded: 0, NotInConversation: 1, NotAllowed: 2, CheckFailed: 3, Blocked: 5 };
 const BodyField = Object.fromEntries(Object.entries(Schema.ResponseBody).map(([Field, [Id]]) => [Id, Field]));
@@ -99,20 +100,25 @@ async function Conversations(Pool, Viewer, Where, Values, Requests = false) {
 	const Result = await Pool.query(`SELECT c.*, me.read_index, me.min_index, me.muted, me.request,
 		(SELECT coalesce(max(m.index_in_conversation), 0) FROM messages m WHERE m.conversation_id = c.id) AS last_index,
 		(SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id AND m.index_in_conversation > greatest(me.read_index, me.min_index) AND m.sender_id <> $1 AND m.recalled_at IS NULL AND ${Visible}) AS unread,
-		(SELECT json_agg(json_build_object('user_id', p.user_id::text, 'joined_at', p.joined_at, 'request', p.request) ORDER BY p.joined_at) FROM conversation_members p WHERE p.conversation_id = c.id) AS members
+		(SELECT json_agg(json_build_object('user_id', p.user_id::text, 'joined_at', p.joined_at, 'request', p.request, 'name', pu.display_name) ORDER BY p.joined_at, p.user_id) FROM conversation_members p JOIN users pu ON pu.id = p.user_id WHERE p.conversation_id = c.id) AS members
 		FROM conversations c JOIN conversation_members me ON me.conversation_id = c.id AND me.user_id = $1
 		WHERE ${Requests === null ? '' : `me.request = ${Requests} AND `}EXISTS (SELECT 1 FROM conversation_members peer WHERE peer.conversation_id = c.id AND peer.user_id <> $1) AND ${Where} ORDER BY (SELECT max(m.id) FROM messages m WHERE m.conversation_id = c.id) DESC NULLS LAST, c.id DESC`, [Viewer, ...Values]);
 	return Result.rows;
 }
 
+const OwnerOf = Row => String(Row.owner_id ?? Row.members[0]?.user_id ?? '0');
+const GroupName = (Row, Viewer) => Row.name || Row.members.filter(Member => Member.user_id !== Viewer).slice(0, 3).map(Member => Member.name).join(', ');
+
 function ConversationShape(Row, Viewer) {
-	const Base = { conversation_id: Row.conversation_key, conversation_short_id: Row.id, conversation_type: Row.conversation_type, inbox_type: Row.request ? 3 : 0 };
-	const Participants = Row.members.map((Member, Index) => ({ user_id: Member.user_id, sec_uid: Member.user_id, sort_order: String(Index), role: Member.user_id === String(Row.creator_id) ? 1 : 0 }));
+	const Base = { conversation_id: Row.conversation_key, conversation_short_id: Row.id, conversation_type: Row.conversation_type, inbox_type: InboxOf(Row, Row.request) };
+	const Group = Row.conversation_type === 2, Owner = Group ? OwnerOf(Row) : String(Row.creator_id ?? '0');
+	const Participants = Row.members.map((Member, Index) => ({ user_id: Member.user_id, sec_uid: Member.user_id, sort_order: String(Index), role: Member.user_id === Owner ? 1 : 0 }));
 	return {
 		...Base, ticket: 'kittok', participants_count: Participants.length, is_participant: true, badge_count: Row.unread, badge_count_v2: Row.unread,
 		first_page_participants: { participants: Participants, has_more: false, cursor: '0' },
 		user_info: Participants.find(Participant => Participant.user_id === Viewer),
-		conversation_core_info: { ...Base, info_version: '1', owner: Row.creator_id ?? '0', creator_uid: Row.creator_id ?? '0', ext: Row.request ? { stranger: Viewer } : {}, first_message_timestamp: String(new Date(Row.created_at).getTime()) },
+		conversation_core_info: { ...Base, info_version: String(Row.info_version ?? 1), owner: Owner, sec_owner: Owner, creator_uid: Row.creator_id ?? '0', ext: Row.request ? { stranger: Viewer } : {}, first_message_timestamp: String(new Date(Row.created_at).getTime()),
+			...(Group ? { name: GroupName(Row, Viewer), icon: '/public/group.svg' } : {}) },
 		conversation_setting_info: { ...Base, min_index: Row.min_index, min_index_v2: Row.min_index, read_index: Row.read_index, read_index_v2: Row.read_index, mute: Row.muted ? 1 : 0, stick_on_top: 0, setting_version: '1', favorite: 0 },
 	};
 }
@@ -125,16 +131,19 @@ async function Conversation(Pool, Viewer, Body) {
 	return Row;
 }
 
-async function UserCursor(Pool, Viewer, Before = null, RequestInbox = false) {
-	const Result = await Pool.query(`SELECT coalesce(max(m.id), 0)::text AS cursor FROM messages m JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1
-		WHERE m.index_in_conversation > me.min_index AND me.request = $3 AND (NOT $3 OR (${RequestVisible})) AND ($2::bigint IS NULL OR m.id < $2)`, [Viewer, Before, RequestInbox]);
+const InboxOf = (Room, RequestInbox = false) => Room.conversation_type === 2 ? 1 : RequestInbox ? 3 : 0;
+const TypeOf = Inbox => Inbox === 1 ? 2 : 1;
+
+async function UserCursor(Pool, Viewer, Before = null, RequestInbox = false, Type = 1) {
+	const Result = await Pool.query(`SELECT coalesce(max(m.id), 0)::text AS cursor FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1
+		WHERE m.index_in_conversation > me.min_index AND me.request = $3 AND (NOT $3 OR (${RequestVisible})) AND ($2::bigint IS NULL OR m.id < $2) AND c.conversation_type = $4`, [Viewer, Before, RequestInbox, Type]);
 	return Result.rows[0].cursor;
 }
 
-async function UserMessages(Pool, Viewer, After, Limit, RequestInbox = false) {
+async function UserMessages(Pool, Viewer, After, Limit, RequestInbox = false, Type = 1) {
 	const Result = await Pool.query(`SELECT ${MessageColumns} FROM messages m JOIN conversations c ON c.id = m.conversation_id
 		JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1
-		WHERE m.id > $2 AND m.index_in_conversation > me.min_index AND me.request = $4 AND (NOT $4 OR (${RequestVisible})) AND ${Visible} ORDER BY m.id LIMIT $3`, [Viewer, After, Limit + 1, RequestInbox]);
+		WHERE m.id > $2 AND m.index_in_conversation > me.min_index AND me.request = $4 AND (NOT $4 OR (${RequestVisible})) AND ${Visible} AND c.conversation_type = $5 ORDER BY m.id LIMIT $3`, [Viewer, After, Limit + 1, RequestInbox, Type]);
 	return { Rows: Result.rows.slice(0, Limit), HasMore: Result.rows.length > Limit };
 }
 
@@ -172,6 +181,117 @@ async function CreateDirect(Pool, Viewer, Participants) {
 		await Client.query('UPDATE conversation_members SET request = false WHERE conversation_id = $1 AND user_id = $2', [Id, Viewer]);
 	});
 	return (await Conversations(Pool, Viewer, 'c.conversation_key = $2', [Key], null))[0];
+}
+
+const GroupLimit = 32;
+async function Friends(Pool, Viewer, Ids) {
+	const Result = await Pool.query(`SELECT u.id::text FROM users u WHERE u.id = ANY($2::bigint[]) AND u.id <> $1 AND u.suspended_at IS NULL AND u.dm_friends <> 3
+		AND EXISTS (SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) AND EXISTS (SELECT 1 FROM follows WHERE follower_id = u.id AND following_id = $1)
+		AND NOT ${BlockedBetween('$1::bigint', 'u.id')}`, [Viewer, Ids]);
+	return Result.rows.map(Row => Row.id);
+}
+
+const Ids = Values => [...new Set((Array.isArray(Values) ? Values : []).map(String).filter(Value => /^\d{1,19}$/.test(Value)))];
+const CleanName = Value => String(Value ?? '').replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 50);
+
+const Notices = { Created: 103112, Removed: 103102, Left: 103104, Added: 103105, Renamed: 103106 };
+async function Notice(Client, RoomId, Actor, Kind, Objects = [], Extra = {}) {
+	const People = (await Client.query('SELECT id::text, display_name FROM users WHERE id = ANY($1::bigint[])', [[Actor, ...Objects]])).rows;
+	const Person = Id => ({ uid: String(Id), sec_uid: String(Id), nickname: People.find(Row => Row.id === String(Id))?.display_name ?? '' });
+	const Content = JSON.stringify({ aweType: Kind, subject_users: [Person(Actor)], object_users: Objects.map(Person), max_display_subject_users: 10, max_display_object_users: 10, ...Extra });
+	await Client.query('SELECT pg_advisory_xact_lock(741950193)');
+	return (await Client.query(`INSERT INTO messages(conversation_id, sender_id, client_message_id, message_type, content, ext, index_in_conversation)
+		SELECT $1, $2, $3, 1031, $4, '{}', coalesce(max(index_in_conversation), 0) + 1 FROM messages WHERE conversation_id = $1 RETURNING *`, [RoomId, Actor, `notice:${randomUUID()}`, Content])).rows[0];
+}
+
+async function Deliver(Pool, Room, Row, Members = Room.members.map(Member => Member.user_id)) {
+	for (const UserId of Members) {
+		const Member = Room.members.find(Entry => Entry.user_id === UserId);
+		const RequestInbox = Boolean(Member?.request) && UserId !== String(Row.sender_id);
+		const Message = MessageShape({ ...Row, conversation_key: Room.conversation_key, conversation_type: Room.conversation_type }, RequestInbox ? UserId : undefined);
+		const Previous = await UserCursor(Pool, UserId, Row.id, RequestInbox, Room.conversation_type);
+		const Unread = (await Pool.query(`SELECT count(*)::int AS count FROM messages m JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $2
+			WHERE m.conversation_id = $1 AND m.sender_id <> $2 AND m.index_in_conversation > greatest(me.read_index, me.min_index)`, [Room.id, UserId])).rows[0]?.count ?? 0;
+		PushTo([UserId], Envelope(Cmd.NewMessageNotify, {
+			conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, notify_type: 1, message: Message, badge_count: Unread, badge_count_v2: Unread, ref_msg_info: Message.reference_info,
+			previous_cursor: Previous, next_cursor: Row.id, index_in_conversation: Row.index_in_conversation, index_in_conversation_v2: Row.index_in_conversation,
+		}, InboxOf(Room, RequestInbox)));
+	}
+}
+
+export async function CreateGroup(Pool, Viewer, Participants, Name = '') {
+	if (!Misc.groupChats) throw new ImError(Status.InvalidRequest, 'GroupChatsOff');
+	const Others = Ids(Participants).filter(Id => Id !== Viewer);
+	if (Others.length < 2 || Others.length >= GroupLimit) throw new ImError(Status.InvalidRequest, 'GroupNeeds2To31People');
+	if ((await Friends(Pool, Viewer, Others)).length !== Others.length) throw new ImError(Status.UserForbidden, 'OnlyFriendsCanBeAdded');
+	if (await ActiveRestriction(Pool, Viewer, 'message')) throw new ImError(Status.UserForbidden, 'MessageRestricted');
+	const { Id, Notice: Created } = await Transaction(Pool, async Client => {
+		const Id = (await Client.query("INSERT INTO conversations(conversation_key, conversation_type, creator_id, owner_id, name) VALUES ('group:' || gen_random_uuid(), 2, $1, $1, $2) RETURNING id", [Viewer, CleanName(Name)])).rows[0].id;
+		await Client.query('UPDATE conversations SET conversation_key = id::text WHERE id = $1', [Id]);
+		await Client.query('INSERT INTO conversation_members(conversation_id, user_id, joined_at) SELECT $1, member, now() + (position * interval \'1 microsecond\') FROM unnest($2::bigint[]) WITH ORDINALITY AS list(member, position)', [Id, [Viewer, ...Others]]);
+		return { Id, Notice: await Notice(Client, Id, Viewer, Notices.Created, Others) };
+	});
+	const Room = (await Conversations(Pool, Viewer, 'c.id = $2', [Id], null))[0];
+	await Deliver(Pool, Room, Created);
+	return Room;
+}
+
+async function GroupOf(Pool, Viewer, Body) {
+	const Room = await Conversation(Pool, Viewer, Body);
+	if (Room.conversation_type !== 2) throw new ImError(Status.InvalidRequest, 'NotAGroup');
+	return Room;
+}
+
+export async function AddMembers(Pool, Viewer, Body, Wanted) {
+	const Room = await GroupOf(Pool, Viewer, Body);
+	const Fresh = Ids(Wanted).filter(Id => !Room.members.some(Member => Member.user_id === Id));
+	const Allowed = (await Friends(Pool, Viewer, Fresh)).slice(0, Math.max(GroupLimit - Room.members.length, 0));
+	if (Allowed.length) {
+		const Added = await Transaction(Pool, async Client => {
+			await Client.query('INSERT INTO conversation_members(conversation_id, user_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING', [Room.id, Allowed]);
+			await Client.query('UPDATE conversations SET info_version = info_version + 1 WHERE id = $1', [Room.id]);
+			return Notice(Client, Room.id, Viewer, Notices.Added, Allowed);
+		});
+		await Deliver(Pool, (await Conversations(Pool, Viewer, 'c.id = $2', [Room.id], null))[0], Added);
+	}
+	return { Added: Allowed, Failed: Fresh.filter(Id => !Allowed.includes(Id)) };
+}
+
+export async function RemoveMembers(Pool, Viewer, Body, Wanted) {
+	const Room = await GroupOf(Pool, Viewer, Body);
+	if (OwnerOf(Room) !== Viewer) throw new ImError(Status.UserForbidden, 'OnlyTheOwnerCanRemove');
+	const Leaving = Ids(Wanted).filter(Id => Id !== Viewer && Room.members.some(Member => Member.user_id === Id));
+	if (!Leaving.length) return [];
+	const Removed = await Transaction(Pool, async Client => {
+		await Client.query('DELETE FROM conversation_members WHERE conversation_id = $1 AND user_id = ANY($2::bigint[])', [Room.id, Leaving]);
+		await Client.query('UPDATE conversations SET info_version = info_version + 1 WHERE id = $1', [Room.id]);
+		return Notice(Client, Room.id, Viewer, Notices.Removed, Leaving);
+	});
+	await Deliver(Pool, Room, Removed, Room.members.map(Member => Member.user_id).filter(Id => !Leaving.includes(Id)));
+	return Leaving;
+}
+
+export async function LeaveGroup(Pool, Viewer, Body) {
+	const Room = await GroupOf(Pool, Viewer, Body);
+	const Rest = Room.members.map(Member => Member.user_id).filter(Id => Id !== Viewer);
+	const Left = await Transaction(Pool, async Client => {
+		await Client.query('DELETE FROM conversation_members WHERE conversation_id = $1 AND user_id = $2', [Room.id, Viewer]);
+		await Client.query('UPDATE conversations SET info_version = info_version + 1, owner_id = CASE WHEN $2 THEN $3::bigint ELSE owner_id END WHERE id = $1', [Room.id, OwnerOf(Room) === Viewer, Rest[0] ?? null]);
+		return Rest.length ? Notice(Client, Room.id, Viewer, Notices.Left) : null;
+	});
+	if (Left) await Deliver(Pool, Room, Left, Rest);
+}
+
+export async function RenameGroup(Pool, Viewer, Body, Name) {
+	const Room = await GroupOf(Pool, Viewer, Body);
+	const Clean = CleanName(Name);
+	if (Clean === Room.name) return Room;
+	const Renamed = await Transaction(Pool, async Client => {
+		await Client.query('UPDATE conversations SET name = $2, info_version = info_version + 1 WHERE id = $1', [Room.id, Clean]);
+		return Notice(Client, Room.id, Viewer, Notices.Renamed, [], { group_name: Clean });
+	});
+	await Deliver(Pool, Room, Renamed);
+	return (await Conversations(Pool, Viewer, 'c.id = $2', [Room.id], null))[0];
 }
 
 async function SendMessage(Context, Body) {
@@ -212,19 +332,7 @@ async function SendMessage(Context, Body) {
 		return { ...Inserted.rows[0], conversation_key: Room.conversation_key, conversation_type: Room.conversation_type, media: Media.length ? Media.map(Row => Row.media) : null };
 	});
 	if (Row.Limited) return { ...Fail(SendStatus.CheckFailed), check_code: '7195', check_message: JSON.stringify({ status_code: 7195, status_msg: { msg_content: { tips: 'You can send up to 3 messages until this person accepts your message request.', template: [] } } }) };
-	if (!Row.Repeated) {
-		for (const Member of Room.members) {
-			const RequestInbox = Member.request && Member.user_id !== User.id;
-			const Message = MessageShape(Row, RequestInbox ? Member.user_id : undefined);
-			const Previous = await UserCursor(Pool, Member.user_id, Row.id, RequestInbox);
-			const Unread = (await Pool.query(`SELECT count(*)::int AS count FROM messages m JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $2
-				WHERE m.conversation_id = $1 AND m.sender_id <> $2 AND m.index_in_conversation > greatest(me.read_index, me.min_index)`, [Room.id, Member.user_id])).rows[0].count;
-			PushTo([Member.user_id], Envelope(Cmd.NewMessageNotify, {
-				conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, notify_type: 1, message: Message, badge_count: Unread, badge_count_v2: Unread, ref_msg_info: Message.reference_info,
-				previous_cursor: Previous, next_cursor: Row.id, index_in_conversation: Row.index_in_conversation, index_in_conversation_v2: Row.index_in_conversation,
-			}, RequestInbox ? 3 : 0));
-		}
-	}
+	if (!Row.Repeated) await Deliver(Pool, Room, Row);
 	return { status: SendStatus.Succeeded, server_message_id: Row.id, client_message_id: ClientId, check_code: '0', check_message: '', conversation: ConversationShape(await Conversation(Pool, User.id, Body), User.id) };
 }
 
@@ -237,26 +345,26 @@ const Handlers = {
 		return { configs: [1, 2].map(Type => ({ type: Type, resource_space: 'kittok', host: Host, current_time: String(Now), expiry_time: String(Now + 3600000), access_key: 'kittok', session_token: 'kittok', secret_access_key: 'kittok' })) };
 	},
 	async [Cmd.MessagesByUserInitV2]({ Pool, User, InboxType }) {
-		const RequestInbox = InboxType === 3;
-		const Rooms = RequestInbox ? await Requests(Pool, User.id) : await Conversations(Pool, User.id, 'true', []);
+		const RequestInbox = InboxType === 3, Type = TypeOf(InboxType);
+		const Rooms = RequestInbox ? await Requests(Pool, User.id) : await Conversations(Pool, User.id, 'c.conversation_type = $2', [Type]);
 		const Recent = await Pool.query(`SELECT * FROM (SELECT ${MessageColumns}, row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.index_in_conversation DESC) AS rank
 			FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN conversation_members me ON me.conversation_id = m.conversation_id AND me.user_id = $1
-			WHERE m.index_in_conversation > me.min_index AND me.request = $2 AND (NOT $2 OR (${RequestVisible})) AND ${Visible}) recent WHERE rank <= 20 ORDER BY id`, [User.id, RequestInbox]);
+			WHERE m.index_in_conversation > me.min_index AND me.request = $2 AND (NOT $2 OR (${RequestVisible})) AND ${Visible} AND c.conversation_type = $3) recent WHERE rank <= 20 ORDER BY id`, [User.id, RequestInbox, Type]);
 		const Allowed = new Set(Rooms.map(Room => Room.id));
-		const Cursor = await UserCursor(Pool, User.id, null, RequestInbox);
+		const Cursor = await UserCursor(Pool, User.id, null, RequestInbox, Type);
 		return { conversations: Rooms.map(Row => ConversationShape(Row, User.id)), messages: Recent.rows.filter(Row => !RequestInbox || Allowed.has(Row.conversation_id)).map(Row => MessageShape(Row, RequestInbox ? User.id : undefined)), per_user_cursor: Cursor, next_cursor: Cursor, has_more: false, cmd_start_index: '0', next_conversation_version: '0' };
 	},
 	async [Cmd.MessagesByUser]({ Pool, User, InboxType }, Body) {
 		const After = String(Body.cursor ?? '0');
-		const Page = await UserMessages(Pool, User.id, After, Math.min(Math.max(Number(Body.limit) || 50, 1), 200), InboxType === 3);
+		const Page = await UserMessages(Pool, User.id, After, Math.min(Math.max(Number(Body.limit) || 50, 1), 200), InboxType === 3, TypeOf(InboxType));
 		return { messages: Page.Rows.map(Row => MessageShape(Row, InboxType === 3 ? User.id : undefined)), next_cursor: Page.Rows.at(-1)?.id ?? After, has_more: Page.HasMore, next_conversation_version: '0', next_cmd_index: '0' };
 	},
 	async [Cmd.MessagesByUserCombo]({ Pool, User }, Body) {
 		const Inboxes = await Promise.all((Body.inboxes ?? []).slice(0, 5).map(async Inbox => {
 			const After = String(Inbox.cursor ?? '0');
 			const Base = { inbox_type: Inbox.inbox_type ?? 0, cursor_type: Inbox.cursor_type ?? 0, next_interval: '30', status_code: 0 };
-			if (![0, 3].includes(Inbox.inbox_type ?? 0) || (Inbox.cursor_type ?? 0) !== 0) return { ...Base, messages: [], next_cursor: After, has_more: false };
-			const Page = await UserMessages(Pool, User.id, After, Math.min(Math.max(Number(Inbox.limit) || 50, 1), 200), Inbox.inbox_type === 3);
+			if (![0, 1, 3].includes(Inbox.inbox_type ?? 0) || (Inbox.cursor_type ?? 0) !== 0) return { ...Base, messages: [], next_cursor: After, has_more: false };
+			const Page = await UserMessages(Pool, User.id, After, Math.min(Math.max(Number(Inbox.limit) || 50, 1), 200), Inbox.inbox_type === 3, TypeOf(Inbox.inbox_type ?? 0));
 			return { ...Base, messages: Page.Rows.map(Row => MessageShape(Row, Inbox.inbox_type === 3 ? User.id : undefined)), next_cursor: Page.Rows.at(-1)?.id ?? After, has_more: Page.HasMore };
 		}));
 		return { inboxes: Inboxes, need_reset: false };
@@ -276,10 +384,10 @@ const Handlers = {
 		const Row = { ...Updated.rows[0], conversation_key: Room.conversation_key, conversation_type: Room.conversation_type };
 		for (const Member of Room.members) {
 			const RequestInbox = Member.request;
-			const Cursor = await UserCursor(Pool, Member.user_id, null, RequestInbox);
+			const Cursor = await UserCursor(Pool, Member.user_id, null, RequestInbox, Room.conversation_type);
 			PushTo([Member.user_id], Envelope(Cmd.NewMessageNotify, { conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, previous_cursor: Cursor, next_cursor: Cursor,
 				message: { ...MessageShape({ ...Row, recalled_at: null, message_type: 50021, content: '{}', client_message_id: `recall:${Row.id}` }, RequestInbox ? Member.user_id : undefined), ext: { 's:server_message_id': Row.id, 's:is_recalled': 'true', ...(RequestInbox ? { stranger: Member.user_id } : {}) } }
-			}, RequestInbox ? 3 : 0));
+			}, InboxOf(Room, RequestInbox)));
 		}
 		return null;
 	},
@@ -312,16 +420,35 @@ const Handlers = {
 		if (Row.Rejected) return Fail(2);
 		for (const Member of Room.members) {
 			const RequestInbox = Member.request;
-			const Cursor = await UserCursor(Pool, Member.user_id, null, RequestInbox);
+			const Cursor = await UserCursor(Pool, Member.user_id, null, RequestInbox, Room.conversation_type);
 			PushTo([Member.user_id], Envelope(Cmd.NewMessageNotify, { conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, previous_cursor: Cursor, next_cursor: Cursor,
 				message: { ...MessageShape({ ...Row, message_type: 70002, content: '{}' }, RequestInbox ? Member.user_id : undefined), ext: { 's:client_message_id': Row.client_message_id, 's:server_message_id': Row.id, ...(RequestInbox ? { stranger: Member.user_id } : {}) } }
-			}, RequestInbox ? 3 : 0));
+			}, InboxOf(Room, RequestInbox)));
 		}
 		return { status: 0, version: String(Row.property_version) };
 	},
 	async [Cmd.CreateConversationV2]({ Pool, User }, Body) {
-		if (Number(Body.conversation_type ?? 1) !== 1) throw new ImError(Status.InvalidRequest, 'GroupChatsUnsupported');
-		return { conversation: ConversationShape(await CreateDirect(Pool, User.id, Body.participants ?? []), User.id), status: 0, check_code: '0' };
+		const Room = Number(Body.conversation_type ?? 1) === 2 ? await CreateGroup(Pool, User.id, Body.participants ?? [], Body.name) : await CreateDirect(Pool, User.id, Body.participants ?? []);
+		return { conversation: ConversationShape(Room, User.id), status: 0, check_code: '0' };
+	},
+	async [Cmd.AddParticipants]({ Pool, User }, Body) {
+		const { Added, Failed } = await AddMembers(Pool, User.id, Body, Body.participants);
+		return { success_participants: Added, failed_participants: Failed, status: 0, check_code: '0', check_message: '' };
+	},
+	async [Cmd.RemoveParticipants]({ Pool, User }, Body) {
+		const Removed = await RemoveMembers(Pool, User.id, Body, Body.participants);
+		return { failed_participants: Ids(Body.participants).filter(Id => !Removed.includes(Id)), status: 0, check_code: '0', check_message: '' };
+	},
+	async [Cmd.LeaveConversation]({ Pool, User }, Body) {
+		await LeaveGroup(Pool, User.id, Body);
+		return null;
+	},
+	async [Cmd.CoreInfo]({ Pool, User }, Body) {
+		return { conversation_core_info: ConversationShape(await Conversation(Pool, User.id, Body), User.id).conversation_core_info };
+	},
+	async [Cmd.SetCoreInfo]({ Pool, User }, Body) {
+		const Room = Body.is_name_set === false ? await GroupOf(Pool, User.id, Body) : await RenameGroup(Pool, User.id, Body, Body.name);
+		return { conversation_core_info: ConversationShape(Room, User.id).conversation_core_info, status: 0, check_code: '0', check_message: '' };
 	},
 	async [Cmd.ConversationInfoV2]({ Pool, User }, Body) {
 		return { conversation_info: ConversationShape(await Conversation(Pool, User.id, Body), User.id) };
@@ -334,7 +461,7 @@ const Handlers = {
 	},
 	async [Cmd.UserConversationList]({ Pool, User, InboxType }, Body) {
 		const Offset = Math.max(Number(Body.cursor) || 0, 0), Limit = Math.min(Math.max(Number(Body.limit) || 50, 1), 100);
-		const Rows = InboxType === 3 ? await Requests(Pool, User.id) : await Conversations(Pool, User.id, 'true', []);
+		const Rows = InboxType === 3 ? await Requests(Pool, User.id) : await Conversations(Pool, User.id, 'c.conversation_type = $2', [TypeOf(InboxType)]);
 		const Page = Rows.slice(Offset, Offset + Limit);
 		return { list: Page.map(Row => ConversationShape(Row, User.id)), has_more: Offset + Limit < Rows.length, next_cursor: String(Offset + Page.length) };
 	},
@@ -355,7 +482,7 @@ const Handlers = {
 		const Index = BigInt(Body.read_message_index ?? '0') > BigInt(Room.last_index) ? Room.last_index : String(Body.read_message_index ?? '0');
 		await Pool.query('UPDATE conversation_members SET read_index = greatest(read_index, $3) WHERE conversation_id = $1 AND user_id = $2', [Room.id, User.id, Index]);
 		const Peers = (await Disclosures(Pool, User.id, Room)).filter(Peer => Peer.read_status && !Peer.pending && !Peer.blocked).map(Peer => Peer.other);
-		PushTo([User.id, ...Peers], Envelope(Cmd.MarkReadNotify, { conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, read_index: Index, read_index_v2: Index, user_id: User.id }));
+		PushTo([User.id, ...Peers], Envelope(Cmd.MarkReadNotify, { conversation_id: Room.conversation_key, conversation_type: Room.conversation_type, read_index: Index, read_index_v2: Index, user_id: User.id }, InboxOf(Room)));
 		return null;
 	},
 	async [Cmd.MarkConversationReadV3](Context, Body) { return Handlers[Cmd.MarkConversationRead](Context, Body); },
@@ -405,7 +532,7 @@ const Handlers = {
 	async [Cmd.InputStatus]({ Pool, User }, Body) {
 		const Room = await Conversation(Pool, User.id, Body);
 		PushTo((await Disclosures(Pool, User.id, Room)).filter(Peer => !Peer.pending && !Peer.blocked).map(Peer => Peer.other), Envelope(Cmd.InputStatusNotify, {
-			sender: User.id, conversation_id: Room.conversation_key, conversation_short_id: Room.id, conversation_type: Room.conversation_type, input_status: Number(Body.status ?? 0), create_time: String(Date.now()) }));
+			sender: User.id, conversation_id: Room.conversation_key, conversation_short_id: Room.id, conversation_type: Room.conversation_type, input_status: Number(Body.status ?? 0), create_time: String(Date.now()) }, InboxOf(Room)));
 		return {};
 	},
 	async [Cmd.StrangerConversations]({ Pool, User }, Body) {
@@ -504,7 +631,7 @@ export async function HandleRequest(Context, Bytes) {
 		}
 		const Input = Request.body?.[RequestField[FieldOf(Request.cmd)]] ?? Object.values(Request.body ?? {})[0] ?? {};
 		const InboxType = Request.inbox_type ?? 0;
-		const Body = ![0, 3].includes(InboxType) && EmptyInbox[Request.cmd] ? EmptyInbox[Request.cmd](Input) : await Handler({ ...Context, InboxType }, Input);
+		const Body = ![0, 1, 3].includes(InboxType) && EmptyInbox[Request.cmd] ? EmptyInbox[Request.cmd](Input) : await Handler({ ...Context, InboxType }, Input);
 		if (Body) Response.body = { [BodyField[FieldOf(Request.cmd)]]: Body };
 	} catch (Error) {
 		if (Error instanceof ImError) { Response.status_code = Error.Code; Response.error_desc = Error.message; }
@@ -550,9 +677,65 @@ async function MessageMedia(Context) {
 	return true;
 }
 
+async function Groups(Context) {
+	const { Request, Response, Url, Pool, User, Config, Limiter } = Context;
+	RequireUser(User);
+	if (Config.Features?.messages === false || !Misc.groupChats) throw new HttpError(403, 'GroupChatsOff');
+	const Run = async Work => {
+		try { return await Work(); } catch (Failure) {
+			if (!(Failure instanceof ImError)) throw Failure;
+			throw new HttpError({ [Status.UserForbidden]: 403, [Status.ConversationNotExist]: 404 }[Failure.Code] ?? 400, Failure.message);
+		}
+	};
+	const Path = Url.pathname.slice('/api/v1/im/groups'.length);
+	if (Path === '/friends') {
+		RequireMethod(Request, ['GET']);
+		const Rows = (await Pool.query(`SELECT u.id::text, u.username, u.display_name, u.avatar_name FROM users u WHERE u.id <> $1 AND u.suspended_at IS NULL AND u.dm_friends <> 3
+			AND EXISTS (SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = u.id) AND EXISTS (SELECT 1 FROM follows WHERE follower_id = u.id AND following_id = $1)
+			AND NOT ${BlockedBetween('$1::bigint', 'u.id')} ORDER BY lower(u.display_name), u.id LIMIT 500`, [User.id])).rows;
+		Json(Response, { friends: Rows.map(Row => ({ id: Row.id, username: Row.username, name: Row.display_name, avatar: AvatarUrl(Row, Config.Origin) })) }); return true;
+	}
+	if (Request.method !== 'GET') { RequireCsrf(Request, User); Limiter.Hit(`groups:${User.id}`, 60); }
+	if (Path === '' && Request.method === 'GET') {
+		const Rooms = await Conversations(Pool, User.id, 'c.conversation_type = 2', []);
+		Json(Response, { groups: Rooms.map(Room => ({ id: String(Room.id), title: GroupName(Room, User.id), members: Room.members.length })) }); return true;
+	}
+	if (Path === '') {
+		RequireMethod(Request, ['POST']);
+		Limiter.Hit(`groupcreate:${User.id}`, 10, 3600000);
+		const Body = await ReadBody(Request);
+		const Room = await Run(() => CreateGroup(Pool, User.id, Body.members, Body.name));
+		Json(Response, { id: String(Room.id) }); return true;
+	}
+	const Match = Path.match(/^\/(\d{1,19})(\/members(?:\/(\d{1,19}))?)?$/);
+	if (!Match) throw new HttpError(404, 'NotFound');
+	const Target = { conversation_short_id: Match[1] };
+	if (Match[3]) {
+		RequireMethod(Request, ['DELETE']);
+		await Run(() => Match[3] === User.id ? LeaveGroup(Pool, User.id, Target) : RemoveMembers(Pool, User.id, Target, [Match[3]]));
+		Json(Response, { ok: true }); return true;
+	}
+	if (Match[2]) {
+		RequireMethod(Request, ['POST']);
+		const { Added, Failed } = await Run(async () => AddMembers(Pool, User.id, Target, (await ReadBody(Request)).members));
+		Json(Response, { added: Added, failed: Failed }); return true;
+	}
+	RequireMethod(Request, ['GET', 'PATCH']);
+	if (Request.method === 'PATCH') {
+		const Body = await ReadBody(Request);
+		await Run(() => RenameGroup(Pool, User.id, Target, Body.name));
+	}
+	const Room = await Run(() => GroupOf(Pool, User.id, Target));
+	const People = (await Pool.query('SELECT id::text, username, display_name, avatar_name FROM users WHERE id = ANY($1::bigint[])', [Room.members.map(Member => Member.user_id)])).rows;
+	Json(Response, { id: String(Room.id), name: Room.name, title: GroupName(Room, User.id), owner: OwnerOf(Room), you: User.id, limit: GroupLimit,
+		members: Room.members.map(Member => People.find(Row => Row.id === Member.user_id)).filter(Boolean).map(Row => ({ id: Row.id, username: Row.username, name: Row.display_name, avatar: AvatarUrl(Row, Config.Origin) })) });
+	return true;
+}
+
 export async function Im(Context) {
 	const { Request, Response, Url, User } = Context;
 	if (Url.pathname.startsWith('/api/v1/im/media')) return MessageMedia(Context);
+	if (Url.pathname === '/api/v1/im/groups' || Url.pathname.startsWith('/api/v1/im/groups/')) return Groups(Context);
 	if (!/^\/v[1-3]\/[a-z_/]+$/.test(Url.pathname) || Request.method !== 'POST' || !Request.headers['content-type']?.startsWith('application/x-protobuf')) return false;
 	if (!User) throw new HttpError(401, 'NotLoggedIn');
 	if (Context.Config.Features?.messages === false) throw new HttpError(403, 'MessagesDisabled');

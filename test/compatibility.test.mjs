@@ -825,7 +825,7 @@ test('original client direct messages persist through the IM protocol over HTTP 
 	assert.equal((await Im(301, 'messages_in_conversation_body', { conversation_short_id: Outsider })).status_code, 1001);
 	const Grumpy = (await Pool.query("SELECT id FROM users WHERE username = 'grumpy'")).rows[0].id;
 	assert.equal((await Im(609, 'create_conversation_v2_body', { conversation_type: 1, participants: [Grumpy] })).status_code, 11);
-	assert.equal((await Im(609, 'create_conversation_v2_body', { conversation_type: 2, participants: [Friend.id, Grumpy] })).status_code, 4);
+	assert.equal((await Im(609, 'create_conversation_v2_body', { conversation_type: 2, participants: [Friend.id, Grumpy] })).status_code, 11);
 	assert.equal((await Im(9999, 'vcd_clean_body', {})).status_code, 5);
 	const Upgrade = Origin => new Promise(Resolve => {
 		const Sent = HttpRequest('http://127.0.0.1:13210/ws/v2', { headers: { ...AsFriend, connection: 'Upgrade', upgrade: 'websocket', 'sec-websocket-version': '13', 'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==', origin: Origin } });
@@ -1955,6 +1955,48 @@ test('photo and video messages upload through Kittok, render as native cards, an
 	const Shim = (await MessageUploader(Buffer.from('(self.__LOADABLE_LOADED_CHUNKS__=self.__LOADABLE_LOADED_CHUNKS__||[]).push([["9"],{42:function(e){e.exports=0}}]);'))).toString();
 	assert.ok(Shim.startsWith('(self.__LOADABLE_LOADED_CHUNKS__=self.__LOADABLE_LOADED_CHUNKS__||[]).push([["9"],{42:function(e){e.exports=class KittokUploader'));
 	assert.ok(Shell(await readFile(join(ClientDir, 'index.html'), 'utf8'), Origin, { Config, User: { ...Alpha, csrf_token: AsAlpha['x-csrf-token'] } }).includes('"web_dm_multimedia_msg":{"vid":"v2"'));
+});
+
+test('group chats are made of friends, live in the group inbox, and post native notices as people join, leave, and rename', async () => {
+	const Users = {}, As = {};
+	for (const Name of ['grp_a', 'grp_b', 'grp_c', 'grp_d', 'grp_x']) {
+		Users[Name] = await CreateUser(Pool, { username: Name, displayName: Name.toUpperCase(), password: Password }, 'closed', true);
+		const Signed = await Login(Pool, Name, Password);
+		As[Name] = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	}
+	for (const A of ['grp_a', 'grp_b', 'grp_c', 'grp_d']) for (const B of ['grp_a', 'grp_b', 'grp_c', 'grp_d']) if (A !== B) await Pool.query('INSERT INTO follows(follower_id, following_id) VALUES ($1, $2)', [Users[A].id, Users[B].id]);
+	const Im = async (Headers, Cmd, Field, Body, Inbox = 1) => Proto.Decode('Response', Buffer.from(await (await fetch(`${Origin}/v1/kittok`, { method: 'POST', headers: { ...Headers, 'content-type': 'application/x-protobuf' }, body: Proto.Encode('Request', { cmd: Cmd, sequence_id: '1', inbox_type: Inbox, body: { [Field]: Body } }) })).arrayBuffer()));
+	const Create = (Headers, Participants, Name) => Im(Headers, 609, 'create_conversation_v2_body', { conversation_type: 2, participants: Participants, name: Name });
+	assert.equal((await Create(As.grp_a, [Users.grp_b.id, Users.grp_x.id])).status_code, 11);
+	assert.equal((await Create(As.grp_a, [Users.grp_b.id])).status_code, 4);
+	const Group = (await Create(As.grp_a, [Users.grp_b.id, Users.grp_c.id], 'Crew')).body.create_conversation_v2_body.conversation;
+	assert.deepEqual([Group.conversation_type, Group.inbox_type, Group.conversation_core_info.name, Group.participants_count], [2, 1, 'Crew', 3]);
+	assert.equal(Group.first_page_participants.participants.find(Member => Member.role === 1).user_id, Users.grp_a.id);
+	const Short = Group.conversation_short_id, Target = { conversation_short_id: Short, conversation_type: 2 };
+	const Thread = async Headers => (await Im(Headers, 301, 'messages_in_conversation_body', { ...Target, direction: 1, anchor_index: '0', limit: 50 })).body.messages_in_conversation_body?.messages;
+	const Notices = async Headers => (await Thread(Headers)).filter(Message => Message.message_type === 1031).map(Message => JSON.parse(Message.content).aweType);
+	const List = async (Headers, Inbox) => ((await Im(Headers, 2006, 'get_user_conversation_list_body', { limit: 50 }, Inbox)).body.get_conversation_list_body?.list ?? []).map(Room => Room.conversation_short_id);
+	assert.ok((await List(As.grp_b, 1)).includes(Short)); assert.ok(!(await List(As.grp_b, 0)).includes(Short));
+	const Sent = (await Im(As.grp_b, 100, 'send_message_body', { ...Target, message_type: 7, content: '{"aweType":0,"text":"hi crew"}', client_message_id: 'grp-1' })).body.send_message_body;
+	assert.equal(Sent.status, 0);
+	assert.ok((await Thread(As.grp_c)).some(Message => Message.server_message_id === Sent.server_message_id));
+	assert.equal((await Im(As.grp_d, 301, 'messages_in_conversation_body', Target)).status_code, 1001);
+	const Added = (await Im(As.grp_b, 650, 'conversation_add_participants_body', { ...Target, participants: [Users.grp_d.id, Users.grp_x.id] })).body.conversation_add_participants_body;
+	assert.deepEqual([Added.success_participants, Added.failed_participants], [[Users.grp_d.id], [Users.grp_x.id]]);
+	assert.ok((await Thread(As.grp_d)).some(Message => Message.server_message_id === Sent.server_message_id));
+	assert.equal((await Im(As.grp_b, 651, 'conversation_remove_participants_body', { ...Target, participants: [Users.grp_c.id] })).status_code, 11);
+	assert.equal((await Im(As.grp_a, 651, 'conversation_remove_participants_body', { ...Target, participants: [Users.grp_c.id] })).status_code, 0);
+	assert.equal((await Im(As.grp_c, 301, 'messages_in_conversation_body', Target)).status_code, 1001);
+	assert.equal((await Im(As.grp_d, 902, 'set_conversation_core_info_body', { ...Target, name: 'Crew 2', is_name_set: true })).body.set_conversation_core_info_body.conversation_core_info.name, 'Crew 2');
+	assert.equal((await Im(As.grp_a, 652, 'leave_conversation_body', Target)).status_code, 0);
+	const Info = await (await Call(`/api/v1/im/groups/${Short}`, 'GET', undefined, As.grp_b)).json();
+	assert.equal(Info.owner, Users.grp_b.id); assert.deepEqual(Info.members.map(Member => Member.username).sort(), ['grp_b', 'grp_d']);
+	assert.deepEqual((await Notices(As.grp_b)).reverse(), [103112, 103105, 103102, 103106, 103104]);
+	assert.equal((await Call('/api/v1/im/groups', 'POST', { members: [Users.grp_c.id, Users.grp_d.id] }, { cookie: As.grp_b.cookie })).status, 403);
+	assert.equal((await Call('/api/v1/im/groups', 'POST', { members: [Users.grp_c.id, Users.grp_d.id], name: 'Two' }, As.grp_b)).status, 200);
+	assert.deepEqual((await (await Call('/api/v1/im/groups', 'GET', undefined, As.grp_c)).json()).groups.map(Room => Room.title), ['Two']);
+	assert.deepEqual((await (await Call('/api/v1/im/groups/friends', 'GET', undefined, As.grp_x)).json()).friends, []);
+	assert.equal((await Call(`/api/v1/im/groups/${Short}/members/${Users.grp_d.id}`, 'DELETE', undefined, { cookie: As.grp_d.cookie })).status, 403);
 });
 
 test('misc switches turn Kittok features off and back on without a restart', async () => {
