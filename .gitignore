@@ -12,3 +12,4 @@ dist/
 .git/
 scripts/tcs-preview.mjs
 scripts/tcs-preview/
+.claude/

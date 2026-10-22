@@ -9,6 +9,7 @@
 		"user:create": "node --env-file-if-exists=.env scripts/create-user.mjs",
 		"invite:create": "node --env-file-if-exists=.env scripts/create-invite.mjs",
 		"ip-key": "node --env-file-if-exists=.env scripts/ip-key.mjs",
+		"collectibles": "node --env-file-if-exists=.env scripts/import-decorations.mjs",
 		"video:import": "node --env-file-if-exists=.env scripts/import-video.mjs",
 		"demo": "node --env-file-if-exists=.env scripts/seed.mjs",
 		"setup": "node scripts/setup.mjs",

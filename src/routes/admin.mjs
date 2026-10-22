@@ -5,6 +5,7 @@ import { Escape, HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '.
 import { Hash, RateLimiter, RequireCsrf, Token } from '../auth.mjs';
 import { HashIp, InstanceKey, LocalSeal, Open, Unlock } from '../ips.mjs';
 import { SendMail } from '../mail.mjs';
+import { CollectibleCounts, SaveCollectibles } from '../decorations.mjs';
 import { RemoveMedia, SaveBrandImage, WarmDownloads } from '../media.mjs';
 import { AvatarUrl, UserStats } from '../store.mjs';
 import { ClientDir, Root } from '../client/archive.mjs';
@@ -181,6 +182,7 @@ export async function Admin(Context) {
 			Json(Response, { actions: Rows, hasMore: Rows.length === 50 }); return true;
 		}
 		if (Route === 'settings') { Json(Response, Settings(Config)); return true; }
+		if (Route === 'collectibles') { Json(Response, CollectibleCounts()); return true; }
 		if (Route === 'console') {
 			const Counts = (await Pool.query(`SELECT (SELECT count(DISTINCT (target_type, target_id))::int FROM reports WHERE status = 'open') AS tickets,
 				(SELECT count(*)::int FROM moderation_appeals WHERE status = 'pending') AS appeals,
@@ -284,6 +286,28 @@ export async function Admin(Context) {
 		await Audit(Pool, User, Name ? 'brand.upload' : 'brand.reset', Slot);
 		if (Slot === 'wordmarkDark') WarmDownloads(Pool, Config).catch(() => {});
 		Json(Response, Settings(Config).brand); return true;
+	}
+	if (Route === 'collectibles') {
+		const Type = Request.headers['content-type'] ?? '';
+		let Categories;
+		if (Type.startsWith('multipart/form-data')) {
+			const File = (await new globalThis.Response(await ReadRaw(Request, 20 * 1024 * 1024), { headers: { 'content-type': Type } }).formData().catch(() => null))?.get('file');
+			if (!(File instanceof Blob)) throw new HttpError(400, 'InvalidUpload');
+			try { Categories = JSON.parse(await File.text()); } catch { throw new HttpError(400, 'InvalidCollectibles'); }
+		} else {
+			const Address = String((await ReadBody(Request, 4096)).url ?? '');
+			let Url;
+			try { Url = new URL(Address); } catch { throw new HttpError(400, 'InvalidUrl'); }
+			if (Url.protocol !== 'https:') throw new HttpError(400, 'InvalidUrl');
+			const Remote = await fetch(Url, { signal: AbortSignal.timeout(30000), redirect: 'follow' }).catch(() => null);
+			if (!Remote?.ok) throw new HttpError(502, 'CouldntDownload');
+			const Raw = await Remote.arrayBuffer();
+			if (Raw.byteLength > 20 * 1024 * 1024) throw new HttpError(413, 'TooLarge');
+			try { Categories = JSON.parse(Buffer.from(Raw).toString('utf8')); } catch { throw new HttpError(400, 'InvalidCollectibles'); }
+		}
+		const Counts = await SaveCollectibles(Config, Array.isArray(Categories?.categories) ? Categories.categories : Categories);
+		await Audit(Pool, User, 'collectibles.import', 'discord', `${Counts.decorations} decorations, ${Counts.nameplates} nameplates`);
+		Json(Response, Counts); return true;
 	}
 	const Body = await ReadBody(Request, 32768);
 	if (Route === 'settings/mail') {

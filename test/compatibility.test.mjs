@@ -1597,9 +1597,24 @@ test('the native inbox lists follow requests and approves them with from_user_id
 test('avatar decorations come from the Discord catalog, are owner-editable, and serve cached images', async () => {
 	const Signed = await Login(Pool, 'pride_kitten', Password);
 	const As = { cookie: `kittok_session=${Signed.Token}`, 'x-csrf-token': Signed.Csrf };
+	assert.deepEqual((await (await Call('/_kittok/decorations/catalog')).json()).collections, []);
+	const Collectibles = [
+		{ name: 'Cauldron Chaos', products: [
+			{ name: 'Witch Hat Bundle', items: [{ type: 0, sku_id: '1100000000000000001', asset: 'a_' + '1'.repeat(32), label: 'A pointy hat.' }, { type: 2, sku_id: '1100000000000000002', label: 'Bats fly across a full moon.', palette: 'cobalt' }] },
+			{ name: 'Cat Ears', items: [{ type: 0, sku_id: '1100000000000000003', asset: '2'.repeat(32), label: 'Purple cat ears.' }] },
+		] },
+		{ name: 'All Ears', products: [{ name: 'Leopard Print', items: [{ type: 2, sku_id: '1100000000000000004', label: 'Sparkling leopard print.', palette: 'black' }, { type: 1, sku_id: '1100000000000000005' }] }] },
+	];
+	const Upload = Value => { const Form = new FormData(); Form.append('file', new Blob([Value], { type: 'application/json' }), 'collectibles.json'); return fetch(Origin + '/_kittok/admin/collectibles', { method: 'POST', headers: Auth(), body: Form }); };
+	assert.equal((await Upload('not json')).status, 400);
+	assert.equal((await Upload('[]')).status, 422);
+	assert.equal((await Call('/_kittok/admin/collectibles', 'POST', { url: 'http://example.com/collectibles.json' }, Auth())).status, 400);
+	const Imported = await Upload(JSON.stringify(Collectibles));
+	assert.equal(Imported.status, 200); assert.deepEqual(await Imported.json(), { decorations: 2, nameplates: 2 });
+	assert.deepEqual(await (await Call('/_kittok/admin/collectibles', 'GET', undefined, Auth())).json(), { decorations: 2, nameplates: 2 });
 	const Catalog = await (await Call('/_kittok/decorations/catalog')).json();
 	const Items = Catalog.collections.flatMap(Collection => Collection.items);
-	assert.equal(Items.length, 644); assert.equal(new Set(Items.map(Item => Item.id)).size, 644);
+	assert.deepEqual(Items.map(Item => [Item.id, Item.name]), [['1100000000000000001', 'Witch Hat'], ['1100000000000000003', 'Cat Ears']]);
 	const Pick = Items[0];
 	assert.deepEqual(Object.keys(Pick).sort(), ['id', 'image', 'label', 'name', 'still']);
 	const Update = (Body, Headers = As) => Call('/api/v1/profile/decoration', 'PATCH', Body, Headers);
@@ -1638,7 +1653,7 @@ test('display name styles and nameplates use Discord ids, show in the badge look
 	assert.deepEqual((await (await Style({ style: { font: 3, effect: 8, colors: [1, 2, 3, 4] } })).json()).style, { font: 3, effect: 8, colors: [1, 2, 3, 4], name: Name });
 	assert.equal((await Style({ style: { font: 16, effect: 1, colors: [] } })).status, 200);
 	const Items = (await (await Call('/_kittok/nameplates/catalog')).json()).collections.flatMap(Collection => Collection.items);
-	assert.equal(Items.length, 256); assert.equal(new Set(Items.map(Item => Item.id)).size, 256);
+	assert.deepEqual(Items.map(Item => [Item.id, Item.palette.dark]), [['1100000000000000002', '#0131C2'], ['1100000000000000004', '#000000']]);
 	const Pick = Items[0];
 	assert.deepEqual(Object.keys(Pick).sort(), ['id', 'image', 'label', 'name', 'palette', 'video']);
 	for (const Invalid of ['1', '<script>', [], true, 5]) assert.equal((await Plate({ nameplate: Invalid })).status, 400);

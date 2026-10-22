@@ -1,48 +1,81 @@
-import { readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { HttpError } from './http.mjs';
 import { Misc } from './settings.mjs';
 
-const Entries = JSON.parse(readFileSync(new URL('./decorations.json', import.meta.url), 'utf8'));
-const ById = new Map(Entries.map(Entry => [Entry[0], Entry]));
-const ByAsset = new Map(Entries.map(Entry => [Entry[1], Entry]));
+let Entries = [], ById = new Map(), ByAsset = new Map(), Plates = [], PlateById = new Map(), Catalogs = { decorations: { collections: [] }, nameplates: { collections: [] } };
 const Pending = new Map();
 
 const Image = (Asset, Still) => `/_kittok/decorations/${Asset}.png${Still ? '?static=1' : ''}`;
 const Shape = ([Id, Asset, Name, , Label]) => ({ id: Id, name: Name, label: Label, image: Image(Asset), still: Image(Asset, true) });
-
-export const DecorationCatalog = (() => {
+const Palettes = { crimson: ['#900007', '#E7040F'], berry: ['#893A99', '#B11FCF'], sky: ['#0080B7', '#56CCFF'], teal: ['#086460', '#7DEED7'], forest: ['#2D5401', '#6AA624'],
+	bubble_gum: ['#DC3E97', '#F957B3'], violet: ['#730BC8', '#972FED'], cobalt: ['#0131C2', '#4278FF'], clover: ['#047B20', '#63CD5A'], lemon: ['#F6CD12', '#FED400'], white: ['#FFFFFF', '#FFFFFF'], black: ['#000000', '#000000'] };
+const PlateShape = ([Id, Name, , Label, Palette]) => ({ id: Id, name: Name, label: Label, image: `/_kittok/nameplates/${Id}.png`, video: `/_kittok/nameplates/${Id}.webm`,
+	palette: { dark: Palettes[Palette]?.[0] ?? '', light: Palettes[Palette]?.[1] ?? '' } });
+const Group = (List, Index, Make) => {
 	const Collections = new Map();
-	for (const Entry of Entries) {
-		if (!Collections.has(Entry[3])) Collections.set(Entry[3], []);
-		Collections.get(Entry[3]).push(Shape(Entry));
+	for (const Entry of List) {
+		if (!Collections.has(Entry[Index])) Collections.set(Entry[Index], []);
+		Collections.get(Entry[Index]).push(Make(Entry));
 	}
 	return { collections: [...Collections].map(([Name, Items]) => ({ name: Name, items: Items })) };
-})();
+};
+const Files = Config => ({ Decorations: join(Config.MediaDir, 'private', 'decorations.json'), Nameplates: join(Config.MediaDir, 'private', 'nameplates.json') });
+
+function Use(Decorations, Nameplates) {
+	Entries = Decorations; ById = new Map(Entries.map(Entry => [Entry[0], Entry])); ByAsset = new Map(Entries.map(Entry => [Entry[1], Entry]));
+	Plates = Nameplates; PlateById = new Map(Plates.map(Entry => [Entry[0], Entry]));
+	Catalogs = { decorations: Group(Entries, 3, Shape), nameplates: Group(Plates, 2, PlateShape) };
+}
+export async function LoadCollectibles(Config) {
+	const Read = Path => readFile(Path, 'utf8').then(JSON.parse).then(Value => Array.isArray(Value) ? Value : []).catch(() => []);
+	Use(await Read(Files(Config).Decorations), await Read(Files(Config).Nameplates));
+}
+export const DecorationCatalog = () => Catalogs.decorations;
+export const NameplateCatalog = () => Catalogs.nameplates;
+export const DecorationAssets = () => Entries.map(Entry => Entry[1]);
+export const CollectibleCounts = () => ({ decorations: Entries.length, nameplates: Plates.length });
+
+export function BuildCollectibles(Categories) {
+	if (!Array.isArray(Categories)) throw new HttpError(400, 'InvalidCollectibles');
+	const Text = (Value, Limit) => String(Value ?? '').slice(0, Limit);
+	const Collect = (Type, Valid, Entry) => {
+		const Seen = new Map();
+		for (const Category of Categories) {
+			for (const Product of Array.isArray(Category?.products) ? Category.products : []) {
+				const Items = Array.isArray(Product?.items) ? Product.items : [];
+				for (const Item of Items) {
+					if (Item?.type !== Type || !/^\d{17,20}$/.test(String(Item.sku_id)) || !Valid(Item)) continue;
+					const Own = Items.length === 1, Existing = Seen.get(Item.sku_id);
+					if (Existing && (Existing.Own || !Own)) continue;
+					Seen.set(Item.sku_id, { Own, Entry: Entry(Item, Text(Product.name, 100).replace(/ Bundle$/, ''), Text(Category.name, 100)) });
+				}
+			}
+		}
+		return [...Seen.values()].map(Value => Value.Entry);
+	};
+	const Decorations = Collect(0, Item => /^(a_)?[0-9a-f]{32}$/.test(Item.asset), (Item, Name, Collection) => [Item.sku_id, Item.asset, Name, Collection, Text(Item.label, 300)]);
+	const Nameplates = Collect(2, () => true, (Item, Name, Collection) => [Item.sku_id, Name, Collection, Text(Item.label, 300), Object.hasOwn(Palettes, Item.palette) ? Item.palette : '']);
+	if (!Decorations.length && !Nameplates.length) throw new HttpError(422, 'NoCollectiblesFound');
+	return { Decorations, Nameplates };
+}
+export async function SaveCollectibles(Config, Categories) {
+	const { Decorations, Nameplates } = BuildCollectibles(Categories);
+	await mkdir(join(Config.MediaDir, 'private'), { recursive: true, mode: 0o700 });
+	for (const [Path, Data] of [[Files(Config).Decorations, Decorations], [Files(Config).Nameplates, Nameplates]]) {
+		const Temporary = `${Path}.${randomUUID()}`;
+		await writeFile(Temporary, JSON.stringify(Data) + '\n'); await rename(Temporary, Path);
+	}
+	Use(Decorations, Nameplates);
+	return CollectibleCounts();
+}
 
 export function AvatarDecoration(Value) {
 	if (Value === '' || Value === null) return '';
 	if (typeof Value !== 'string' || !ById.has(Value)) throw new HttpError(400, 'InvalidAvatarDecoration');
 	return Value;
 }
-
-const Plates = JSON.parse(readFileSync(new URL('./nameplates.json', import.meta.url), 'utf8'));
-const PlateById = new Map(Plates.map(Entry => [Entry[0], Entry]));
-const Palettes = { crimson: ['#900007', '#E7040F'], berry: ['#893A99', '#B11FCF'], sky: ['#0080B7', '#56CCFF'], teal: ['#086460', '#7DEED7'], forest: ['#2D5401', '#6AA624'],
-	bubble_gum: ['#DC3E97', '#F957B3'], violet: ['#730BC8', '#972FED'], cobalt: ['#0131C2', '#4278FF'], clover: ['#047B20', '#63CD5A'], lemon: ['#F6CD12', '#FED400'], white: ['#FFFFFF', '#FFFFFF'], black: ['#000000', '#000000'] };
-const PlateShape = ([Id, Name, , Label, Palette]) => ({ id: Id, name: Name, label: Label, image: `/_kittok/nameplates/${Id}.png`, video: `/_kittok/nameplates/${Id}.webm`,
-	palette: { dark: Palettes[Palette]?.[0] ?? '', light: Palettes[Palette]?.[1] ?? '' } });
-
-export const NameplateCatalog = (() => {
-	const Collections = new Map();
-	for (const Entry of Plates) {
-		if (!Collections.has(Entry[2])) Collections.set(Entry[2], []);
-		Collections.get(Entry[2]).push(PlateShape(Entry));
-	}
-	return { collections: [...Collections].map(([Name, Items]) => ({ name: Name, items: Items })) };
-})();
 
 export function Nameplate(Value) {
 	if (Value === '' || Value === null) return '';

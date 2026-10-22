@@ -51,7 +51,7 @@ export async function Api(Context) {
 	if (Path === '/_kittok/nameplates/catalog') {
 		RequireMethod(Request, ['GET']);
 		if (!Misc.nameplates) throw new HttpError(404, 'NameplatesDisabled');
-		Response.setHeader('cache-control', 'public, max-age=3600'); Json(Response, NameplateCatalog); return true;
+		Response.setHeader('cache-control', 'public, max-age=3600'); Json(Response, NameplateCatalog()); return true;
 	}
 	const PlateArt = Path.match(/^\/_kittok\/nameplates\/(\d{17,20})\.(png|webm)$/);
 	if (PlateArt) {
@@ -91,7 +91,7 @@ export async function Api(Context) {
 	if (Path === '/_kittok/decorations/catalog') {
 		RequireMethod(Request, ['GET']);
 		if (!Misc.avatarDecorations) throw new HttpError(404, 'AvatarDecorationsDisabled');
-		Response.setHeader('cache-control', 'public, max-age=3600'); Json(Response, DecorationCatalog); return true;
+		Response.setHeader('cache-control', 'public, max-age=3600'); Json(Response, DecorationCatalog()); return true;
 	}
 	const Decoration = Path.match(/^\/_kittok\/decorations\/((?:a_)?[0-9a-f]{32})\.png$/);
 	if (Decoration) {

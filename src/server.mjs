@@ -24,12 +24,14 @@ import { Stories } from './routes/stories.mjs';
 import { Upgrade, Sweep } from './im/frontier.mjs';
 import { AssertVideoVisible } from './privacy.mjs';
 import { LoadSettings } from './settings.mjs';
+import { LoadCollectibles } from './decorations.mjs';
 
 const Config = LoadConfig();
 const Pool = Database(Config.DatabaseUrl);
 await Migrate(Pool);
 await BackfillCategories(Pool);
 await LoadSettings(Pool, Config);
+await LoadCollectibles(Config);
 const Raw = await readFile(join(ClientDir, 'index.html'), 'utf8').catch(() => { throw new Error('Run npm run capture first'); });
 const Unknown = new Map();
 const Blocked = new Map();

@@ -24,6 +24,7 @@
 		copyright: ['Reuploaded content they do not own'], other: ['Violates the instance rules'],
 	};
 	const Errors = {
+		InvalidCollectibles: 'That isn’t Discord’s collectibles catalog.', NoCollectiblesFound: 'No decorations or nameplates in that file.', CouldntDownload: 'Couldn’t download that URL.', InvalidUrl: 'Use an https:// URL.',
 		InvalidMailSettings: 'Check the server, port, and From address.', MailFailed: 'Couldn’t send the test email. Check the settings.', MailNotConfigured: 'Save email settings first.', InvalidEmail: 'Enter an email address.',
 		WrongSecurityKey: 'That isn’t the security key.', NoSecurityKey: 'Set up a security key on the server first.', OptedOut: 'User has opted out from their ip being visible',
 		CannotModerateAdmin: 'Admins and your own account can’t be moderated here.', CannotChangeYourself: 'You can’t do that to your own account.', InvalidCsrf: 'Your session changed. Refresh and try again.',
@@ -760,8 +761,12 @@
 
 	async function MiscPage() {
 		SetTitle(['Misc']);
-		const S = await Api('settings');
+		const [S, Counts] = await Promise.all([Api('settings'), Api('collectibles')]);
 		const Names = Boot.misc;
+		const Summary = El('span', { class: 'Faint' }, Counts.decorations || Counts.nameplates ? `${Counts.decorations} decorations · ${Counts.nameplates} nameplates` : 'Not imported');
+		const Import = async Body => { try { const Result = await Api('collectibles', Body); Summary.textContent = `${Result.decorations} decorations · ${Result.nameplates} nameplates`; Toast(`Imported ${Result.decorations} decorations and ${Result.nameplates} nameplates`); } catch (Error) { Fail(Error); } };
+		const Picker = El('input', { type: 'file', accept: 'application/json,.json', hidden: true, onchange: async Event => { const File = Event.target.files[0]; Event.target.value = ''; if (!File) return; const Form = new FormData(); Form.append('file', File); await Import(Form); } });
+		const Address = El('input', { class: 'Input Grow', type: 'url', placeholder: 'https://… collectibles-categories JSON', 'aria-label': 'Catalog URL' });
 		const State = Object.fromEntries(Object.keys(Names).map(Key => [Key, S.misc[Key] !== false]));
 		const Save = async (Key, Input) => {
 			State[Key] = Input.checked;
@@ -771,7 +776,10 @@
 			El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Kittok features', El('span', { class: 'Faint' }, 'Changes apply on the next page load')), El('div', { class: 'PanelBody' }, El('div', { class: 'Toggles MiscToggles' }, Object.entries(Names).map(([Key, [Label, Hint]]) => {
 				const Input = El('input', { type: 'checkbox', checked: State[Key], onchange: () => Save(Key, Input) });
 				return El('label', { class: 'ToggleRow' }, El('span', { class: 'Switch' }, Input, El('span')), El('span', { class: 'Stack', style: 'gap:2px' }, El('span', {}, Label), El('span', { class: 'Faint', style: 'font-size:12px' }, Hint)));
-			}))))));
+			})))),
+			El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Discord collectibles', Summary), El('div', { class: 'PanelBody Form' },
+				El('p', { class: 'Muted', style: 'margin:0' }, 'Avatar decorations and nameplates come from Discord’s collectibles catalog (the JSON from discord.com/api/v9/collectibles-categories while signed in). Importing again replaces the list.'),
+				El('div', { class: 'Row', style: 'gap:8px;flex-wrap:wrap' }, Picker, Btn('Upload catalog', () => Picker.click()), Address, Btn('Import from URL', () => Import({ url: Address.value.trim() }), 'Primary'))))));
 	}
 
 	async function InvitesPage() {
