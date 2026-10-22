@@ -11,7 +11,7 @@ It's early (0.1.0) and there are rough edges, but most of what people actually u
 You need Docker with Compose, a domain, and a reverse proxy that handles HTTPS.
 
 ```sh
-tar -xzf kittok-0.1.0.tar.gz
+git clone https://github.com/xmvo/kittok.git
 cd kittok
 npm run setup
 ```
@@ -31,7 +31,7 @@ docker compose exec app node scripts/create-user.mjs yourname --admin
 
 Point your proxy at `127.0.0.1:3210` (there's a [Caddy example](deploy/Caddyfile.example)). Log in through TikTok's normal login page: **Use phone / email / username**, then **Log in with email or username**.
 
-On first start Kittok downloads TikTok's web client into its own cache and sets up the database. The client isn't part of this repo; each instance fetches its own copy.
+The repo includes the copy of TikTok's web client that Kittok is built against (`client/`), so every instance runs the same version. Kittok patches parts of it, which is why it doesn't just grab TikTok's latest.
 
 A few extras you'll probably want, all covered in [HOSTING.md](docs/HOSTING.md):
 
@@ -53,7 +53,6 @@ npm run setup
 Create a database and put its URL in `.env` as `DATABASE_URL`, then:
 
 ```sh
-npm run capture
 npm run migrate
 npm run user:create -- yourname --admin
 npm start
@@ -67,7 +66,7 @@ For local use, keep `PUBLIC_ORIGIN=http://127.0.0.1:3210`. A new instance is emp
 npm test
 ```
 
-This makes a throwaway database, runs the real server against it with ffmpeg, and deletes the database afterwards. Your Postgres user needs permission to create databases; otherwise point `KITTOK_TEST_ADMIN_URL` at one that can. You need a captured client first (`npm run capture`).
+This makes a throwaway database, runs the real server against it with ffmpeg, and deletes the database afterwards. Your Postgres user needs permission to create databases; otherwise point `KITTOK_TEST_ADMIN_URL` at one that can.
 
 ## Source archive
 
@@ -75,4 +74,4 @@ This makes a throwaway database, runs the real server against it with ffmpeg, an
 
 ## License
 
-Kittok is AGPL-3.0-or-later ([LICENSE](LICENSE)). TikTok's client belongs to TikTok and isn't included. The fonts in `public/fonts` are Discord's builds of open source fonts under the SIL Open Font License ([OFL.txt](public/fonts/OFL.txt)).
+Kittok is AGPL-3.0-or-later ([LICENSE](LICENSE)). The copy of TikTok's web client in `client/` belongs to TikTok and isn't covered by that license. The fonts in `public/fonts` are Discord's builds of open source fonts under the SIL Open Font License ([OFL.txt](public/fonts/OFL.txt)).

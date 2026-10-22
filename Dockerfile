@@ -4,8 +4,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY . .
-RUN npm run source && mkdir -p /var/lib/kittok/client /var/lib/kittok/media && chown -R node:node /var/lib/kittok
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=3210 CLIENT_DIR=/var/lib/kittok/client MEDIA_DIR=/var/lib/kittok/media
+RUN npm run source && mkdir -p /var/lib/kittok/media && chown -R node:node /var/lib/kittok /app/client
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3210 CLIENT_DIR=/app/client MEDIA_DIR=/var/lib/kittok/media
 USER node
 EXPOSE 3210
 ENTRYPOINT ["sh", "deploy/entrypoint.sh"]

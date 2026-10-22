@@ -1,6 +1,6 @@
 # Architecture
 
-Kittok has an HTTP server, PostgreSQL, local media storage, and a per-instance capture of the original desktop web client.
+Kittok has an HTTP server, PostgreSQL, local media storage, and a pinned copy of the original desktop web client in `client/`.
 
 ```mermaid
 flowchart LR
@@ -14,7 +14,7 @@ flowchart LR
 
 `routes/api.mjs` defines Kittok's own stable API under `/api/v1`. `routes/compatibility.mjs` answers the observed TikTok API shapes. `routes/im.mjs` speaks the client's protobuf direct-message protocol over HTTP and the WebSocket in `im/frontier.mjs`. All of them use the same PostgreSQL records and media storage. The compatibility code does not forward API requests to TikTok. A browser bridge routes recognized remote API URLs locally, and Content Security Policy blocks outbound connections and remote frames, forms, scripts, and media. The captured client needs inline script and eval support.
 
-`client/archive.mjs` caches assets from four fixed CDN origins, plus the exact public login-module manifest path. `scripts/capture.mjs` captures the public guest page without account cookies, records its build metadata, and downloads initial entry assets. It also captures the original standalone login application and its entry assets. The native Passport login endpoint decodes the client’s transport encoding, authenticates against Kittok’s PostgreSQL users, and issues the same host-only local session used by the Kittok API. Native success navigation is rewritten to this instance. Additional assets are cached on first request. Guest identifiers and public-origin settings are replaced before the client is served. A local telemetry dependency remains because the client calls its initialization interface; outbound collection is blocked.
+`client/archive.mjs` caches assets from four fixed CDN origins, plus the exact public login-module manifest path. The repo ships the tested capture; `scripts/capture.mjs` makes a new one from the public guest page without account cookies, records its build metadata, and downloads initial entry assets. It also captures the original standalone login application and its entry assets. The native Passport login endpoint decodes the client’s transport encoding, authenticates against Kittok’s PostgreSQL users, and issues the same host-only local session used by the Kittok API. Native success navigation is rewritten to this instance. Additional assets are cached on first request. Guest identifiers and public-origin settings are replaced before the client is served. A local telemetry dependency remains because the client calls its initialization interface; outbound collection is blocked.
 
 ## Data
 

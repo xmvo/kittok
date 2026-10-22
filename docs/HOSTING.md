@@ -41,7 +41,7 @@ It prints a 128-character key once; save it somewhere safe, because it can't be 
 | `HOST_PORT` | `3210` | Host-side loopback port in Compose |
 | `HOST`, `PORT` | `127.0.0.1`, `3210` | Source server bind address and port; image binds internally to `0.0.0.0:3210` |
 | `MEDIA_DIR` | `media/` | Media storage path; image uses its media volume |
-| `CLIENT_DIR` | `client/` | Captured-client storage path; image uses its client volume |
+| `CLIENT_DIR` | `client/` | Where TikTok's web client lives. The repo and the Docker image ship the tested copy |
 | `MAX_VIDEO_MB` | `100` | Maximum uploaded source file size |
 | `MAX_VIDEO_SECONDS` | `600` | Maximum video duration |
 | `FFMPEG`, `FFPROBE` | `ffmpeg`, `ffprobe` | Video tool executables |
@@ -102,7 +102,7 @@ Named volumes are `postgres`, `media`, and `client`, scoped by the Compose proje
 
 Migrations use a transaction and an advisory lock. Applied migration checksums must remain unchanged. Add a new migration for schema changes; never edit a migration that has already run. This release does not implement automatic downgrade migrations.
 
-A client recapture is a separate operation. `docker compose exec app node scripts/capture.mjs` downloads the current public client and can require adapter updates. The server reads its pinned HTML at startup, so restart the app after a successful recapture. The client asset cache is not a guarantee that every screen will work offline.
+The repo ships the copy of TikTok's web client that Kittok is tested against. `npm run capture` replaces it with whatever TikTok serves today, which usually breaks things until Kittok is updated to match; `git checkout client` puts the tested copy back. Restart after either.
 
 ## Multiple instances
 

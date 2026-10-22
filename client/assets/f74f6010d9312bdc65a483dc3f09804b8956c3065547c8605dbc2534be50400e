@@ -1,0 +1,1 @@
+"use strict";(self.__LOADABLE_LOADED_CHUNKS__=self.__LOADABLE_LOADED_CHUNKS__||[]).push([["2264"],{363142:function(_,e,l){l.r(e);var n=l(973628),r=l(584007);e.default=(0,n.memo)(function(_){var e=_.listKey,l=_.handler;return(0,r.Wj)(e,l),null})}}]);

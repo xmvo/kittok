@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- The repo and Docker image now ship the copy of TikTok's web client Kittok is built against, instead of downloading TikTok's latest on first start, which broke new instances whenever TikTok updated.
 - Avatar decorations and nameplates are no longer shipped: import Discord's collectibles catalog from the admin panel's Misc page (upload or URL) or with `npm run collectibles`. The Discord fonts now ship with their Open Font License notices.
 - The admin panel says "Server is outdated, please restart" when Kittok's code changed on disk but the server hasn't been restarted, instead of a page error.
 - Set the default profile photo for new accounts and the mail server (with a test email) from the admin panel's Instance page. The SMTP password is stored encrypted. Admins see "User has opted out from their ip being visible" for people who said they mind, and can't reveal their IPs.

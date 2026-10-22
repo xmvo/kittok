@@ -13,7 +13,7 @@ npm run user:create -- yourname --admin
 npm start              # http://127.0.0.1:3210
 ```
 
-The first start downloads the client into `client/`. Nothing from the client is committed.
+`client/` is the copy of TikTok's web client Kittok is built against. Don't replace it with a new capture unless you're updating Kittok to match.
 
 ## Running the tests
 
@@ -57,7 +57,7 @@ Features Kittok adds on top of the client should get a switch on the admin **Mis
 - Keep each PR to one change, with a commit message that says what changed and why.
 - Include a test for anything behavioral.
 - Database changes go in a new migration file.
-- Don't commit `.env`, `client/`, `media/` or `data/`.
+- Don't commit `.env`, `media/` or `data/`, and only change `client/` on purpose.
 
 ## Using AI
 

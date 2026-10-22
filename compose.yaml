@@ -29,7 +29,6 @@ services:
     ports:
       - "127.0.0.1:${HOST_PORT:-3210}:3210"
     volumes:
-      - client:/var/lib/kittok/client
       - media:/var/lib/kittok/media
     depends_on:
       db:
@@ -43,5 +42,4 @@ services:
     restart: unless-stopped
 volumes:
   postgres:
-  client:
   media:

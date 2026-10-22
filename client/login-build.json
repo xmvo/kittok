@@ -1,0 +1,27 @@
+{
+	"source": "https://www.tiktok.com/login",
+	"capturedAt": "2026-10-19T13:01:18.621Z",
+	"sha256": "1459167c92e9028b0e79833814dae7679aef34b4585bb2141373b4d4c33cf080",
+	"entries": [
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok_privacy_protection_framework/loader/2.0.0.314/index.js",
+		"https://lf16-cdn-tos.tiktokcdn-us.com/obj/static-tx/tiktok-infra/csp/sdk-pre/slardar.web.pre.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/npm-react.c4b2dca3.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/npm-rxjs.06b4ba78.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/npm-sigi.ab6cb388.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/npm-tea.f2519f28.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/npm-emotion-init.81f34902.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/biz-slardar.64aeae4b.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/biz-cache-tux.2fcf1768.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/biz-shared-init.64d288d1.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/biz-atom-init.57345492.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/biz-login-init.9f2eae57.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/biz-common-lib.639f457c.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/i18n.6eb0f1b2.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/vendor.d2c09aff.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/webapp-login-page.039ee754.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/js/async/login-tip-modal.8984d814.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/assets/index.133fe48f.css",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/assets/styles.fdfe54c5.css",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/login/experimental/webapp-login-page/static/assets/index.6827bcfa.css"
+	]
+}

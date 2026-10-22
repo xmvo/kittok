@@ -3,7 +3,7 @@
 .env.*
 !.env.example
 node_modules
-client
+client/tcs-preview
 media
 data
 artifacts

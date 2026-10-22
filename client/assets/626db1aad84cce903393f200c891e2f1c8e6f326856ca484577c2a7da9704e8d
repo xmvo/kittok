@@ -1,0 +1,1769 @@
+:root {
+  --tux-colorPositive: rgba(11, 224, 155, 1);
+  --tux-colorNegative: rgba(255, 76, 58, 1);
+  --tux-colorToastDefault: rgba(84, 84, 84, 0.92);
+  --tux-colorToastNegative: rgba(255, 76, 58, 0.92);
+  --tux-colorSecondary: rgba(32, 213, 236, 1);
+  --tux-colorSecondary2: rgba(16, 162, 197, 1);
+  --tux-colorPositive2: rgba(79, 171, 126, 1);
+
+  --tux-colorConstTextInverse: rgba(255, 255, 255, 1);
+  --tux-colorConstTextInverse2: rgba(255, 255, 255, 0.9);
+  --tux-colorConstTextInverse3: rgba(255, 255, 255, 0.75);
+  --tux-colorConstTextInverse4: rgba(255, 255, 255, 0.5);
+  --tux-colorConstTextInverse5: rgba(255, 255, 255, 0.34);
+  --tux-colorConstTextPrimary: rgba(22, 24, 35, 1);
+
+  --tux-colorConstBGInverse: rgba(0, 0, 0, 1);
+  --tux-colorConstBGInverse2: rgba(0, 0, 0, 0.6);
+  --tux-colorConstBGInverse3: rgba(37, 37, 37, 0.6);
+  --tux-colorConstBGInverse4: rgba(84, 84, 84, 0.5);
+  --tux-colorBGCreation: rgba(0, 0, 0, 1);
+  --tux-colorBGCreation2: rgba(27, 27, 27, 1);
+  --tux-colorBGCreation5: rgba(0, 0, 0, 0.15);
+  --tux-colorConstBGMat: rgba(255, 255, 255, 0.2);
+  --tux-colorConstBGContainer: rgba(255, 255, 255, 0.12);
+  --tux-colorConstBGContainer2: rgba(255, 255, 255, 0.08);
+  --tux-colorConstBGContainer3: rgba(255, 255, 255, 0.04);
+  --tux-colorConstBGPlaceholderOpaque: rgba(241, 241, 241, 1);
+  --tux-colorConstBGInverseOpaque: rgba(37, 37, 37, 1);
+  --tux-colorConstBGInverse1: rgba(56, 56, 56, 0.95);
+
+  --tux-colorConstLineInverse: rgba(255, 255, 255, 0.2);
+  --tux-colorConstLineInverse2: rgba(255, 255, 255, 0.12);
+
+  --tux-colorSDPrimary: rgba(0, 0, 0, 0.8);
+
+  --tux-gradientLive: linear-gradient(131.17deg, #ff1764 0%, #ed3495 94.15%);
+  --tux-gradientVideoCoverOverlay: linear-gradient(
+    180deg,
+    rgba(22, 24, 35, 0.0001) 2.92%,
+    rgba(22, 24, 35, 0.5) 98.99%
+  );
+
+  --tux-colorAssistColorYellow: rgba(250, 206, 21, 1);
+}
+
+:root,
+[data-theme='light'],
+[data-tux-theme='light'] {
+  --tux-colorPrimary: rgba(254, 44, 85, 1);
+  --tux-colorPrimary-tint-4: rgba(244, 42, 82, 1);
+  --tux-colorPrimary-tint-8: rgba(234, 40, 78, 1);
+  --tux-colorPrimary-tint-12: rgba(224, 39, 75, 1);
+  --tux-colorPrimary-opacity-0: rgba(254, 44, 85, 0);
+  --tux-colorPrimary-opacity-4: rgba(254, 44, 85, 0.04);
+  --tux-colorPrimary-opacity-8: rgba(254, 44, 85, 0.08);
+  --tux-colorPrimary-opacity-12: rgba(254, 44, 85, 0.12);
+
+  --tux-colorLink: rgba(254, 44, 85, 1);
+  --tux-colorPrimary2: rgba(22, 24, 35, 1);
+
+  --tux-colorTextPrimary: rgba(22, 24, 35, 1);
+  --tux-colorTextSecondary: rgba(22, 24, 35, 0.75);
+  --tux-colorTextTertiary: rgba(22, 24, 35, 0.5);
+  --tux-colorTextQuaternary: rgba(22, 24, 35, 0.34);
+
+  --tux-colorBGPrimary: rgba(255, 255, 255, 1);
+
+  --tux-colorBGSecondary: rgba(255, 255, 255, 1);
+  --tux-colorBGSecondary-tint-4: rgba(245, 245, 245, 1);
+  --tux-colorBGSecondary-tint-8: rgba(235, 235, 235, 1);
+  --tux-colorBGSecondary-tint-12: rgba(224, 224, 224, 1);
+  --tux-colorBGSecondary-opacity-0: rgba(255, 255, 255, 0);
+  --tux-colorBGSecondary-opacity-4: rgba(255, 255, 255, 0.04);
+  --tux-colorBGSecondary-opacity-8: rgba(255, 255, 255, 0.08);
+  --tux-colorBGSecondary-opacity-12: rgba(255, 255, 255, 0.12);
+
+  --tux-colorBGTertiary: rgba(255, 255, 255, 1);
+  --tux-colorBGQuaternary: rgba(255, 255, 255, 1);
+  --tux-colorBGQuinary: rgba(255, 255, 255, 1);
+  --tux-colorBGSecondary2: rgba(255, 255, 255, 1);
+  --tux-colorBGTertiary2: rgba(255, 255, 255, 1);
+  --tux-colorBGPlaceholderDefault: rgba(22, 24, 35, 0.06);
+  --tux-colorBGPlaceholderOpaque: rgba(241, 241, 241, 1);
+  --tux-colorBGInput: rgba(22, 24, 35, 0.06);
+  --tux-colorBGInput2: rgba(22, 24, 35, 0.06);
+  --tux-colorBGView: rgba(22, 24, 35, 0.03);
+  --tux-colorBGCreation3: rgba(248, 248, 248, 1);
+  --tux-colorBGCreation4: rgba(255, 255, 255, 1);
+  --tux-colorBGHover: rgba(22, 24, 35, 0.06);
+  --tux-colorBGBrand: rgba(254, 44, 85, 0.06);
+
+  --tux-colorLinePrimary: rgba(22, 24, 35, 0.2);
+  --tux-colorLineSecondary: rgba(22, 24, 35, 0.12);
+  --tux-colorLineInput: rgba(22, 24, 35, 0.5);
+  --tux-colorLinePrimary2: rgba(22, 24, 35, 0.2);
+  --tux-colorLineSecondary2: rgba(22, 24, 35, 0.12);
+  --tux-colorLineSecondary3: rgba(22, 24, 35, 0.12);
+  --tux-colorLineDarker: rgba(22, 24, 35, 0.12);
+
+  --tux-colorSDSecondary: rgba(0, 0, 0, 0.5);
+  --tux-colorSDTertiary: rgba(0, 0, 0, 0.2);
+}
+
+[data-theme='dark'],
+[data-tux-theme='dark'] {
+  --tux-colorPrimary: rgba(255, 59, 92, 1);
+  --tux-colorPrimary-tint-4: rgba(255, 67, 99, 1);
+  --tux-colorPrimary-tint-8: rgba(255, 75, 105, 1);
+  --tux-colorPrimary-tint-12: rgba(255, 83, 112, 1);
+  --tux-colorPrimary-opacity-0: rgba(255, 59, 92, 0);
+  --tux-colorPrimary-opacity-4: rgba(255, 59, 92, 0.04);
+  --tux-colorPrimary-opacity-8: rgba(255, 59, 92, 0.08);
+  --tux-colorPrimary-opacity-12: rgba(255, 59, 92, 0.12);
+
+  --tux-colorLink: rgba(255, 59, 92, 1);
+  --tux-colorPrimary2: rgba(255, 255, 255, 0.9);
+
+  --tux-colorTextPrimary: rgba(255, 255, 255, 0.9);
+  --tux-colorTextSecondary: rgba(255, 255, 255, 0.75);
+  --tux-colorTextTertiary: rgba(255, 255, 255, 0.5);
+  --tux-colorTextQuaternary: rgba(255, 255, 255, 0.34);
+
+  --tux-colorBGPrimary: rgba(18, 18, 18, 1);
+
+  --tux-colorBGSecondary: rgba(37, 37, 37, 1);
+  --tux-colorBGSecondary-tint-4: rgba(46, 46, 46, 1);
+  --tux-colorBGSecondary-tint-8: rgba(54, 54, 54, 1);
+  --tux-colorBGSecondary-tint-12: rgba(63, 63, 63, 1);
+  --tux-colorBGSecondary-opacity-0: rgba(37, 37, 37, 0);
+  --tux-colorBGSecondary-opacity-4: rgba(37, 37, 37, 0.04);
+  --tux-colorBGSecondary-opacity-8: rgba(37, 37, 37, 0.08);
+  --tux-colorBGSecondary-opacity-12: rgba(37, 37, 37, 0.12);
+
+  --tux-colorBGTertiary: rgba(46, 46, 46, 1);
+  --tux-colorBGQuaternary: rgba(56, 56, 56, 1);
+  --tux-colorBGQuinary: rgba(75, 75, 75, 1);
+  --tux-colorBGSecondary2: rgba(255, 255, 255, 0.08);
+  --tux-colorBGTertiary2: rgba(255, 255, 255, 0.12);
+  --tux-colorBGPlaceholderDefault: rgba(255, 255, 255, 0.08);
+  --tux-colorBGPlaceholderOpaque: rgba(37, 37, 37, 1);
+  --tux-colorBGInput: rgba(255, 255, 255, 0.12);
+  --tux-colorBGInput2: rgba(255, 255, 255, 0.08);
+  --tux-colorBGView: rgba(255, 255, 255, 0.04);
+  --tux-colorBGCreation3: rgba(18, 18, 18, 1);
+  --tux-colorBGCreation4: rgba(27, 27, 27, 1);
+  --tux-colorBGBrand: rgba(254, 44, 85, 0.34);
+
+  --tux-colorLinePrimary: rgba(255, 255, 255, 0);
+  --tux-colorLineSecondary: rgba(255, 255, 255, 0.12);
+  --tux-colorLineInput: rgba(255, 255, 255, 0.5);
+  --tux-colorLinePrimary2: rgba(255, 255, 255, 0.2);
+  --tux-colorLineSecondary2: rgba(255, 255, 255, 0);
+  --tux-colorLineSecondary3: rgba(255, 255, 255, 0.5);
+  --tux-colorLineDarker: rgba(0, 0, 0, 0.6);
+
+  --tux-colorSDSecondary: rgba(0, 0, 0, 0.68);
+  --tux-colorSDTertiary: rgba(0, 0, 0, 0.5);
+}
+
+:root {
+  --tux-boxShadowIcon: 0 2px 12px 0 rgba(0, 0, 0, 0.12);
+  --tux-boxShadowLayer: 0 2px 8px 0 rgba(0, 0, 0, 0.06);
+  --tux-boxShadowNotice: 0 2px 12px 0 rgba(0, 0, 0, 0.12);
+}
+
+:root {
+  --tux-fontFamilyHeading: 'TikTokDisplayFont', Arial, Tahoma, PingFangSC, sans-serif;
+  --tux-fontFamilyParagraph: 'TikTokFont', Arial, Tahoma, PingFangSC, sans-serif;
+
+  --tux-fontWeightRegular: 400;
+  --tux-fontWeightSemibold: 500;
+  --tux-fontWeightBold: 700;
+
+  --tux-fontSizeH1: 96px;
+  --tux-fontSizeH2: 72px;
+  --tux-fontSizeH3: 56px;
+  --tux-fontSizeH4: 48px;
+  --tux-fontSizeH5: 32px;
+  --tux-fontSizeH6: 24px;
+  --tux-fontSizeH7: 18px;
+
+  --tux-fontSizeP1: 24px;
+  --tux-fontSizeP2: 18px;
+  --tux-fontSizeP3: 16px;
+  --tux-fontSizeP4: 14px;
+  --tux-fontSizeP5: 12px;
+}
+
+@font-face {
+  font-family: 'TikTokFont';
+  src: url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Regular.woff2?_default_font=1&v=2)
+      format('woff2'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Regular.woff?_default_font=1&v=2)
+      format('woff'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Regular.otf?_default_font=1&v=2)
+      format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: fallback;
+}
+
+@font-face {
+  font-family: 'TikTokFont';
+  src: url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.woff2?_default_font=1&v=2)
+      format('woff2'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.woff?_default_font=1&v=2)
+      format('woff'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.otf?_default_font=1&v=2)
+      format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: fallback;
+}
+
+@font-face {
+  font-family: 'TikTokFont';
+  src: url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.woff2?_default_font=1&v=2)
+      format('woff2'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.woff?_default_font=1&v=2)
+      format('woff'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.otf?_default_font=1&v=2)
+      format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: fallback;
+}
+
+@font-face {
+  font-family: 'TikTokFont';
+  src: url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Bold.woff2?_default_font=1&v=2)
+      format('woff2'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Bold.woff?_default_font=1&v=2)
+      format('woff'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Bold.otf?_default_font=1&v=2)
+      format('opentype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: fallback;
+}
+
+@font-face {
+  font-family: 'TikTokDisplayFont';
+  src: url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Regular.woff2?_default_font=1&v=2)
+      format('woff2'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Regular.woff?_default_font=1&v=2)
+      format('woff'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Regular.otf?_default_font=1&v=2)
+      format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: fallback;
+}
+
+@font-face {
+  font-family: 'TikTokDisplayFont';
+  src: url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Semibold.woff2?_default_font=1&v=2)
+      format('woff2'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Semibold.woff?_default_font=1&v=2)
+      format('woff'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Semibold.otf?_default_font=1&v=2)
+      format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: fallback;
+}
+
+@font-face {
+  font-family: 'TikTokDisplayFont';
+  src: url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Semibold.woff2?_default_font=1&v=2)
+      format('woff2'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Semibold.woff?_default_font=1&v=2)
+      format('woff'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Semibold.otf?_default_font=1&v=2)
+      format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: fallback;
+}
+
+@font-face {
+  font-family: 'TikTokDisplayFont';
+  src: url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Bold.woff2?_default_font=1&v=2)
+      format('woff2'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Bold.woff?_default_font=1&v=2)
+      format('woff'),
+    url(https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Bold.otf?_default_font=1&v=2)
+      format('opentype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: fallback;
+}
+
+/* Color */
+
+.tux-color-TextPrimary {
+  color: var(--tux-colorTextPrimary);
+}
+
+.tux-color-TextSecondary {
+  color: var(--tux-colorTextSecondary);
+}
+
+.tux-color-TextTertiary {
+  color: var(--tux-colorTextTertiary);
+}
+
+.tux-color-TextQuaternary {
+  color: var(--tux-colorTextQuaternary);
+}
+
+.tux-color-Link {
+  color: var(--tux-colorLink);
+}
+
+.tux-color-Primary {
+  color: var(--tux-colorPrimary);
+}
+
+.tux-color-Primary2 {
+  color: var(--tux-colorPrimary2);
+}
+
+.tux-color-Secondary {
+  color: var(--tux-colorSecondary);
+}
+
+.tux-color-Secondary2 {
+  color: var(--tux-colorSecondary2);
+}
+
+.tux-color-Positive {
+  color: var(--tux-colorPositive);
+}
+
+.tux-color-Positive2 {
+  color: var(--tux-colorPositive2);
+}
+
+.tux-colorNegative {
+  color: var(--tux-colorNegative);
+}
+
+.tux-color-ConstTextPrimary {
+  color: var(--tux-colorConstTextPrimary);
+}
+
+.tux-color-ConstTextInverse {
+  color: var(--tux-colorConstTextInverse);
+}
+
+.tux-color-ConstTextInverse2 {
+  color: var(--tux-colorConstTextInverse2);
+}
+
+.tux-color-ConstTextInverse3 {
+  color: var(--tux-colorConstTextInverse3);
+}
+
+.tux-color-ConstTextInverse4 {
+  color: var(--tux-colorConstTextInverse4);
+}
+
+.tux-color-ConstTextInverse5 {
+  color: var(--tux-colorConstTextInverse5);
+}
+
+.tux-color-AssistColorYellow {
+  color: var(--tux-colorAssistColorYellow);
+}
+
+/* Background color */
+
+.tux-background-BGPrimary {
+  background-color: var(--tux-colorBGPrimary);
+}
+
+.tux-background-BGSecondary {
+  background-color: var(--tux-colorBGSecondary);
+}
+
+.tux-background-BGSecondary2 {
+  background-color: var(--tux-colorBGSecondary2);
+}
+
+.tux-background-BGTertiary {
+  background-color: var(--tux-colorBGTertiary);
+}
+
+.tux-background-BGTertiary2 {
+  background-color: var(--tux-colorBGTertiary2);
+}
+
+.tux-background-BGQuaternary {
+  background-color: var(--tux-colorBGQuaternary);
+}
+
+.tux-background-BGQuinary {
+  background-color: var(--tux-colorBGQuinary);
+}
+
+.tux-background-BGInput {
+  background-color: var(--tux-colorBGInput);
+}
+
+.tux-background-BGInput2 {
+  background-color: var(--tux-colorBGInput2);
+}
+
+.tux-background-BGView {
+  background-color: var(--tux-colorBGView);
+}
+
+.tux-background-BGHover {
+  background-color: var(--tux-colorBGHover);
+}
+
+.tux-background-BGBrand {
+  background-color: var(--tux-colorBGBrand);
+}
+
+.tux-background-BGPlaceholderDefault {
+  background-color: var(--tux-colorBGPlaceholderDefault);
+}
+
+.tux-background-BGPlaceholderOpaque {
+  background-color: var(--tux-colorBGPlaceholderOpaque);
+}
+
+.tux-background-ToastDefault {
+  background-color: var(--tux-colorToastDefault);
+}
+
+.tux-background-ToastNegative {
+  background-color: var(--tux-colorToastNegative);
+}
+
+.tux-background-ConstBGInverse {
+  background-color: var(--tux-colorConstBGInverse);
+}
+
+.tux-background-ConstBGInverse1 {
+  background-color: var(--tux-colorConstBGInverse1);
+}
+
+.tux-background-ConstBGInverse2 {
+  background-color: var(--tux-colorBGConstBGInverse2);
+}
+
+.tux-background-ConstBGInverse3 {
+  background-color: var(--tux-colorBGConstBGInverse3);
+}
+
+.tux-background-ConstBGInverse4 {
+  background-color: var(--tux-colorBGConstBGInverse4);
+}
+
+.tux-background-BGCreation {
+  background-color: var(--tux-colorBGCreation);
+}
+
+.tux-background-BGCreation2 {
+  background-color: var(--tux-colorBGCreation2);
+}
+
+.tux-background-BGCreation3 {
+  background-color: var(--tux-colorBGCreation3);
+}
+
+.tux-background-BGCreation4 {
+  background-color: var(--tux-colorBGCreation4);
+}
+
+.tux-background-BGCreation5 {
+  background-color: var(--tux-colorBGCreation5);
+}
+
+.tux-background-ConstBGMat {
+  background-color: var(--tux-colorConstBGMat);
+}
+
+.tux-background-ConstBGContainer {
+  background-color: var(--tux-colorConstBGContainer);
+}
+
+.tux-background-ConstBGContainer2 {
+  background-color: var(--tux-colorConstBGContainer2);
+}
+
+.tux-background-ConstBGContainer3 {
+  background-color: var(--tux-colorConstBGContainer3);
+}
+
+.tux-background-ConstBGPlaceholderOpaque {
+  background-color: var(--tux-colorConstBGPlaceholderOpaque);
+}
+
+._TUXInputLabel {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+}
+
+._TUXInputLabel--hidden {
+  display: none;
+}
+
+[dir="ltr"] ._TUXInputLabel-tooltipIcon {
+  margin-left: 6px;
+}
+
+[dir="rtl"] ._TUXInputLabel-tooltipIcon {
+  margin-right: 6px;
+}
+
+._TUXInputLabel-tooltipIcon {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  -webkit-margin-start: 6px;
+          margin-inline-start: 6px;
+  height: 16px;
+  width: 16px;
+}
+
+._TUXInputError {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+}
+
+._TUXInputError-icon {
+  height: 14px;
+}
+
+._TUXChip-container {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  display: -webkit-inline-box;
+  display: -ms-inline-flexbox;
+  display: inline-flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  border-radius: 999px;
+  font-family: var(--tux-fontFamilyParagraph);
+  font-weight: var(--tux-fontWeightSemibold);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+
+._TUXChip-container--small {
+  height: 40px;
+  max-width: 360px;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-inline: 20px;
+  font-size: var(--tux-fontSizeP3);
+}
+
+._TUXChip-container--large {
+  height: 50px;
+  max-width: 450px;
+  padding-left: 30px;
+  padding-right: 30px;
+  padding-inline: 30px;
+  font-size: var(--tux-fontSizeP1);
+}
+
+._TUXChip-iconContainer {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+}
+
+[dir="ltr"] ._TUXChip-iconContainer--small {
+  margin-right: 4px;
+}
+
+[dir="rtl"] ._TUXChip-iconContainer--small {
+  margin-left: 4px;
+}
+
+._TUXChip-iconContainer--small {
+  -webkit-margin-end: 4px;
+          margin-inline-end: 4px;
+}
+
+[dir="ltr"] ._TUXChip-iconContainer--large {
+  margin-right: 8px;
+}
+
+[dir="rtl"] ._TUXChip-iconContainer--large {
+  margin-left: 8px;
+}
+
+._TUXChip-iconContainer--large {
+  -webkit-margin-end: 8px;
+          margin-inline-end: 8px;
+}
+
+._TUXChip-iconContainer > * {
+  height: 1em;
+  width: 1em;
+  -ms-flex-negative: 0;
+      flex-shrink: 0;
+}
+
+._TUXTooltip-reference {
+  display: inline-block;
+}
+
+._TUXTooltip-tooltip {
+  padding: 12px;
+  border-radius: 8px;
+  -webkit-box-shadow: var(--tux-boxShadowNotice);
+          box-shadow: var(--tux-boxShadowNotice);
+  -webkit-transition: opacity 300ms cubic-bezier(0.65, 0, 0.35, 1);
+  transition: opacity 300ms cubic-bezier(0.65, 0, 0.35, 1); /* TODO: consider making this a variable */
+  opacity: 0;
+}
+
+._TUXTooltip-tooltip--small {
+  max-width: 240px;
+}
+
+._TUXTooltip-tooltip--medium {
+  max-width: 360px;
+}
+
+._TUXTooltip-tooltip--primary {
+  background-color: var(--tux-colorSecondary2);
+  color: var(--tux-colorSecondary2); /* This will set the color of the arrow SVG */
+}
+
+._TUXTooltip-tooltip--secondary {
+  background-color: var(--tux-colorToastDefault);
+  color: var(--tux-colorToastDefault); /* This will set the color of the arrow SVG */
+}
+
+._TUXTooltip-tooltip--popover {
+  background-color: var(--tux-colorBGSecondary);
+  color: var(--tux-colorBGSecondary); /* This will set the color of the arrow SVG */
+}
+
+._TUXTooltip-tooltip--initial,
+._TUXTooltip-tooltip--close {
+  opacity: 0;
+}
+
+._TUXTooltip-tooltip--open {
+  opacity: 1;
+}
+
+._TUXTooltip-content--primary {
+  color: var(--tux-colorConstTextInverse);
+}
+
+._TUXTooltip-content--secondary {
+  color: var(--tux-colorConstTextInverse);
+}
+
+._TUXTooltip-content--popover {
+  color: var(--tux-colorTextPrimary);
+}
+
+._TUXRadioStandalone-container {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  display: -webkit-inline-box;
+  display: -ms-inline-flexbox;
+  display: inline-flex;
+  position: relative;
+  width: 16px;
+  height: 16px;
+  -ms-flex-negative: 0;
+      flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+._TUXRadioStandalone-container--disabled {
+  opacity: 0.34;
+  background-color: var(--tux-colorBGInput);
+}
+
+._TUXRadioStandalone-input {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+._TUXRadioStandalone-input:disabled {
+  cursor: not-allowed;
+}
+
+._TUXRadioStandalone-circleOutside {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  color: var(--tux-colorLineSecondary);
+}
+
+/* Light up the outer circle when the input is checked */
+[data-tux-radio-input]:checked ~ ._TUXRadioStandalone-circleOutside {
+  color: var(--tux-colorPrimary);
+}
+
+/* Light up the outer circle when the input is hovered or focused */
+[data-tux-radio-input]:not(:disabled):hover ~ ._TUXRadioStandalone-circleOutside,
+[data-tux-radio-input].focus-visible ~ ._TUXRadioStandalone-circleOutside {
+  color: rgba(234, 40, 78, 1);
+}
+[data-tux-radio-input]:not(:disabled):hover ~ ._TUXRadioStandalone-circleOutside,
+[data-tux-radio-input]:focus-visible ~ ._TUXRadioStandalone-circleOutside {
+  color: rgba(234, 40, 78, 1);
+}
+
+/* Light up the outer circle when the input is active */
+[data-tux-radio-input]:not(:disabled):active ~ ._TUXRadioStandalone-circleOutside {
+  color: rgba(224, 39, 75, 1);
+}
+
+._TUXRadioStandalone-circleInside {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  color: var(--tux-colorPrimary);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* Show up the inner circle when the input is checked */
+[data-tux-radio-input]:checked ~ ._TUXRadioStandalone-circleInside {
+  visibility: visible;
+}
+
+/* Light up the inner circle when the input is hovered or focused */
+[data-tux-radio-input]:not(:disabled):hover ~ ._TUXRadioStandalone-circleInside,
+[data-tux-radio-input].focus-visible ~ ._TUXRadioStandalone-circleInside {
+  color: rgba(234, 40, 78, 1);
+}
+[data-tux-radio-input]:not(:disabled):hover ~ ._TUXRadioStandalone-circleInside,
+[data-tux-radio-input]:focus-visible ~ ._TUXRadioStandalone-circleInside {
+  color: rgba(234, 40, 78, 1);
+}
+
+/* Light up the inner circle when the input is active */
+[data-tux-radio-input]:not(:disabled):active ~ ._TUXRadioStandalone-circleInside {
+  color: rgba(224, 39, 75, 1);
+}
+
+._TUXRadio-container {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+}
+
+._TUXRadio-label {
+  -webkit-box-flex: 1;
+      -ms-flex-positive: 1;
+          flex-grow: 1;
+}
+
+/* Use padding instead of margin so the gap between button and label remains clickable */
+[dir="ltr"] ._TUXRadio-label--before {
+  padding-left: 0px;
+}
+[dir="rtl"] ._TUXRadio-label--before {
+  padding-right: 0px;
+}
+[dir="ltr"] ._TUXRadio-label--before {
+  padding-right: 12px;
+}
+[dir="rtl"] ._TUXRadio-label--before {
+  padding-left: 12px;
+}
+._TUXRadio-label--before {
+  -webkit-padding-start: 0px;
+          padding-inline-start: 0px;
+  -webkit-padding-end: 12px;
+          padding-inline-end: 12px;
+}
+
+[dir="ltr"] ._TUXRadio-label--after {
+  padding-left: 12px;
+}
+
+[dir="rtl"] ._TUXRadio-label--after {
+  padding-right: 12px;
+}
+
+[dir="ltr"] ._TUXRadio-label--after {
+  padding-right: 0px;
+}
+
+[dir="rtl"] ._TUXRadio-label--after {
+  padding-left: 0px;
+}
+
+._TUXRadio-label--after {
+  -webkit-padding-start: 12px;
+          padding-inline-start: 12px;
+  -webkit-padding-end: 0px;
+          padding-inline-end: 0px;
+}
+
+._TUXMenu-container {
+  min-width: 240px;
+  margin-top: 3px;
+  margin-bottom: 3px;
+  margin-block: 3px;
+}
+
+._TUXMenuItem-container {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  padding-block: 7px;
+  padding-left: 11px;
+  padding-right: 11px;
+  padding-inline: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  text-decoration: none;
+  font-family: var(--tux-fontFamilyParagraph);
+  font-size: var(--tux-fontSizeP3);
+  font-weight: var(--tux-fontWeightRegular);
+  color: var(--tux-colorTextPrimary);
+
+  /* Reset button styles if used as a button */
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  border: none;
+  background-color: transparent;
+}
+
+._TUXMenuItem-container:hover {
+  background-color: var(--tux-colorBGView);
+}
+
+._TUXMenuItem-container:disabled {
+  background-color: var(--tuxColorBGView);
+  color: var(--tux-colorTextQuaternary);
+  cursor: not-allowed;
+}
+
+._TUXMenuItem-container:disabled:hover {
+  background-color: transparent;
+}
+
+._TUXTimeInput-inputContainer {
+  margin-top: 6px;
+  -webkit-margin-before: 6px;
+          margin-block-start: 6px;
+}
+
+._TUXTimeInput-inputContainer--hasDescription {
+  margin-top: 4px;
+  -webkit-margin-before: 4px;
+          margin-block-start: 4px;
+}
+
+._TUXTimeInput-inputContainer--isLabelHidden {
+  margin-top: 0px;
+  -webkit-margin-before: 0px;
+          margin-block-start: 0px;
+}
+
+._TUXTimeInput-button {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  height: 36px;
+  min-width: 140px;
+  padding-left: 11px;
+  padding-right: 11px;
+  padding-inline: 11px;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  border: 1px solid var(--tux-colorLineSecondary);
+  border-radius: 2px;
+  background-color: var(--tux-colorBGPrimary);
+  outline: none;
+  cursor: pointer;
+}
+
+._TUXTimeInput-button--large {
+  height: 48px;
+}
+
+._TUXTimeInput-button--error {
+  border-color: var(--tux-colorNegative);
+}
+
+._TUXTimeInput-button:disabled {
+  color: var(--tux-colorTextQuaternary);
+  background-color: var(--tux-colorBGInput);
+  cursor: not-allowed;
+}
+
+._TUXTimeInput-button.focus-visible:not(:disabled) {
+  border-color: var(--tux-colorLineInput);
+}
+
+._TUXTimeInput-button:focus-visible:not(:disabled) {
+  border-color: var(--tux-colorLineInput);
+}
+
+._TUXTimeInput-button:hover:not(:disabled) {
+  background-color: var(--tux-colorBGSecondary-tint-4);
+}
+
+[dir="ltr"] ._TUXTimeInput-buttonIcon {
+  margin-right: 8px;
+}
+
+[dir="rtl"] ._TUXTimeInput-buttonIcon {
+  margin-left: 8px;
+}
+
+._TUXTimeInput-buttonIcon {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  height: 16px;
+  width: 16px;
+  -webkit-margin-end: 8px;
+          margin-inline-end: 8px;
+  color: inherit;
+}
+
+._TUXTimeInput-popoverContent {
+  height: 224px;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+}
+
+._TUXTimeInput-list {
+  overflow-y: auto;
+  padding-top: 96px;
+  padding-bottom: 96px;
+  padding-block: 96px;
+}
+
+[dir="ltr"] ._TUXTimeInput-list:not(:last-child) {
+  border-right: 1px solid var(--tux-colorLineSecondary);
+}
+
+[dir="rtl"] ._TUXTimeInput-list:not(:last-child) {
+  border-left: 1px solid var(--tux-colorLineSecondary);
+}
+
+._TUXTimeInput-list:not(:last-child) {
+  -webkit-border-end: 1px solid var(--tux-colorLineSecondary);
+          border-inline-end: 1px solid var(--tux-colorLineSecondary);
+}
+
+._TUXTimeInput-timeOption {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  -webkit-box-pack: center;
+      -ms-flex-pack: center;
+          justify-content: center;
+  height: 32px;
+  width: 64px;
+  color: var(--tux-colorTextPrimary);
+  cursor: pointer;
+}
+
+._TUXTimeInput-timeOption:not(._TUXTimeInput-timeOption--disabled):hover {
+  background-color: var(--tux-colorBGView);
+}
+
+._TUXTimeInput-timeOption--selected {
+  color: var(--tux-colorPrimary);
+  background-color: var(--tux-colorBGPrimary);
+  font-weight: 700;
+}
+
+._TUXTimeInput-timeOption--disabled {
+  color: var(--tux-colorTextTertiary);
+}
+
+._TUXTimeInput-timeOption--selected._TUXTimeInput-timeOption--disabled {
+  background-color: var(--tux-colorNegative);
+  color: var(--tux-colorConstTextInverse);
+}
+
+._TUXSidesheet {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  display: -webkit-box;
+
+  display: -ms-flexbox;
+
+  display: flex;
+
+  overflow: hidden;
+
+  --tux-sidesheetTransitionDuration: 0.3s;
+}
+
+._TUXSidesheet--alignStart {
+  -webkit-box-pack: start;
+      -ms-flex-pack: start;
+          justify-content: flex-start;
+}
+
+._TUXSidesheet--alignEnd {
+  -webkit-box-pack: end;
+      -ms-flex-pack: end;
+          justify-content: flex-end;
+}
+
+._TUXSidesheet-backdrop {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  background: var(--tux-colorSDSecondary);
+  opacity: 0;
+
+  -webkit-transition-property: opacity;
+
+  transition-property: opacity;
+  -webkit-transition-duration: var(--tux-sidesheetTransitionDuration);
+          transition-duration: var(--tux-sidesheetTransitionDuration);
+  -webkit-transition-timing-function: linear;
+          transition-timing-function: linear;
+}
+
+._TUXSidesheet-backdrop--entering {
+  opacity: 1;
+}
+
+._TUXSidesheet-backdrop--entered {
+  opacity: 1;
+}
+
+._TUXSidesheet-backdrop--exiting {
+  opacity: 0;
+}
+
+._TUXSidesheet-backdrop--exited {
+  opacity: 0;
+}
+
+._TUXSidesheet-sheet {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  background-color: var(--tux-colorBGPrimary);
+  -webkit-box-shadow: var(--tux-boxShadowNotice);
+          box-shadow: var(--tux-boxShadowNotice);
+  width: auto;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  outline: 0;
+  -webkit-transition-property: opacity, -webkit-transform;
+  transition-property: opacity, -webkit-transform;
+  transition-property: transform, opacity;
+  transition-property: transform, opacity, -webkit-transform;
+  -webkit-transition-duration: var(--tux-sidesheetTransitionDuration);
+          transition-duration: var(--tux-sidesheetTransitionDuration);
+  -webkit-transition-timing-function: linear;
+          transition-timing-function: linear;
+}
+
+/* stylelint-disable selector-no-qualifying-type */
+
+body:not([dir='rtl']) ._TUXSidesheet-sheet--alignStart,
+body[dir='rtl'] ._TUXSidesheet-sheet--alignEnd {
+  /* Sliding in from left. */
+  --tux-sidesheet-exitTranslateX: -100%;
+}
+
+body:not([dir='rtl']) ._TUXSidesheet-sheet--alignEnd,
+body[dir='rtl'] ._TUXSidesheet-sheet--alignStart {
+  /* Sliding in from right. */
+  --tux-sidesheet-exitTranslateX: +100%;
+}
+
+/* stylelint-enable selector-no-qualifying-type */
+
+._TUXSidesheet-sheet--entering {
+  -webkit-transform: translateX(0);
+          transform: translateX(0);
+  opacity: 1;
+}
+
+._TUXSidesheet-sheet--entered {
+  -webkit-transform: translateX(0);
+          transform: translateX(0);
+  opacity: 1;
+}
+
+._TUXSidesheet-sheet--exiting {
+  -webkit-transform: translateX(var(--tux-sidesheet-exitTranslateX));
+          transform: translateX(var(--tux-sidesheet-exitTranslateX));
+  opacity: 0;
+}
+
+._TUXSidesheet-sheet--exited {
+  -webkit-transform: translateX(var(--tux-sidesheet-exitTranslateX));
+          transform: translateX(var(--tux-sidesheet-exitTranslateX));
+  opacity: 0;
+}
+
+@-webkit-keyframes TUXSkeleton__background--light {
+  0% {
+    background-color: rgba(22, 24, 35, 0.1);
+  }
+
+  50.0% {
+    background-color: var(--tux-colorBGView);
+  }
+
+  100.0% {
+    background-color: rgba(22, 24, 35, 0.1);
+  }
+}
+
+@keyframes TUXSkeleton__background--light {
+  0% {
+    background-color: rgba(22, 24, 35, 0.1);
+  }
+
+  50.0% {
+    background-color: var(--tux-colorBGView);
+  }
+
+  100.0% {
+    background-color: rgba(22, 24, 35, 0.1);
+  }
+}
+
+@-webkit-keyframes TUXSkeleton__background--dark {
+  0% {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  50.0% {
+    background-color: var(--tux-colorBGView);
+  }
+
+  100.0% {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+@keyframes TUXSkeleton__background--dark {
+  0% {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  50.0% {
+    background-color: var(--tux-colorBGView);
+  }
+
+  100.0% {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+._TUXSkeleton {
+  background-color: var(--tux-colorBGView);
+  -webkit-animation-name: TUXSkeleton__background--light;
+          animation-name: TUXSkeleton__background--light;
+  -webkit-animation-duration: 1600ms;
+          animation-duration: 1600ms;
+  -webkit-animation-timing-function: linear;
+          animation-timing-function: linear;
+  -webkit-animation-iteration-count: infinite;
+          animation-iteration-count: infinite;
+  -webkit-animation-play-state: running;
+          animation-play-state: running;
+}
+
+[data-theme='dark'] ._TUXSkeleton {
+  -webkit-animation-name: TUXSkeleton__background--dark;
+          animation-name: TUXSkeleton__background--dark;
+}
+
+._TUXSkeletonCircle {
+  border-radius: 50%;
+}
+
+._TUXSkeletonRectangle {
+  border-radius: 2px;
+}
+
+._TUXSkeletonCell {
+  border-radius: 24px;
+}
+
+._TUXDropdownButton-button {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  height: 28px;
+  display: -webkit-inline-box;
+  display: -ms-inline-flexbox;
+  display: inline-flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  padding-left: 11px;
+  padding-right: 11px;
+  padding-inline: 11px;
+  border: 1px solid var(--tux-colorLineSecondary);
+  color: var(--tux-colorTextPrimary);
+  background-color: var(--tux-colorBGSecondary);
+  border-radius: 2px;
+  font-weight: var(--tux-fontWeightSemibold);
+  font-family: var(--tux-fontFamilyParagraph);
+  cursor: pointer;
+}
+
+._TUXDropdownButton-button:not(:disabled):hover {
+  background-color: var(--tux-colorBGSecondary-tint-4);
+  border-color: var(--tux-colorLinePrimary);
+}
+
+._TUXDropdownButton-button:not(:disabled):active {
+  background-color: var(--tux-colorBGSecondary-tint-8);
+  border-color: var(--tux-colorLinePrimary);
+}
+
+._TUXDropdownButton-button:disabled {
+  color: var(--tux-colorTextQuaternary);
+  cursor: not-allowed;
+}
+
+._TUXDropdownButton-button--small {
+  font-size: var(--tux-fontSizeP4);
+  height: 28px;
+  padding-left: 11px;
+  padding-right: 11px;
+  padding-inline: 11px;
+}
+
+._TUXDropdownButton-button--medium {
+  font-size: var(--tux-fontSizeP3);
+  height: 36px;
+  padding-left: 15px;
+  padding-right: 15px;
+  padding-inline: 15px;
+}
+
+._TUXDropdownButton-button--large {
+  font-size: var(--tux-fontSizeP3);
+  height: 48px;
+  padding-left: 23px;
+  padding-right: 23px;
+  padding-inline: 23px;
+}
+
+._TUXDropdownButton-icon {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  /* TODO: make this timing function into a CSS variable */
+  -webkit-transition: -webkit-transform 220ms cubic-bezier(0.65, 0, 0.35, 1);
+  transition: -webkit-transform 220ms cubic-bezier(0.65, 0, 0.35, 1);
+  transition: transform 220ms cubic-bezier(0.65, 0, 0.35, 1);
+  transition: transform 220ms cubic-bezier(0.65, 0, 0.35, 1), -webkit-transform 220ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+[dir="ltr"] ._TUXDropdownButton-button--small ._TUXDropdownButton-icon {
+  margin-left: 2px;
+}
+
+[dir="rtl"] ._TUXDropdownButton-button--small ._TUXDropdownButton-icon {
+  margin-right: 2px;
+}
+
+._TUXDropdownButton-button--small ._TUXDropdownButton-icon {
+  -webkit-margin-start: 2px;
+          margin-inline-start: 2px;
+}
+
+[dir="ltr"] ._TUXDropdownButton-button--medium ._TUXDropdownButton-icon {
+  margin-left: 4px;
+}
+
+[dir="rtl"] ._TUXDropdownButton-button--medium ._TUXDropdownButton-icon {
+  margin-right: 4px;
+}
+
+._TUXDropdownButton-button--medium ._TUXDropdownButton-icon {
+  -webkit-margin-start: 4px;
+          margin-inline-start: 4px;
+}
+
+[dir="ltr"] ._TUXDropdownButton-button--large ._TUXDropdownButton-icon {
+  margin-left: 4px;
+}
+
+[dir="rtl"] ._TUXDropdownButton-button--large ._TUXDropdownButton-icon {
+  margin-right: 4px;
+}
+
+._TUXDropdownButton-button--large ._TUXDropdownButton-icon {
+  -webkit-margin-start: 4px;
+          margin-inline-start: 4px;
+}
+
+._TUXDropdownButton-icon--isOpen {
+  -webkit-transform: rotate(180deg);
+          transform: rotate(180deg);
+}
+
+._TUXAccordion-container {
+  background-color: var(--tux-colorBGSecondary);
+}
+
+[dir="ltr"] ._TUXAccordion-sectionHeader {
+  text-align: left;
+}
+
+[dir="rtl"] ._TUXAccordion-sectionHeader {
+  text-align: right;
+}
+
+._TUXAccordion-sectionHeader {
+  /* reset button appearance */
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  border: none;
+  width: 100%;
+  text-align: start;
+
+  padding-top: 16px;
+
+  padding-bottom: 16px;
+
+  padding-block: 16px;
+  padding-left: 24px;
+  padding-right: 24px;
+  padding-inline: 24px;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  -webkit-box-pack: justify;
+      -ms-flex-pack: justify;
+          justify-content: space-between;
+  background-color: var(--tux-colorBGSecondary);
+  cursor: pointer;
+}
+
+._TUXAccordion-sectionHeader:hover {
+  background-color: var(--tux-colorBGSecondary-tint-4);
+}
+
+._TUXAccordion-sectionHeader:active {
+  background-color: var(--tux-colorBGSecondary-tint-8);
+}
+
+[dir="ltr"] ._TUXAccordion-triangleIcon {
+  margin-left: 48px;
+}
+
+[dir="rtl"] ._TUXAccordion-triangleIcon {
+  margin-right: 48px;
+}
+
+._TUXAccordion-triangleIcon {
+  height: 16px;
+  width: 16px;
+  -ms-flex-negative: 0;
+      flex-shrink: 0;
+  -webkit-margin-start: 48px;
+          margin-inline-start: 48px;
+  color: var(--tux-colorTextPrimary);
+  -webkit-transform: rotate(-90deg);
+          transform: rotate(-90deg);
+  -webkit-transition: -webkit-transform 220ms cubic-bezier(0.65, 0, 0.35, 1);
+  transition: -webkit-transform 220ms cubic-bezier(0.65, 0, 0.35, 1);
+  transition: transform 220ms cubic-bezier(0.65, 0, 0.35, 1);
+  transition: transform 220ms cubic-bezier(0.65, 0, 0.35, 1), -webkit-transform 220ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* stylelint-disable selector-no-qualifying-type */
+
+body[dir='rtl'] ._TUXAccordion-triangleIcon {
+  -webkit-transform: rotate(+90deg);
+          transform: rotate(+90deg);
+}
+
+body[dir='rtl'] ._TUXAccordion-triangleIcon--isOpen,
+._TUXAccordion-triangleIcon--isOpen {
+  -webkit-transform: rotate(0deg);
+          transform: rotate(0deg);
+}
+
+/* stylelint-enable selector-no-qualifying-type */
+
+._TUXAccordion-sectionDivider {
+  margin-left: 24px;
+  margin-right: 24px;
+  margin-inline: 24px;
+  border-top: 1px solid var(--tux-colorLineSecondary);
+}
+
+._TUXAccordion-sectionContent {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  padding-block: 16px;
+  padding-left: 24px;
+  padding-right: 24px;
+  padding-inline: 24px;
+}
+
+._TUXModalHeader {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  min-height: 84px;
+  overflow: hidden;
+
+  display: -webkit-box;
+
+  display: -ms-flexbox;
+
+  display: flex;
+  -webkit-box-orient: horizontal;
+  -webkit-box-direction: normal;
+      -ms-flex-flow: row nowrap;
+          flex-flow: row nowrap;
+  -webkit-box-align: start;
+      -ms-flex-align: start;
+          align-items: flex-start;
+  justify-self: space-between;
+
+  padding: 24px;
+  margin-top: 2px;
+}
+
+._TUXModalTitle {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  text-align: center;
+  margin: 32px auto 8px;
+  overflow: hidden;
+}
+
+._TUXModalBody {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  -webkit-box-flex: 1;
+
+      -ms-flex-positive: 1;
+
+          flex-grow: 1;
+  -ms-flex-negative: 1;
+      flex-shrink: 1;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  padding: 24px;
+}
+
+._TUXModalFooter {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  display: -webkit-box;
+
+  display: -ms-flexbox;
+
+  display: flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  -webkit-box-pack: end;
+      -ms-flex-pack: end;
+          justify-content: flex-end;
+
+  padding: 24px;
+  gap: 8px;
+}
+
+._TUXModalCloseButton {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  border: none;
+  cursor: pointer;
+
+  height: 32px;
+  width: 32px;
+  font-size: 32px;
+  padding: 0;
+
+  background: transparent;
+  color: var(--tux-colorTextSecondary);
+}
+
+._TUXModal-wrapper {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  display: -webkit-box;
+
+  display: -ms-flexbox;
+
+  display: flex;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+  -webkit-box-pack: center;
+      -ms-flex-pack: center;
+          justify-content: center;
+
+  overflow: auto;
+
+  --tux-modalTransitionDuration: 0.3s;
+}
+
+._TUXModal-verticalPositionWrapper {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-pack: center;
+      -ms-flex-pack: center;
+          justify-content: center;
+  -webkit-box-align: start;
+      -ms-flex-align: start;
+          align-items: flex-start;
+
+  max-height: 100vh;
+  overflow: visible;
+}
+
+._TUXModal-verticalPaddingWrapper {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-pack: center;
+      -ms-flex-pack: center;
+          justify-content: center;
+  -webkit-box-align: center;
+      -ms-flex-align: center;
+          align-items: center;
+
+  padding: 32px 16px;
+  max-width: 100vw;
+}
+
+._TUXModal-backdrop {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  background: var(--tux-colorSDSecondary);
+  opacity: 0;
+
+  -webkit-transition-property: opacity;
+
+  transition-property: opacity;
+  -webkit-transition-duration: var(--tux-modalTransitionDuration);
+          transition-duration: var(--tux-modalTransitionDuration);
+  -webkit-transition-timing-function: linear;
+          transition-timing-function: linear;
+}
+
+._TUXModal-backdrop--entering {
+  opacity: 1;
+}
+
+._TUXModal-backdrop--entered {
+  opacity: 1;
+}
+
+._TUXModal-backdrop--exiting {
+  opacity: 0;
+}
+
+._TUXModal-backdrop--exited {
+  opacity: 0;
+}
+
+._TUXModal {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+
+  background-color: var(--tux-colorBGPrimary);
+  -webkit-box-shadow: var(--tux-boxShadowNotice);
+          box-shadow: var(--tux-boxShadowNotice);
+
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+
+  border-radius: 8px;
+  outline: 0;
+
+  display: -webkit-box;
+
+  display: -ms-flexbox;
+
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+      -ms-flex-direction: column;
+          flex-direction: column;
+  -webkit-box-align: stretch;
+      -ms-flex-align: stretch;
+          align-items: stretch;
+  -webkit-box-pack: start;
+      -ms-flex-pack: start;
+          justify-content: flex-start;
+
+  -webkit-transition-property: opacity, -webkit-transform;
+
+  transition-property: opacity, -webkit-transform;
+
+  transition-property: transform, opacity;
+
+  transition-property: transform, opacity, -webkit-transform;
+  -webkit-transition-duration: var(--tux-modalTransitionDuration);
+          transition-duration: var(--tux-modalTransitionDuration);
+  -webkit-transition-timing-function: linear;
+          transition-timing-function: linear;
+}
+
+._TUXModal--width-Small {
+  width: 400px;
+}
+
+._TUXModal--width-Medium {
+  width: 764px;
+}
+
+._TUXModal--width-Large {
+  width: 1000px;
+}
+
+._TUXModal--width-Compact {
+  width: auto;
+}
+
+._TUXModal--width-Full {
+  width: calc(100vw - 32px);
+}
+
+._TUXModal--height-Compact {
+  height: auto;
+}
+
+._TUXModal--height-Full {
+  height: calc(100vh - 64px);
+  min-height: 178px;
+}
+
+._TUXModal--transparent {
+  background-color: none;
+}
+
+._TUXModal--entering {
+  -webkit-transform: scale(1);
+          transform: scale(1);
+  opacity: 1;
+}
+
+._TUXModal--entered {
+  -webkit-transform: scale(1);
+          transform: scale(1);
+  opacity: 1;
+}
+
+._TUXModal--exiting {
+  -webkit-transform: scale(1);
+          transform: scale(1);
+  opacity: 0;
+}
+
+._TUXModal--exited {
+  -webkit-transform: scale(0.8);
+          transform: scale(0.8);
+  opacity: 0;
+}
+
+._TUXModal-closeButtonWrapper {
+  position: absolute;
+  top: 26px;
+  right: 24px;
+}
+
+body[dir='rtl'] ._TUXModal-closeButtonWrapper {
+  left: 24px;
+  right: auto;
+}

@@ -1,0 +1,4953 @@
+@font-face {
+  font-family: "TikTokFont";
+  src: url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Regular.woff2?_default_font=1&v=2") format("woff2"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Regular.woff?_default_font=1&v=2") format("woff"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Regular.otf?_default_font=1&v=2") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: fallback
+}
+
+@font-face {
+  font-family: "TikTokFont";
+  src: url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.woff2?_default_font=1&v=2") format("woff2"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.woff?_default_font=1&v=2") format("woff"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Semibold.otf?_default_font=1&v=2") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: fallback
+}
+
+@font-face {
+  font-family: "TikTokFont";
+  src: url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Bold.woff2?_default_font=1&v=2") format("woff2"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Bold.woff?_default_font=1&v=2") format("woff"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokFont-Bold.otf?_default_font=1&v=2") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: fallback
+}
+
+@font-face {
+  font-family: "TikTokDisplayFont";
+  src: url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Regular.woff2?_default_font=1&v=2") format("woff2"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Regular.woff?_default_font=1&v=2") format("woff"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Regular.otf?_default_font=1&v=2") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: fallback
+}
+
+@font-face {
+  font-family: "TikTokDisplayFont";
+  src: url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Semibold.woff2?_default_font=1&v=2") format("woff2"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Semibold.woff?_default_font=1&v=2") format("woff"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Semibold.otf?_default_font=1&v=2") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: fallback
+}
+
+@font-face {
+  font-family: "TikTokDisplayFont";
+  src: url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Bold.woff2?_default_font=1&v=2") format("woff2"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Bold.woff?_default_font=1&v=2") format("woff"),url("https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok_fonts/TikTokDisplayFont-Bold.otf?_default_font=1&v=2") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: fallback
+}
+
+.tux-web-canary {
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  -webkit-text-size-adjust: 100%;
+}
+
+.tux-web-canary a,a.tux-web-canary {
+  background-color: rgba(0,0,0,0);
+  -webkit-text-decoration: none;
+  text-decoration: none;
+  color: inherit;
+}
+
+.tux-web-canary h1,.tux-web-canary h2,.tux-web-canary h3,.tux-web-canary h4,.tux-web-canary p,p.tux-web-canary,.tux-web-canary figure,.tux-web-canary blockquote,.tux-web-canary dl,.tux-web-canary dd {
+  margin: 0;
+}
+
+.tux-web-canary button,.tux-web-canary input,.tux-web-canary optgroup,.tux-web-canary select,.tux-web-canary textarea {
+  font-family: inherit;
+  font-feature-settings: inherit;
+  font-variation-settings: inherit;
+  font-size: 100%;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  margin: 0;
+  border: 0;
+}
+
+.tux-web-canary button {
+  background-color: rgba(0,0,0,0);
+  background-image: none;
+  border: none;
+}
+
+.tux-web-canary,.tux-web-canary::before,.tux-web-canary::after,.tux-web-canary *,.tux-web-canary *::before,.tux-web-canary *::after {
+  box-sizing: border-box;
+  border-width: 0;
+}
+
+.tux-web-canary ul[role=list] {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tux-web-canary ol[role=list] {
+  list-style: none;
+}
+
+.tux-web-canary img,.tux-web-canary svg,.tux-web-canary video,.tux-web-canary canvas,.tux-web-canary audio,.tux-web-canary iframe,.tux-web-canary embed,.tux-web-canary object {
+  display: block;
+  max-width: 100%;
+}
+
+[dir=rtl] .flip-rtl {
+  transform: scaleX(-1);
+}
+
+[data-tux-color-scheme=light] {
+  --tux-v2-color-brand-ai-1: rgb(132, 112, 255);
+  --tux-v2-color-brand-ai-gradient-1: rgb(0, 241, 200);
+  --tux-v2-color-brand-ai-gradient-1-a70: rgba(0, 241, 200, 0.7);
+  --tux-v2-color-brand-ai-gradient-2: rgb(0, 237, 234);
+  --tux-v2-color-brand-ai-gradient-3: rgb(217, 255, 158);
+  --tux-v2-color-brand-ai-gradient-3-a50: rgba(217, 255, 158, 0.5);
+  --tux-v2-color-brand-ai-gradient-3-a70: rgba(217, 255, 158, 0.7);
+  --tux-v2-color-brand-ai-gradient-4: rgb(143, 180, 255);
+  --tux-v2-color-brand-ai-gradient-4-a20: rgba(143, 180, 255, 0.2);
+  --tux-v2-color-brand-ai-gradient-4-a50: rgba(143, 180, 255, 0.5);
+  --tux-v2-color-brand-ai-gradient-5: rgb(178, 140, 255);
+  --tux-v2-color-brand-ai-gradient-5-a20: rgba(178, 140, 255, 0.2);
+  --tux-v2-color-brand-ai-gradient-6: rgb(211, 255, 252);
+  --tux-v2-color-brand-ai-gradient-6-a10: rgba(211, 255, 252, 0.1);
+  --tux-v2-color-brand-ai-gradient-6-a50: rgba(211, 255, 252, 0.5);
+  --tux-v2-color-brand-ai-icon-1: rgb(0, 186, 180);
+  --tux-v2-color-brand-lemon8: rgb(255, 247, 0);
+  --tux-v2-color-brand-oscar-gold: rgb(186, 158, 94);
+  --tux-v2-color-brand-tako-1: rgb(0, 181, 238);
+  --tux-v2-color-brand-tako-2: rgb(0, 0, 0);
+  --tux-v2-color-brand-tiktok-photos-1: rgb(100, 250, 205);
+  --tux-v2-color-brand-tiktok-photos-2: rgb(0, 170, 150);
+  --tux-v2-color-brand-tiktok-plus-1: rgb(255, 200, 4);
+  --tux-v2-color-brand-tiktok-plus-2: rgb(229, 165, 0);
+  --tux-v2-color-brand-tiktok-black: rgb(0, 0, 0);
+  --tux-v2-color-brand-tiktok-blaze: rgb(241, 32, 74);
+  --tux-v2-color-brand-tiktok-dawn: rgb(237, 187, 232);
+  --tux-v2-color-brand-tiktok-ember: rgb(74, 5, 5);
+  --tux-v2-color-brand-tiktok-glint: rgb(45, 204, 211);
+  --tux-v2-color-brand-tiktok-glow: rgb(251, 235, 53);
+  --tux-v2-color-brand-tiktok-muse: rgb(237, 212, 178);
+  --tux-v2-color-brand-tiktok-neutral-background: rgb(255, 255, 255);
+  --tux-v2-color-brand-tiktok-neutral-foreground: rgb(0, 0, 0);
+  --tux-v2-color-brand-tiktok-shimmer: rgb(186, 246, 240);
+  --tux-v2-color-brand-tiktok-thrive: rgb(3, 54, 36);
+  --tux-v2-color-brand-tiktok-white: rgb(255, 255, 255);
+  --tux-v2-color-brand-tokopedia-1: rgb(0, 170, 91);
+  --tux-v2-color-creation-adjust-background: rgb(255, 178, 215);
+  --tux-v2-color-creation-adjust-hsl-blue: rgb(50, 152, 246);
+  --tux-v2-color-creation-adjust-hsl-cyan: rgb(53, 225, 225);
+  --tux-v2-color-creation-adjust-hsl-fuchsia: rgb(201, 46, 255);
+  --tux-v2-color-creation-adjust-hsl-green: rgb(120, 194, 94);
+  --tux-v2-color-creation-adjust-hsl-indigo: rgb(88, 86, 214);
+  --tux-v2-color-creation-adjust-hsl-orange: rgb(255, 147, 61);
+  --tux-v2-color-creation-adjust-hsl-red: rgb(255, 82, 82);
+  --tux-v2-color-creation-adjust-hsl-yellow: rgb(242, 205, 70);
+  --tux-v2-color-creation-adjust-label: rgb(142, 31, 84);
+  --tux-v2-color-creation-comment-christmas-text: rgb(0, 107, 47);
+  --tux-v2-color-creation-filter-background: rgb(255, 191, 191);
+  --tux-v2-color-creation-filter-label: rgb(139, 35, 41);
+  --tux-v2-color-creation-first-comment-gradient-red-1: rgb(255, 59, 134);
+  --tux-v2-color-creation-first-comment-gradient-red-2: rgb(255, 149, 90);
+  --tux-v2-color-creation-flash-light-cold: rgb(211, 234, 255);
+  --tux-v2-color-creation-flash-light-warm: rgb(255, 242, 205);
+  --tux-v2-color-creation-glance-watermark: rgb(255, 248, 90);
+  --tux-v2-color-creation-pill-overlay: rgba(230, 230, 230, 0.32);
+  --tux-v2-color-creation-sticker-background: rgb(180, 175, 255);
+  --tux-v2-color-creation-sticker-label: rgb(65, 47, 177);
+  --tux-v2-color-customer-service-report: rgb(62, 72, 121);
+  --tux-v2-color-data-categories-assist-1: rgb(139, 127, 255);
+  --tux-v2-color-data-categories-assist-2: rgb(245, 141, 0);
+  --tux-v2-color-data-categories-assist-3: rgb(248, 204, 16);
+  --tux-v2-color-data-categories-assist-4: rgb(250, 69, 160);
+  --tux-v2-color-data-categories-assist-5: rgb(128, 195, 255);
+  --tux-v2-color-data-categories-assist-6: rgb(0, 163, 127);
+  --tux-v2-color-data-categories-assist-7: rgb(74, 214, 116);
+  --tux-v2-color-data-categories-primary: rgb(0, 117, 219);
+  --tux-v2-color-data-categories-secondary: rgb(255, 74, 103);
+  --tux-v2-color-data-categories-tertiary: rgb(17, 207, 230);
+  --tux-v2-color-ec-azure-banner: rgba(37, 163, 255, 0.08);
+  --tux-v2-color-ec-azure-main: rgb(37, 163, 255);
+  --tux-v2-color-ec-azure-tag: rgba(37, 163, 255, 0.12);
+  --tux-v2-color-ec-azure-text: rgb(0, 119, 207);
+  --tux-v2-color-ec-azure-text-on-tag: rgb(0, 119, 207);
+  --tux-v2-color-ec-black-image-mask: rgba(0, 0, 0, 0.03);
+  --tux-v2-color-ec-black-text-1: rgb(0, 0, 0);
+  --tux-v2-color-ec-black-text-2: rgba(0, 0, 0, 0.65);
+  --tux-v2-color-ec-black-text-3: rgba(0, 0, 0, 0.48);
+  --tux-v2-color-ec-bronze-banner: rgb(255, 245, 231);
+  --tux-v2-color-ec-bronze-border: rgba(137, 81, 9, 0.15);
+  --tux-v2-color-ec-bronze-main: rgb(155, 89, 11);
+  --tux-v2-color-ec-bronze-tag: rgba(203, 103, 11, 0.12);
+  --tux-v2-color-ec-bronze-text: rgb(137, 81, 9);
+  --tux-v2-color-ec-bronze-text-on-tag: rgb(137, 81, 9);
+  --tux-v2-color-ec-cyan-banner: rgb(240, 251, 251);
+  --tux-v2-color-ec-cyan-border: rgba(0, 123, 123, 0.14);
+  --tux-v2-color-ec-cyan-main: rgb(0, 184, 185);
+  --tux-v2-color-ec-cyan-tag: rgba(0, 184, 185, 0.12);
+  --tux-v2-color-ec-cyan-text: rgb(0, 123, 123);
+  --tux-v2-color-ec-cyan-text-on-tag: rgb(0, 123, 123);
+  --tux-v2-color-ec-gold-banner: rgb(253, 246, 231);
+  --tux-v2-color-ec-gold-border: rgba(182, 122, 6, 0.2);
+  --tux-v2-color-ec-gold-main: rgb(255, 193, 34);
+  --tux-v2-color-ec-gold-tag: rgba(255, 193, 34, 0.2);
+  --tux-v2-color-ec-gold-text: rgb(182, 122, 6);
+  --tux-v2-color-ec-gold-text-on-tag: rgb(182, 122, 6);
+  --tux-v2-color-ec-neutral-tag: rgba(0, 0, 0, 0.05);
+  --tux-v2-color-ec-neutral-text: rgb(107, 107, 107);
+  --tux-v2-color-ec-neutral-text-on-tag: rgb(107, 107, 107);
+  --tux-v2-color-ec-orange-banner: rgb(255, 242, 238);
+  --tux-v2-color-ec-orange-border: rgba(235, 94, 45, 0.16);
+  --tux-v2-color-ec-orange-main: rgb(255, 92, 33);
+  --tux-v2-color-ec-orange-tag: rgba(255, 92, 33, 0.12);
+  --tux-v2-color-ec-orange-text: rgb(235, 94, 45);
+  --tux-v2-color-ec-orange-text-on-tag: rgb(235, 94, 45);
+  --tux-v2-color-ec-primary-banner: rgb(255, 242, 245);
+  --tux-v2-color-ec-primary-border: rgba(225, 5, 67, 0.1);
+  --tux-v2-color-ec-primary-tag: rgba(254, 44, 85, 0.12);
+  --tux-v2-color-ec-primary-text-on-tag: rgb(225, 5, 67);
+  --tux-v2-color-ec-theme-affirm: rgb(74, 74, 244);
+  --tux-v2-color-ec-theme-ai-chat-bubble-sent: rgba(0, 186, 180, 0.12);
+  --tux-v2-color-ec-theme-ai-gradient-primary-1: rgb(0, 186, 180);
+  --tux-v2-color-ec-theme-ai-gradient-primary-2: rgb(39, 220, 215);
+  --tux-v2-color-ec-theme-ai-gradient-primary-subtle: rgb(241, 251, 251);
+  --tux-v2-color-ec-theme-ai-gradient-secondary-1: rgb(219, 130, 251);
+  --tux-v2-color-ec-theme-ai-gradient-secondary-subtle: rgb(248, 241, 251);
+  --tux-v2-color-ec-theme-best-seller-top-1: rgb(255, 224, 175);
+  --tux-v2-color-ec-theme-best-seller-top-1-text: rgb(105, 72, 41);
+  --tux-v2-color-ec-theme-best-seller-top-2: rgb(226, 230, 248);
+  --tux-v2-color-ec-theme-best-seller-top-2-text: rgb(62, 65, 85);
+  --tux-v2-color-ec-theme-best-seller-top-3: rgb(235, 204, 184);
+  --tux-v2-color-ec-theme-best-seller-top-3-text: rgb(120, 82, 57);
+  --tux-v2-color-ec-theme-klarna: rgb(255, 168, 205);
+  --tux-v2-color-ec-theme-paypal: rgb(255, 196, 57);
+  --tux-v2-color-ec-theme-store-tier-gold-1: rgb(247, 237, 226);
+  --tux-v2-color-ec-theme-store-tier-gold-2: rgb(182, 122, 6);
+  --tux-v2-color-ec-theme-store-tier-silver-1: rgb(227, 241, 252);
+  --tux-v2-color-ec-theme-store-tier-silver-2: rgb(86, 119, 143);
+  --tux-v2-color-ec-theme-toko-primary: rgb(0, 158, 66);
+  --tux-v2-color-ec-theme-vip-banner-gradient-1: rgb(255, 240, 213);
+  --tux-v2-color-ec-theme-vip-banner-gradient-2: rgb(255, 227, 185);
+  --tux-v2-color-ec-theme-vip-banner-gradient-3: rgb(247, 209, 154);
+  --tux-v2-color-ec-theme-vip-main-gradient-1: rgb(155, 89, 11);
+  --tux-v2-color-ec-theme-vip-main-gradient-2: rgb(126, 83, 44);
+  --tux-v2-color-ec-theme-vip-main-gradient-3: rgb(74, 47, 32);
+  --tux-v2-color-ec-theme-venmo: rgb(0, 140, 255);
+  --tux-v2-color-ec-white-text-1: rgb(255, 255, 255);
+  --tux-v2-color-ec-white-text-2: rgba(255, 255, 255, 0.88);
+  --tux-v2-color-ec-white-text-3: rgba(255, 255, 255, 0.6);
+  --tux-v2-color-effect-platform-capability-3d: rgb(159, 218, 248);
+  --tux-v2-color-effect-platform-capability-audio: rgb(163, 163, 255);
+  --tux-v2-color-effect-platform-capability-face: rgb(229, 178, 241);
+  --tux-v2-color-effect-platform-capability-other: rgb(255, 255, 255);
+  --tux-v2-color-effect-platform-capability-render: rgb(252, 224, 139);
+  --tux-v2-color-effect-platform-capability-screen: rgb(69, 204, 167);
+  --tux-v2-color-effect-platform-capability-tracker: rgb(242, 141, 151);
+  --tux-v2-color-feature-illustration-base-image: rgb(228, 232, 240);
+  --tux-v2-color-feature-illustration-base-plain: rgb(238, 241, 246);
+  --tux-v2-color-feature-illustration-elevated-image: rgb(119, 124, 132);
+  --tux-v2-color-feature-illustration-elevated-plain: rgb(255, 255, 255);
+  --tux-v2-color-feature-illustration-gesture-1: rgb(255, 255, 255);
+  --tux-v2-color-feature-illustration-gesture-2: rgba(255, 255, 255, 0.6);
+  --tux-v2-color-feature-illustration-skeleton-on-base-image: rgba(255, 255, 255, 0.75);
+  --tux-v2-color-feature-illustration-skeleton-on-base-plain: rgb(215, 221, 230);
+  --tux-v2-color-feature-illustration-skeleton-on-elevated-image: rgba(255, 255, 255, 0.6);
+  --tux-v2-color-feature-illustration-skeleton-on-elevated-plain: rgb(238, 241, 246);
+  --tux-v2-color-feature-illustration-text-1: rgb(0, 0, 0);
+  --tux-v2-color-feature-illustration-text-2: rgba(0, 0, 0, 0.55);
+  --tux-v2-color-feature-illustration-transparent-base-image: rgba(228, 232, 240, 0);
+  --tux-v2-color-feature-illustration-transparent-base-plain: rgba(238, 241, 246, 0);
+  --tux-v2-color-feature-illustration-transparent-elevated-image: rgba(119, 124, 132, 0);
+  --tux-v2-color-feature-illustration-transparent-elevated-plain: rgba(255, 255, 255, 0);
+  --tux-v2-color-feature-illustration-transparent-skeleton-on-base-image: rgba(255, 255, 255, 0);
+  --tux-v2-color-feature-illustration-transparent-skeleton-on-base-plain: rgba(215, 221, 230, 0);
+  --tux-v2-color-feature-illustration-transparent-skeleton-on-elevated-image: rgba(255, 255, 255, 0);
+  --tux-v2-color-feature-illustration-transparent-skeleton-on-elevated-plain: rgba(238, 241, 246, 0);
+  --tux-v2-color-feature-illustration-transparent-text-1: rgba(0, 0, 0, 0);
+  --tux-v2-color-feature-illustration-transparent-text-2: rgba(0, 0, 0, 0);
+  --tux-v2-color-feed-anchor-bg: rgba(37, 37, 37, 0.34);
+  --tux-v2-color-feed-components-text-2-on-backdrop: rgba(255, 255, 255, 0.5);
+  --tux-v2-color-feed-components-text-backdrop: rgba(77, 77, 77, 0.5);
+  --tux-v2-color-feed-components-text-backdrop-2: rgba(64, 64, 64, 0.5);
+  --tux-v2-color-feed-top-tab-text-shadow-a30: rgba(0, 0, 0, 0.3);
+  --tux-v2-color-feed-top-tab-text-shadow-a40: rgba(0, 0, 0, 0.4);
+  --tux-v2-color-feed-top-tab-text-shadow-a50: rgba(0, 0, 0, 0.5);
+  --tux-v2-color-feed-top-tab-text-shadow-a66: rgba(0, 0, 0, 0.66);
+  --tux-v2-color-feed-top-tab-text-shadow-a83: rgba(0, 0, 0, 0.83);
+  --tux-v2-color-illustration-color-primary: rgb(109, 231, 227);
+  --tux-v2-color-illustration-color-secondary: rgb(255, 114, 123);
+  --tux-v2-color-illustration-color-stroke: rgb(102, 51, 245);
+  --tux-v2-color-illustration-color-symbol: rgb(255, 255, 255);
+  --tux-v2-color-illustration-color-tertiary: rgb(255, 221, 42);
+  --tux-v2-color-illustration-gray-fill: rgba(0, 0, 0, 0.14);
+  --tux-v2-color-illustration-gray-stroke: rgba(0, 0, 0, 0.26);
+  --tux-v2-color-inbox-filter-highlight: rgba(21, 192, 249, 0.16);
+  --tux-v2-color-inbox-filter-text-on-highlight: rgb(13, 130, 158);
+  --tux-v2-color-live-brand-1: rgb(255, 23, 100);
+  --tux-v2-color-live-brand-2: rgb(237, 52, 149);
+  --tux-v2-color-live-e-commerce-billboard-overlay: rgba(255, 255, 255, 0.85);
+  --tux-v2-color-live-foundation-background-1: rgba(51, 51, 51, 0.5);
+  --tux-v2-color-live-foundation-background-2: rgba(84, 84, 84, 0.12);
+  --tux-v2-color-live-foundation-shape-1: rgba(64, 64, 64, 0.5);
+  --tux-v2-color-live-foundation-shape-2: rgb(64, 64, 64);
+  --tux-v2-color-live-foundational-profile-text-1: rgb(250, 77, 77);
+  --tux-v2-color-live-multi-guest-social-shape-1: rgb(23, 99, 232);
+  --tux-v2-color-live-multi-guest-social-shape-2: rgb(212, 22, 162);
+  --tux-v2-color-live-multi-guest-social-shape-3: rgb(98, 32, 230);
+  --tux-v2-color-live-revenue-beans-shape: rgb(30, 21, 61);
+  --tux-v2-color-live-revenue-enigma-shape-1: rgb(92, 105, 230);
+  --tux-v2-color-live-revenue-enigma-shape-2: rgba(92, 105, 230, 0.2);
+  --tux-v2-color-live-revenue-enigma-shape-3: rgb(29, 34, 85);
+  --tux-v2-color-live-revenue-enigma-shape-4: rgb(157, 176, 255);
+  --tux-v2-color-live-revenue-enigma-shape-5: rgb(30, 30, 53);
+  --tux-v2-color-live-revenue-enigma-text-1: rgb(197, 212, 255);
+  --tux-v2-color-live-revenue-ranking-daily-text-1: rgb(255, 243, 76);
+  --tux-v2-color-live-revenue-ranking-daily-text-2: rgb(255, 187, 0);
+  --tux-v2-color-live-revenue-ranking-daily-text-3: rgb(45, 32, 27);
+  --tux-v2-color-live-revenue-ranking-league-a-shape: rgb(255, 225, 154);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-1: rgb(255, 243, 186);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-2: rgb(255, 229, 133);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-3: rgb(255, 222, 106);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-4: rgb(255, 208, 83);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-5: rgb(72, 37, 0);
+  --tux-v2-color-live-revenue-ranking-league-a-text: rgb(81, 34, 25);
+  --tux-v2-color-live-revenue-ranking-league-b-shape: rgb(212, 229, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-1: rgb(241, 251, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-2: rgb(224, 240, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-3: rgb(208, 235, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-4: rgb(192, 229, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-5: rgb(114, 175, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-6: rgb(41, 0, 120);
+  --tux-v2-color-live-revenue-ranking-league-b-text: rgb(32, 54, 86);
+  --tux-v2-color-live-revenue-ranking-league-c-shape: rgb(255, 214, 193);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-1: rgb(255, 239, 229);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-2: rgb(255, 219, 195);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-3: rgb(255, 213, 188);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-4: rgb(255, 202, 167);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-5: rgb(255, 156, 114);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-6: rgb(77, 12, 0);
+  --tux-v2-color-live-revenue-ranking-league-c-text: rgb(79, 42, 16);
+  --tux-v2-color-live-revenue-ranking-league-d-shape: rgb(245, 219, 219);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-1: rgb(255, 241, 240);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-2: rgb(255, 217, 215);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-3: rgb(255, 209, 208);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-4: rgb(238, 125, 144);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-5: rgb(84, 0, 50);
+  --tux-v2-color-live-revenue-ranking-league-d-text: rgb(70, 21, 23);
+  --tux-v2-color-live-revenue-ranking-lv1-background: rgba(191, 134, 0, 0.6);
+  --tux-v2-color-live-revenue-ranking-shape: rgba(235, 141, 0, 0.12);
+  --tux-v2-color-live-revenue-ranking-shape-golden-1: rgb(243, 232, 191);
+  --tux-v2-color-live-revenue-ranking-shape-golden-2: rgb(206, 189, 147);
+  --tux-v2-color-live-revenue-ranking-shape-golden-3: rgba(191, 134, 0, 0.8);
+  --tux-v2-color-live-revenue-ranking-shape-silver-1: rgb(212, 219, 221);
+  --tux-v2-color-live-revenue-ranking-shape-silver-2: rgb(151, 166, 172);
+  --tux-v2-color-live-revenue-ranking-shape-silver-3: rgba(84, 126, 141, 0.8);
+  --tux-v2-color-live-revenue-ranking-text: rgb(235, 141, 0);
+  --tux-v2-color-live-revenue-recharge-shape-1: rgb(255, 225, 154);
+  --tux-v2-color-live-revenue-recharge-shape-2: rgba(255, 225, 154, 0.65);
+  --tux-v2-color-live-revenue-stage-primary-1: rgb(17, 190, 224);
+  --tux-v2-color-live-revenue-stage-primary-2: rgb(254, 124, 2);
+  --tux-v2-color-live-revenue-stage-primary-3: rgb(139, 56, 255);
+  --tux-v2-color-live-revenue-sticker-text1: rgb(255, 200, 4);
+  --tux-v2-color-live-revenue-superfan-shape-1: rgba(245, 204, 135, 0.2);
+  --tux-v2-color-live-revenue-superfan-shape-2: rgba(115, 67, 0, 0.1);
+  --tux-v2-color-live-revenue-superfan-shape-3: rgb(180, 120, 39);
+  --tux-v2-color-live-revenue-superfan-text-1: rgb(220, 165, 90);
+  --tux-v2-color-live-revenue-superfan-text-2: rgb(115, 67, 0);
+  --tux-v2-color-live-revenue-team-shape-1: rgba(255, 115, 0, 0.17);
+  --tux-v2-color-live-revenue-team-shape-2: rgba(255, 115, 0, 0.08);
+  --tux-v2-color-live-revenue-team-shape-3: rgb(250, 132, 35);
+  --tux-v2-color-live-revenue-team-text-primary-1: rgb(255, 115, 0);
+  --tux-v2-color-live-revenue-team-text-primary-2: rgb(255, 150, 64);
+  --tux-v2-color-live-smb-service-background-1: rgba(14, 98, 255, 0.14);
+  --tux-v2-color-live-smb-service-background-2: rgba(14, 98, 255, 0.12);
+  --tux-v2-color-live-smb-service-background-3: rgba(14, 98, 255, 0);
+  --tux-v2-color-live-smb-service-shape-1: rgb(16, 157, 175);
+  --tux-v2-color-live-subscription-privilege-shape-1: rgb(255, 234, 198);
+  --tux-v2-color-live-subscription-privilege-shape-2: rgba(255, 234, 198, 0.9);
+  --tux-v2-color-live-subscription-privilege-text-1: rgb(255, 131, 8);
+  --tux-v2-color-live-subscription-privilege-text-2: rgba(255, 131, 8, 0.9);
+  --tux-v2-color-local-service-poi: rgb(19, 189, 144);
+  --tux-v2-color-local-service-poi-background: rgba(19, 189, 144, 0.12);
+  --tux-v2-color-local-service-ranking-gold-1: rgba(255, 195, 0, 0.15);
+  --tux-v2-color-local-service-ranking-text-1-on-gold-1: rgb(110, 83, 3);
+  --tux-v2-color-misc-online-shape: rgb(29, 215, 101);
+  --tux-v2-color-misc-online-shape-4: rgba(29, 215, 101, 0.16);
+  --tux-v2-color-misc-online-text: rgb(0, 165, 69);
+  --tux-v2-color-misc-rating-star-selected-fill: rgb(255, 187, 0);
+  --tux-v2-color-misc-toast-background: rgb(82, 82, 82);
+  --tux-v2-color-misc-tooltip-background: rgb(58, 58, 58);
+  --tux-v2-color-misc-tooltip-text-1: rgb(246, 246, 246);
+  --tux-v2-color-misc-verified-badge-1: rgb(32, 213, 236);
+  --tux-v2-color-misc-verified-badge-2: rgb(255, 255, 255);
+  --tux-v2-color-pgc-creator-assistant-1: rgb(63, 99, 255);
+  --tux-v2-color-photo-text-text-mode-background-1: rgb(245, 245, 245);
+  --tux-v2-color-photo-text-text-mode-background-2: rgb(195, 204, 218);
+  --tux-v2-color-privacy-meditation-text-primary: rgb(29, 96, 191);
+  --tux-v2-color-privacy-wellbeing-hub-page-2: rgba(89, 158, 255, 0.08);
+  --tux-v2-color-profile-icon-background-dark-gray: rgba(124, 124, 124, 0.9);
+  --tux-v2-color-search-results-section-background: rgb(255, 255, 255);
+  --tux-v2-color-search-sensitive-overlay: rgba(0, 0, 0, 0.9);
+  --tux-v2-color-search-tako-chat-bubble: rgb(0, 161, 212);
+  --tux-v2-color-search-tako-chat-bubble-2: rgba(0, 148, 255, 0.1);
+  --tux-v2-color-search-task-coin-1: rgb(255, 175, 55);
+  --tux-v2-color-search-task-coin-2: rgb(255, 138, 0);
+  --tux-v2-color-social-avatar-brand-1: rgb(112, 89, 255);
+  --tux-v2-color-social-avatar-profile-01-1: rgb(222, 210, 250);
+  --tux-v2-color-social-avatar-profile-01-2: rgb(26, 19, 18);
+  --tux-v2-color-social-avatar-profile-01-3: rgb(204, 179, 245);
+  --tux-v2-color-social-avatar-profile-02-1: rgb(98, 95, 255);
+  --tux-v2-color-social-avatar-profile-02-2: rgb(252, 221, 73);
+  --tux-v2-color-social-avatar-profile-02-3: rgb(148, 146, 249);
+  --tux-v2-color-social-avatar-profile-03-1: rgb(114, 109, 144);
+  --tux-v2-color-social-avatar-profile-03-2: rgb(239, 229, 204);
+  --tux-v2-color-social-avatar-profile-03-3: rgb(178, 170, 226);
+  --tux-v2-color-social-avatar-profile-04-1: rgb(251, 196, 54);
+  --tux-v2-color-social-avatar-profile-04-2: rgb(61, 61, 61);
+  --tux-v2-color-social-avatar-profile-04-3: rgb(251, 196, 54);
+  --tux-v2-color-social-avatar-profile-05-1: rgb(248, 99, 99);
+  --tux-v2-color-social-avatar-profile-05-2: rgb(61, 75, 148);
+  --tux-v2-color-social-avatar-profile-05-3: rgb(255, 115, 115);
+  --tux-v2-color-social-avatar-profile-06-1: rgb(234, 232, 224);
+  --tux-v2-color-social-avatar-profile-06-2: rgb(115, 127, 150);
+  --tux-v2-color-social-avatar-profile-06-3: rgb(191, 191, 191);
+  --tux-v2-color-social-chat-gradient-blue-1: rgb(0, 184, 211);
+  --tux-v2-color-social-chat-gradient-blue-2: rgb(0, 173, 210);
+  --tux-v2-color-social-chat-gradient-blue-3: rgb(23, 135, 217);
+  --tux-v2-color-social-relation-connect-now: rgb(145, 98, 245);
+  --tux-v2-color-social-relation-contact: rgb(30, 178, 5);
+  --tux-v2-color-social-relation-facebook: rgb(0, 117, 250);
+  --tux-v2-color-social-relation-invite: rgb(242, 174, 0);
+  --tux-v2-color-social-relation-qr-code: rgb(242, 104, 45);
+  --tux-v2-color-social-relation-share: rgb(0, 171, 244);
+  --tux-v2-color-social-share-group-share-icon: rgb(84, 118, 255);
+  --tux-v2-color-social-snail-1: rgb(221, 15, 136);
+  --tux-v2-color-social-story-create: rgb(131, 87, 255);
+  --tux-v2-color-social-story-gradient-green-1: rgb(0, 148, 255);
+  --tux-v2-color-social-story-gradient-green-2: rgb(32, 213, 236);
+  --tux-v2-color-social-story-gradient-green-3: rgb(0, 255, 163);
+  --tux-v2-color-social-story-gradient-purple-1: rgb(199, 87, 255);
+  --tux-v2-color-social-story-gradient-purple-2: rgb(111, 82, 255);
+  --tux-v2-color-social-story-gradient-purple-3: rgb(131, 87, 255);
+  --tux-v2-color-social-story-plus-background: rgb(20, 205, 246);
+  --tux-v2-color-social-story-shape-purple: rgba(124, 92, 253, 0.66);
+  --tux-v2-color-social-streak-01-1: rgb(247, 240, 212);
+  --tux-v2-color-social-streak-01-2: rgb(255, 211, 56);
+  --tux-v2-color-social-streak-01-3: rgb(186, 148, 7);
+  --tux-v2-color-social-streak-02-1: rgb(247, 226, 212);
+  --tux-v2-color-social-streak-02-2: rgb(255, 140, 56);
+  --tux-v2-color-social-streak-02-3: rgb(255, 94, 59);
+  --tux-v2-color-social-streak-03-1: rgb(255, 209, 217);
+  --tux-v2-color-social-streak-03-2: rgb(255, 98, 136);
+  --tux-v2-color-social-streak-03-3: rgb(213, 15, 50);
+  --tux-v2-color-social-streak-04-1: rgb(253, 203, 236);
+  --tux-v2-color-social-streak-04-2: rgb(242, 98, 193);
+  --tux-v2-color-social-streak-04-3: rgb(217, 33, 143);
+  --tux-v2-color-social-streak-05-1: rgb(234, 202, 242);
+  --tux-v2-color-social-streak-05-2: rgb(229, 88, 241);
+  --tux-v2-color-social-streak-05-3: rgb(175, 16, 250);
+  --tux-v2-color-social-text-streak: rgb(255, 102, 19);
+  --tux-v2-color-ui-image-overlay-black: rgb(0, 0, 0);
+  --tux-v2-color-ui-image-overlay-black-a15: rgba(0, 0, 0, 0.15);
+  --tux-v2-color-ui-image-overlay-black-a25: rgba(0, 0, 0, 0.25);
+  --tux-v2-color-ui-image-overlay-black-a50: rgba(0, 0, 0, 0.5);
+  --tux-v2-color-ui-image-overlay-black-a80: rgba(0, 0, 0, 0.8);
+  --tux-v2-color-ui-image-overlay-dark-gray-a30: rgba(51, 51, 51, 0.3);
+  --tux-v2-color-ui-image-overlay-dark-gray-a40: rgba(51, 51, 51, 0.4);
+  --tux-v2-color-ui-image-overlay-dark-gray-a60: rgba(51, 51, 51, 0.6);
+  --tux-v2-color-ui-image-overlay-dark-gray-a85: rgba(51, 51, 51, 0.85);
+  --tux-v2-color-ui-image-overlay-white: rgb(255, 255, 255);
+  --tux-v2-color-ui-image-overlay-white-a20: rgba(255, 255, 255, 0.2);
+  --tux-v2-color-ui-image-overlay-white-a40: rgba(255, 255, 255, 0.4);
+  --tux-v2-color-ui-image-overlay-white-a75: rgba(255, 255, 255, 0.75);
+  --tux-v2-color-ui-page-flat-1: rgb(255, 255, 255);
+  --tux-v2-color-ui-page-flat-2: rgb(248, 248, 248);
+  --tux-v2-color-ui-page-flat-3: rgb(255, 255, 255);
+  --tux-v2-color-ui-page-grouped-1: rgb(245, 245, 245);
+  --tux-v2-color-ui-page-grouped-2: rgb(255, 255, 255);
+  --tux-v2-color-ui-page-grouped-3: rgb(248, 248, 248);
+  --tux-v2-color-ui-shape-danger: rgb(255, 76, 58);
+  --tux-v2-color-ui-shape-danger-2: rgba(255, 76, 58, 0.32);
+  --tux-v2-color-ui-shape-danger-3: rgba(255, 76, 58, 0.21);
+  --tux-v2-color-ui-shape-danger-4: rgba(255, 76, 58, 0.09);
+  --tux-v2-color-ui-shape-info: rgb(0, 117, 220);
+  --tux-v2-color-ui-shape-info-2: rgba(0, 117, 220, 0.3);
+  --tux-v2-color-ui-shape-info-3: rgba(0, 117, 220, 0.19);
+  --tux-v2-color-ui-shape-info-4: rgba(0, 117, 220, 0.1);
+  --tux-v2-color-ui-shape-neutral: rgb(0, 0, 0);
+  --tux-v2-color-ui-shape-neutral-2: rgba(0, 0, 0, 0.17);
+  --tux-v2-color-ui-shape-neutral-3: rgba(0, 0, 0, 0.12);
+  --tux-v2-color-ui-shape-neutral-4: rgba(0, 0, 0, 0.05);
+  --tux-v2-color-ui-shape-primary: rgb(254, 44, 85);
+  --tux-v2-color-ui-shape-primary-2: rgba(254, 44, 85, 0.31);
+  --tux-v2-color-ui-shape-primary-3: rgba(254, 44, 85, 0.18);
+  --tux-v2-color-ui-shape-primary-4: rgba(254, 44, 85, 0.07);
+  --tux-v2-color-ui-shape-primary-5: rgba(254, 44, 85, 0.05);
+  --tux-v2-color-ui-shape-secondary: rgb(32, 213, 236);
+  --tux-v2-color-ui-shape-secondary-2: rgba(32, 213, 236, 0.5);
+  --tux-v2-color-ui-shape-secondary-3: rgba(32, 213, 236, 0.32);
+  --tux-v2-color-ui-shape-secondary-4: rgba(32, 213, 236, 0.13);
+  --tux-v2-color-ui-shape-secondary-5: rgba(32, 213, 236, 0.05);
+  --tux-v2-color-ui-shape-secondary-muted: rgb(0, 162, 201);
+  --tux-v2-color-ui-shape-secondary-muted-2: rgba(0, 162, 201, 0.33);
+  --tux-v2-color-ui-shape-secondary-muted-3: rgba(0, 162, 201, 0.24);
+  --tux-v2-color-ui-shape-secondary-muted-4: rgba(0, 162, 201, 0.12);
+  --tux-v2-color-ui-shape-secondary-muted-5: rgba(0, 162, 201, 0.05);
+  --tux-v2-color-ui-shape-success: rgb(11, 224, 155);
+  --tux-v2-color-ui-shape-success-2: rgba(11, 224, 155, 0.48);
+  --tux-v2-color-ui-shape-success-3: rgba(11, 224, 155, 0.28);
+  --tux-v2-color-ui-shape-success-4: rgba(11, 224, 155, 0.12);
+  --tux-v2-color-ui-shape-text-1-on-danger: rgb(255, 255, 255);
+  --tux-v2-color-ui-shape-text-1-on-info: rgb(231, 244, 255);
+  --tux-v2-color-ui-shape-text-1-on-neutral: rgb(255, 255, 255);
+  --tux-v2-color-ui-shape-text-1-on-primary: rgb(255, 255, 255);
+  --tux-v2-color-ui-shape-text-1-on-secondary: rgb(0, 52, 60);
+  --tux-v2-color-ui-shape-text-1-on-secondary-muted: rgb(255, 255, 255);
+  --tux-v2-color-ui-shape-text-1-on-success: rgb(0, 54, 40);
+  --tux-v2-color-ui-shape-text-1-on-warning: rgb(45, 18, 1);
+  --tux-v2-color-ui-shape-text-2-on-danger: rgb(255, 203, 190);
+  --tux-v2-color-ui-shape-text-2-on-info: rgb(142, 202, 255);
+  --tux-v2-color-ui-shape-text-2-on-neutral: rgba(255, 255, 255, 0.6);
+  --tux-v2-color-ui-shape-text-2-on-primary: rgb(255, 217, 218);
+  --tux-v2-color-ui-shape-text-2-on-secondary: rgb(0, 102, 116);
+  --tux-v2-color-ui-shape-text-2-on-secondary-muted: rgb(177, 240, 255);
+  --tux-v2-color-ui-shape-text-2-on-success: rgb(0, 133, 104);
+  --tux-v2-color-ui-shape-text-2-on-warning: rgb(146, 72, 15);
+  --tux-v2-color-ui-shape-text-on-secondary-2-or-3: rgb(1, 67, 75);
+  --tux-v2-color-ui-shape-text-on-secondary-4-or-5: rgb(2, 109, 122);
+  --tux-v2-color-ui-shape-text-on-secondary-muted-2-or-3: rgb(10, 65, 81);
+  --tux-v2-color-ui-shape-text-on-secondary-muted-4-or-5: rgb(23, 106, 131);
+  --tux-v2-color-ui-shape-warning: rgb(254, 124, 2);
+  --tux-v2-color-ui-shape-warning-2: rgba(254, 124, 2, 0.48);
+  --tux-v2-color-ui-shape-warning-3: rgba(254, 124, 2, 0.28);
+  --tux-v2-color-ui-shape-warning-4: rgba(254, 124, 2, 0.12);
+  --tux-v2-color-ui-sheet-backdrop-1: rgba(0, 0, 0, 0.5);
+  --tux-v2-color-ui-sheet-backdrop-2: rgba(0, 0, 0, 0.2);
+  --tux-v2-color-ui-sheet-flat-1: rgb(255, 255, 255);
+  --tux-v2-color-ui-sheet-flat-2: rgb(248, 248, 248);
+  --tux-v2-color-ui-sheet-flat-3: rgb(255, 255, 255);
+  --tux-v2-color-ui-sheet-grouped-1: rgb(245, 245, 245);
+  --tux-v2-color-ui-sheet-grouped-2: rgb(255, 255, 255);
+  --tux-v2-color-ui-sheet-grouped-3: rgb(248, 248, 248);
+  --tux-v2-color-ui-text-1: rgb(0, 0, 0);
+  --tux-v2-color-ui-text-1-display: rgb(32, 32, 32);
+  --tux-v2-color-ui-text-2: rgba(0, 0, 0, 0.65);
+  --tux-v2-color-ui-text-3: rgba(0, 0, 0, 0.48);
+  --tux-v2-color-ui-text-danger: rgb(218, 49, 35);
+  --tux-v2-color-ui-text-danger-display: rgb(255, 76, 58);
+  --tux-v2-color-ui-text-info: rgb(43, 93, 185);
+  --tux-v2-color-ui-text-info-display: rgb(0, 117, 219);
+  --tux-v2-color-ui-text-placeholder: rgba(0, 0, 0, 0.34);
+  --tux-v2-color-ui-text-primary: rgb(225, 5, 67);
+  --tux-v2-color-ui-text-primary-display: rgb(254, 44, 85);
+  --tux-v2-color-ui-text-secondary: rgb(0, 129, 146);
+  --tux-v2-color-ui-text-secondary-display: rgb(0, 186, 208);
+  --tux-v2-color-ui-text-success: rgb(0, 133, 104);
+  --tux-v2-color-ui-text-success-display: rgb(0, 195, 155);
+  --tux-v2-color-ui-text-warning: rgb(184, 88, 1);
+  --tux-v2-color-ui-text-warning-display: rgb(254, 124, 2);
+  --tux-v2-color-brand-tiktok-background: rgb(255, 255, 255);
+  --tux-v2-color-brand-tiktok-background-element: rgb(0, 0, 0);
+  --tux-v2-color-brand-tiktok-razzmatazz: rgb(254, 44, 85);
+  --tux-v2-color-brand-tiktok-splash: rgb(37, 244, 238);
+  --tux-v2-color-brand-tiktok-spotlight: rgb(0, 0, 0);
+  --tux-v2-color-brand-tiktok-subject-in-spotlight: rgb(255, 255, 255);
+  --tux-v2-color-shadow-attached: rgba(0, 0, 0, 0.14);
+  --tux-v2-color-shadow-blocking: rgba(0, 0, 0, 0.16);
+  --tux-v2-color-shadow-contrast: rgba(0, 0, 0, 0.3);
+  --tux-v2-color-shadow-floating: rgba(0, 0, 0, 0.1);
+  --tux-v2-color-shadow-notice: rgba(0, 0, 0, 0.1);
+  --tux-v2-color-shadow-subtle: rgba(0, 0, 0, 0.07);
+}
+
+[data-tux-color-scheme=dark] {
+  --tux-v2-color-brand-ai-1: rgb(132, 112, 255);
+  --tux-v2-color-brand-ai-gradient-1: rgb(0, 241, 200);
+  --tux-v2-color-brand-ai-gradient-1-a70: rgba(0, 241, 200, 0.7);
+  --tux-v2-color-brand-ai-gradient-2: rgb(0, 237, 234);
+  --tux-v2-color-brand-ai-gradient-3: rgb(217, 255, 158);
+  --tux-v2-color-brand-ai-gradient-3-a50: rgba(217, 255, 158, 0.5);
+  --tux-v2-color-brand-ai-gradient-3-a70: rgba(217, 255, 158, 0.7);
+  --tux-v2-color-brand-ai-gradient-4: rgb(143, 180, 255);
+  --tux-v2-color-brand-ai-gradient-4-a20: rgba(143, 180, 255, 0.2);
+  --tux-v2-color-brand-ai-gradient-4-a50: rgba(143, 180, 255, 0.5);
+  --tux-v2-color-brand-ai-gradient-5: rgb(178, 140, 255);
+  --tux-v2-color-brand-ai-gradient-5-a20: rgba(178, 140, 255, 0.2);
+  --tux-v2-color-brand-ai-gradient-6: rgb(211, 255, 252);
+  --tux-v2-color-brand-ai-gradient-6-a10: rgba(211, 255, 252, 0.1);
+  --tux-v2-color-brand-ai-gradient-6-a50: rgba(211, 255, 252, 0.5);
+  --tux-v2-color-brand-ai-icon-1: rgb(0, 241, 221);
+  --tux-v2-color-brand-lemon8: rgb(255, 247, 0);
+  --tux-v2-color-brand-oscar-gold: rgb(186, 158, 94);
+  --tux-v2-color-brand-tako-1: rgb(0, 181, 238);
+  --tux-v2-color-brand-tako-2: rgb(255, 255, 255);
+  --tux-v2-color-brand-tiktok-photos-1: rgb(100, 250, 205);
+  --tux-v2-color-brand-tiktok-photos-2: rgb(0, 170, 150);
+  --tux-v2-color-brand-tiktok-plus-1: rgb(255, 200, 4);
+  --tux-v2-color-brand-tiktok-plus-2: rgb(229, 165, 0);
+  --tux-v2-color-brand-tiktok-black: rgb(0, 0, 0);
+  --tux-v2-color-brand-tiktok-blaze: rgb(241, 32, 74);
+  --tux-v2-color-brand-tiktok-dawn: rgb(237, 187, 232);
+  --tux-v2-color-brand-tiktok-ember: rgb(74, 5, 5);
+  --tux-v2-color-brand-tiktok-glint: rgb(45, 204, 211);
+  --tux-v2-color-brand-tiktok-glow: rgb(251, 235, 53);
+  --tux-v2-color-brand-tiktok-muse: rgb(237, 212, 178);
+  --tux-v2-color-brand-tiktok-neutral-background: rgb(0, 0, 0);
+  --tux-v2-color-brand-tiktok-neutral-foreground: rgb(255, 255, 255);
+  --tux-v2-color-brand-tiktok-shimmer: rgb(186, 246, 240);
+  --tux-v2-color-brand-tiktok-thrive: rgb(3, 54, 36);
+  --tux-v2-color-brand-tiktok-white: rgb(255, 255, 255);
+  --tux-v2-color-brand-tokopedia-1: rgb(0, 170, 91);
+  --tux-v2-color-creation-adjust-background: rgb(255, 178, 215);
+  --tux-v2-color-creation-adjust-hsl-blue: rgb(50, 152, 246);
+  --tux-v2-color-creation-adjust-hsl-cyan: rgb(53, 225, 225);
+  --tux-v2-color-creation-adjust-hsl-fuchsia: rgb(201, 46, 255);
+  --tux-v2-color-creation-adjust-hsl-green: rgb(120, 194, 94);
+  --tux-v2-color-creation-adjust-hsl-indigo: rgb(88, 86, 214);
+  --tux-v2-color-creation-adjust-hsl-orange: rgb(255, 147, 61);
+  --tux-v2-color-creation-adjust-hsl-red: rgb(255, 82, 82);
+  --tux-v2-color-creation-adjust-hsl-yellow: rgb(242, 205, 70);
+  --tux-v2-color-creation-adjust-label: rgb(142, 31, 84);
+  --tux-v2-color-creation-comment-christmas-text: rgb(68, 155, 92);
+  --tux-v2-color-creation-filter-background: rgb(255, 191, 191);
+  --tux-v2-color-creation-filter-label: rgb(139, 35, 41);
+  --tux-v2-color-creation-first-comment-gradient-red-1: rgb(255, 59, 134);
+  --tux-v2-color-creation-first-comment-gradient-red-2: rgb(255, 149, 90);
+  --tux-v2-color-creation-flash-light-cold: rgb(211, 234, 255);
+  --tux-v2-color-creation-flash-light-warm: rgb(255, 242, 205);
+  --tux-v2-color-creation-glance-watermark: rgb(255, 248, 90);
+  --tux-v2-color-creation-pill-overlay: rgba(230, 230, 230, 0.32);
+  --tux-v2-color-creation-sticker-background: rgb(180, 175, 255);
+  --tux-v2-color-creation-sticker-label: rgb(65, 47, 177);
+  --tux-v2-color-customer-service-report: rgb(62, 72, 121);
+  --tux-v2-color-data-categories-assist-1: rgb(146, 137, 255);
+  --tux-v2-color-data-categories-assist-2: rgb(253, 147, 0);
+  --tux-v2-color-data-categories-assist-3: rgb(235, 191, 0);
+  --tux-v2-color-data-categories-assist-4: rgb(255, 85, 169);
+  --tux-v2-color-data-categories-assist-5: rgb(142, 202, 255);
+  --tux-v2-color-data-categories-assist-6: rgb(0, 195, 155);
+  --tux-v2-color-data-categories-assist-7: rgb(0, 174, 75);
+  --tux-v2-color-data-categories-primary: rgb(0, 127, 234);
+  --tux-v2-color-data-categories-secondary: rgb(255, 95, 117);
+  --tux-v2-color-data-categories-tertiary: rgb(0, 190, 212);
+  --tux-v2-color-ec-azure-banner: rgb(34, 45, 61);
+  --tux-v2-color-ec-azure-main: rgb(37, 163, 255);
+  --tux-v2-color-ec-azure-tag: rgba(37, 163, 255, 0.34);
+  --tux-v2-color-ec-azure-text: rgb(21, 182, 255);
+  --tux-v2-color-ec-azure-text-on-tag: rgb(175, 217, 255);
+  --tux-v2-color-ec-black-image-mask: rgba(0, 0, 0, 0.03);
+  --tux-v2-color-ec-black-text-1: rgb(0, 0, 0);
+  --tux-v2-color-ec-black-text-2: rgba(0, 0, 0, 0.65);
+  --tux-v2-color-ec-black-text-3: rgba(0, 0, 0, 0.48);
+  --tux-v2-color-ec-bronze-banner: rgb(65, 38, 11);
+  --tux-v2-color-ec-bronze-border: rgba(244, 232, 198, 0.15);
+  --tux-v2-color-ec-bronze-main: rgb(155, 89, 11);
+  --tux-v2-color-ec-bronze-tag: rgba(203, 103, 11, 0.3);
+  --tux-v2-color-ec-bronze-text: rgb(228, 178, 132);
+  --tux-v2-color-ec-bronze-text-on-tag: rgb(243, 224, 192);
+  --tux-v2-color-ec-cyan-banner: rgb(26, 48, 49);
+  --tux-v2-color-ec-cyan-border: rgba(168, 231, 231, 0.14);
+  --tux-v2-color-ec-cyan-main: rgb(0, 184, 185);
+  --tux-v2-color-ec-cyan-tag: rgba(0, 184, 185, 0.34);
+  --tux-v2-color-ec-cyan-text: rgb(87, 186, 186);
+  --tux-v2-color-ec-cyan-text-on-tag: rgb(168, 231, 231);
+  --tux-v2-color-ec-gold-banner: rgb(50, 44, 27);
+  --tux-v2-color-ec-gold-border: rgba(250, 216, 167, 0.2);
+  --tux-v2-color-ec-gold-main: rgb(255, 193, 34);
+  --tux-v2-color-ec-gold-tag: rgba(255, 193, 34, 0.32);
+  --tux-v2-color-ec-gold-text: rgb(255, 198, 68);
+  --tux-v2-color-ec-gold-text-on-tag: rgb(250, 216, 167);
+  --tux-v2-color-ec-neutral-tag: rgba(255, 255, 255, 0.2);
+  --tux-v2-color-ec-neutral-text: rgb(193, 193, 193);
+  --tux-v2-color-ec-neutral-text-on-tag: rgb(221, 221, 221);
+  --tux-v2-color-ec-orange-banner: rgb(57, 37, 30);
+  --tux-v2-color-ec-orange-border: rgba(255, 199, 175, 0.16);
+  --tux-v2-color-ec-orange-main: rgb(255, 92, 33);
+  --tux-v2-color-ec-orange-tag: rgba(255, 92, 33, 0.3);
+  --tux-v2-color-ec-orange-text: rgb(254, 127, 75);
+  --tux-v2-color-ec-orange-text-on-tag: rgb(246, 185, 155);
+  --tux-v2-color-ec-primary-banner: rgb(57, 33, 37);
+  --tux-v2-color-ec-primary-border: rgba(255, 183, 197, 0.12);
+  --tux-v2-color-ec-primary-tag: rgba(254, 44, 85, 0.34);
+  --tux-v2-color-ec-primary-text-on-tag: rgb(255, 205, 206);
+  --tux-v2-color-ec-theme-affirm: rgb(74, 74, 244);
+  --tux-v2-color-ec-theme-ai-chat-bubble-sent: rgba(0, 186, 180, 0.28);
+  --tux-v2-color-ec-theme-ai-gradient-primary-1: rgb(0, 186, 180);
+  --tux-v2-color-ec-theme-ai-gradient-primary-2: rgb(39, 220, 215);
+  --tux-v2-color-ec-theme-ai-gradient-primary-subtle: rgb(31, 41, 40);
+  --tux-v2-color-ec-theme-ai-gradient-secondary-1: rgb(219, 130, 251);
+  --tux-v2-color-ec-theme-ai-gradient-secondary-subtle: rgb(45, 36, 51);
+  --tux-v2-color-ec-theme-best-seller-top-1: rgb(255, 224, 175);
+  --tux-v2-color-ec-theme-best-seller-top-1-text: rgb(105, 72, 41);
+  --tux-v2-color-ec-theme-best-seller-top-2: rgb(226, 230, 248);
+  --tux-v2-color-ec-theme-best-seller-top-2-text: rgb(62, 65, 85);
+  --tux-v2-color-ec-theme-best-seller-top-3: rgb(235, 204, 184);
+  --tux-v2-color-ec-theme-best-seller-top-3-text: rgb(120, 82, 57);
+  --tux-v2-color-ec-theme-klarna: rgb(255, 168, 205);
+  --tux-v2-color-ec-theme-paypal: rgb(255, 196, 57);
+  --tux-v2-color-ec-theme-store-tier-gold-1: rgb(247, 237, 226);
+  --tux-v2-color-ec-theme-store-tier-gold-2: rgb(255, 198, 68);
+  --tux-v2-color-ec-theme-store-tier-silver-1: rgb(227, 241, 252);
+  --tux-v2-color-ec-theme-store-tier-silver-2: rgb(160, 203, 235);
+  --tux-v2-color-ec-theme-toko-primary: rgb(0, 158, 66);
+  --tux-v2-color-ec-theme-vip-banner-gradient-1: rgb(65, 38, 11);
+  --tux-v2-color-ec-theme-vip-banner-gradient-2: rgb(88, 55, 21);
+  --tux-v2-color-ec-theme-vip-banner-gradient-3: rgb(116, 76, 33);
+  --tux-v2-color-ec-theme-vip-main-gradient-1: rgb(255, 202, 145);
+  --tux-v2-color-ec-theme-vip-main-gradient-2: rgb(255, 222, 187);
+  --tux-v2-color-ec-theme-vip-main-gradient-3: rgb(255, 231, 203);
+  --tux-v2-color-ec-theme-venmo: rgb(0, 140, 255);
+  --tux-v2-color-ec-white-text-1: rgb(255, 255, 255);
+  --tux-v2-color-ec-white-text-2: rgba(255, 255, 255, 0.88);
+  --tux-v2-color-ec-white-text-3: rgba(255, 255, 255, 0.6);
+  --tux-v2-color-effect-platform-capability-3d: rgb(159, 218, 248);
+  --tux-v2-color-effect-platform-capability-audio: rgb(163, 163, 255);
+  --tux-v2-color-effect-platform-capability-face: rgb(229, 178, 241);
+  --tux-v2-color-effect-platform-capability-other: rgb(255, 255, 255);
+  --tux-v2-color-effect-platform-capability-render: rgb(252, 224, 139);
+  --tux-v2-color-effect-platform-capability-screen: rgb(69, 204, 167);
+  --tux-v2-color-effect-platform-capability-tracker: rgb(242, 141, 151);
+  --tux-v2-color-feature-illustration-base-image: rgb(54, 60, 72);
+  --tux-v2-color-feature-illustration-base-plain: rgb(67, 75, 90);
+  --tux-v2-color-feature-illustration-elevated-image: rgb(39, 43, 48);
+  --tux-v2-color-feature-illustration-elevated-plain: rgb(86, 95, 111);
+  --tux-v2-color-feature-illustration-gesture-1: rgb(162, 178, 199);
+  --tux-v2-color-feature-illustration-gesture-2: rgba(162, 178, 199, 0.6);
+  --tux-v2-color-feature-illustration-skeleton-on-base-image: rgba(90, 96, 106, 0.75);
+  --tux-v2-color-feature-illustration-skeleton-on-base-plain: rgb(89, 101, 116);
+  --tux-v2-color-feature-illustration-skeleton-on-elevated-image: rgba(99, 106, 114, 0.6);
+  --tux-v2-color-feature-illustration-skeleton-on-elevated-plain: rgb(111, 119, 133);
+  --tux-v2-color-feature-illustration-text-1: rgb(255, 255, 255);
+  --tux-v2-color-feature-illustration-text-2: rgba(255, 255, 255, 0.55);
+  --tux-v2-color-feature-illustration-transparent-base-image: rgba(54, 60, 72, 0);
+  --tux-v2-color-feature-illustration-transparent-base-plain: rgba(67, 75, 90, 0);
+  --tux-v2-color-feature-illustration-transparent-elevated-image: rgba(39, 43, 48, 0);
+  --tux-v2-color-feature-illustration-transparent-elevated-plain: rgba(86, 95, 111, 0);
+  --tux-v2-color-feature-illustration-transparent-skeleton-on-base-image: rgba(90, 96, 106, 0);
+  --tux-v2-color-feature-illustration-transparent-skeleton-on-base-plain: rgba(89, 101, 116, 0);
+  --tux-v2-color-feature-illustration-transparent-skeleton-on-elevated-image: rgba(99, 106, 114, 0);
+  --tux-v2-color-feature-illustration-transparent-skeleton-on-elevated-plain: rgba(111, 119, 133, 0);
+  --tux-v2-color-feature-illustration-transparent-text-1: rgba(255, 255, 255, 0);
+  --tux-v2-color-feature-illustration-transparent-text-2: rgba(255, 255, 255, 0);
+  --tux-v2-color-feed-anchor-bg: rgba(37, 37, 37, 0.34);
+  --tux-v2-color-feed-components-text-2-on-backdrop: rgba(255, 255, 255, 0.5);
+  --tux-v2-color-feed-components-text-backdrop: rgba(77, 77, 77, 0.5);
+  --tux-v2-color-feed-components-text-backdrop-2: rgba(64, 64, 64, 0.5);
+  --tux-v2-color-feed-top-tab-text-shadow-a30: rgba(0, 0, 0, 0.3);
+  --tux-v2-color-feed-top-tab-text-shadow-a40: rgba(0, 0, 0, 0.4);
+  --tux-v2-color-feed-top-tab-text-shadow-a50: rgba(0, 0, 0, 0.5);
+  --tux-v2-color-feed-top-tab-text-shadow-a66: rgba(0, 0, 0, 0.66);
+  --tux-v2-color-feed-top-tab-text-shadow-a83: rgba(0, 0, 0, 0.83);
+  --tux-v2-color-illustration-color-primary: rgb(73, 194, 191);
+  --tux-v2-color-illustration-color-secondary: rgb(212, 85, 94);
+  --tux-v2-color-illustration-color-stroke: rgb(93, 68, 243);
+  --tux-v2-color-illustration-color-symbol: rgb(227, 227, 227);
+  --tux-v2-color-illustration-color-tertiary: rgb(223, 192, 12);
+  --tux-v2-color-illustration-gray-fill: rgba(255, 255, 255, 0.19);
+  --tux-v2-color-illustration-gray-stroke: rgba(255, 255, 255, 0.29);
+  --tux-v2-color-inbox-filter-highlight: rgba(21, 192, 249, 0.24);
+  --tux-v2-color-inbox-filter-text-on-highlight: rgb(17, 186, 212);
+  --tux-v2-color-live-brand-1: rgb(255, 23, 100);
+  --tux-v2-color-live-brand-2: rgb(237, 52, 149);
+  --tux-v2-color-live-e-commerce-billboard-overlay: rgba(255, 255, 255, 0.85);
+  --tux-v2-color-live-foundation-background-1: rgba(51, 51, 51, 0.5);
+  --tux-v2-color-live-foundation-background-2: rgba(84, 84, 84, 0.5);
+  --tux-v2-color-live-foundation-shape-1: rgba(64, 64, 64, 0.5);
+  --tux-v2-color-live-foundation-shape-2: rgb(64, 64, 64);
+  --tux-v2-color-live-foundational-profile-text-1: rgb(250, 77, 77);
+  --tux-v2-color-live-multi-guest-social-shape-1: rgb(23, 99, 232);
+  --tux-v2-color-live-multi-guest-social-shape-2: rgb(212, 22, 162);
+  --tux-v2-color-live-multi-guest-social-shape-3: rgb(98, 32, 230);
+  --tux-v2-color-live-revenue-beans-shape: rgb(30, 21, 61);
+  --tux-v2-color-live-revenue-enigma-shape-1: rgb(92, 105, 230);
+  --tux-v2-color-live-revenue-enigma-shape-2: rgba(92, 105, 230, 0.2);
+  --tux-v2-color-live-revenue-enigma-shape-3: rgb(29, 34, 85);
+  --tux-v2-color-live-revenue-enigma-shape-4: rgb(157, 176, 255);
+  --tux-v2-color-live-revenue-enigma-shape-5: rgb(30, 30, 53);
+  --tux-v2-color-live-revenue-enigma-text-1: rgb(197, 212, 255);
+  --tux-v2-color-live-revenue-ranking-daily-text-1: rgb(255, 243, 76);
+  --tux-v2-color-live-revenue-ranking-daily-text-2: rgb(255, 187, 0);
+  --tux-v2-color-live-revenue-ranking-daily-text-3: rgb(45, 32, 27);
+  --tux-v2-color-live-revenue-ranking-league-a-shape: rgb(255, 225, 154);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-1: rgb(255, 243, 186);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-2: rgb(255, 229, 133);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-3: rgb(255, 222, 106);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-4: rgb(255, 208, 83);
+  --tux-v2-color-live-revenue-ranking-league-a-shape-5: rgb(72, 37, 0);
+  --tux-v2-color-live-revenue-ranking-league-a-text: rgb(81, 34, 25);
+  --tux-v2-color-live-revenue-ranking-league-b-shape: rgb(212, 229, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-1: rgb(241, 251, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-2: rgb(224, 240, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-3: rgb(208, 235, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-4: rgb(192, 229, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-5: rgb(114, 175, 255);
+  --tux-v2-color-live-revenue-ranking-league-b-shape-6: rgb(41, 0, 120);
+  --tux-v2-color-live-revenue-ranking-league-b-text: rgb(32, 54, 86);
+  --tux-v2-color-live-revenue-ranking-league-c-shape: rgb(255, 214, 193);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-1: rgb(255, 239, 229);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-2: rgb(255, 219, 195);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-3: rgb(255, 213, 188);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-4: rgb(255, 202, 167);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-5: rgb(255, 156, 114);
+  --tux-v2-color-live-revenue-ranking-league-c-shape-6: rgb(77, 12, 0);
+  --tux-v2-color-live-revenue-ranking-league-c-text: rgb(79, 42, 16);
+  --tux-v2-color-live-revenue-ranking-league-d-shape: rgb(245, 219, 219);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-1: rgb(255, 241, 240);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-2: rgb(255, 217, 215);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-3: rgb(255, 209, 208);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-4: rgb(238, 125, 144);
+  --tux-v2-color-live-revenue-ranking-league-d-shape-5: rgb(84, 0, 50);
+  --tux-v2-color-live-revenue-ranking-league-d-text: rgb(70, 21, 23);
+  --tux-v2-color-live-revenue-ranking-lv1-background: rgba(191, 134, 0, 0.6);
+  --tux-v2-color-live-revenue-ranking-shape: rgba(235, 141, 0, 0.2);
+  --tux-v2-color-live-revenue-ranking-shape-golden-1: rgb(243, 232, 191);
+  --tux-v2-color-live-revenue-ranking-shape-golden-2: rgb(206, 189, 147);
+  --tux-v2-color-live-revenue-ranking-shape-golden-3: rgba(191, 134, 0, 0.8);
+  --tux-v2-color-live-revenue-ranking-shape-silver-1: rgb(212, 219, 221);
+  --tux-v2-color-live-revenue-ranking-shape-silver-2: rgb(151, 166, 172);
+  --tux-v2-color-live-revenue-ranking-shape-silver-3: rgba(84, 126, 141, 0.8);
+  --tux-v2-color-live-revenue-ranking-text: rgb(235, 141, 0);
+  --tux-v2-color-live-revenue-recharge-shape-1: rgb(57, 47, 37);
+  --tux-v2-color-live-revenue-recharge-shape-2: rgba(57, 47, 37, 0.65);
+  --tux-v2-color-live-revenue-stage-primary-1: rgb(17, 190, 224);
+  --tux-v2-color-live-revenue-stage-primary-2: rgb(254, 124, 2);
+  --tux-v2-color-live-revenue-stage-primary-3: rgb(139, 56, 255);
+  --tux-v2-color-live-revenue-sticker-text1: rgb(255, 200, 4);
+  --tux-v2-color-live-revenue-superfan-shape-1: rgba(245, 204, 135, 0.2);
+  --tux-v2-color-live-revenue-superfan-shape-2: rgba(115, 67, 0, 0.1);
+  --tux-v2-color-live-revenue-superfan-shape-3: rgb(180, 120, 39);
+  --tux-v2-color-live-revenue-superfan-text-1: rgb(220, 165, 90);
+  --tux-v2-color-live-revenue-superfan-text-2: rgb(115, 67, 0);
+  --tux-v2-color-live-revenue-team-shape-1: rgba(255, 115, 0, 0.17);
+  --tux-v2-color-live-revenue-team-shape-2: rgba(255, 115, 0, 0.08);
+  --tux-v2-color-live-revenue-team-shape-3: rgb(250, 132, 35);
+  --tux-v2-color-live-revenue-team-text-primary-1: rgb(255, 115, 0);
+  --tux-v2-color-live-revenue-team-text-primary-2: rgb(255, 150, 64);
+  --tux-v2-color-live-smb-service-background-1: rgba(14, 98, 255, 0.14);
+  --tux-v2-color-live-smb-service-background-2: rgba(14, 98, 255, 0.12);
+  --tux-v2-color-live-smb-service-background-3: rgba(14, 98, 255, 0);
+  --tux-v2-color-live-smb-service-shape-1: rgb(16, 157, 175);
+  --tux-v2-color-live-subscription-privilege-shape-1: rgb(255, 234, 198);
+  --tux-v2-color-live-subscription-privilege-shape-2: rgba(255, 234, 198, 0.9);
+  --tux-v2-color-live-subscription-privilege-text-1: rgb(255, 131, 8);
+  --tux-v2-color-live-subscription-privilege-text-2: rgba(255, 131, 8, 0.9);
+  --tux-v2-color-local-service-poi: rgb(19, 189, 144);
+  --tux-v2-color-local-service-poi-background: rgba(19, 189, 144, 0.2);
+  --tux-v2-color-local-service-ranking-gold-1: rgba(255, 195, 0, 0.15);
+  --tux-v2-color-local-service-ranking-text-1-on-gold-1: rgb(221, 177, 63);
+  --tux-v2-color-misc-online-shape: rgb(29, 215, 101);
+  --tux-v2-color-misc-online-shape-4: rgba(29, 215, 101, 0.25);
+  --tux-v2-color-misc-online-text: rgb(34, 198, 96);
+  --tux-v2-color-misc-rating-star-selected-fill: rgb(255, 187, 0);
+  --tux-v2-color-misc-toast-background: rgb(82, 82, 82);
+  --tux-v2-color-misc-tooltip-background: rgb(255, 255, 255);
+  --tux-v2-color-misc-tooltip-text-1: rgb(0, 0, 0);
+  --tux-v2-color-misc-verified-badge-1: rgb(32, 213, 236);
+  --tux-v2-color-misc-verified-badge-2: rgb(255, 255, 255);
+  --tux-v2-color-pgc-creator-assistant-1: rgb(53, 85, 233);
+  --tux-v2-color-photo-text-text-mode-background-1: rgb(32, 32, 32);
+  --tux-v2-color-photo-text-text-mode-background-2: rgb(0, 0, 0);
+  --tux-v2-color-privacy-meditation-text-primary: rgb(29, 96, 191);
+  --tux-v2-color-privacy-wellbeing-hub-page-2: rgba(89, 158, 255, 0.22);
+  --tux-v2-color-profile-icon-background-dark-gray: rgba(124, 124, 124, 0.9);
+  --tux-v2-color-search-results-section-background: rgb(18, 18, 18);
+  --tux-v2-color-search-sensitive-overlay: rgba(0, 0, 0, 0.9);
+  --tux-v2-color-search-tako-chat-bubble: rgb(0, 147, 194);
+  --tux-v2-color-search-tako-chat-bubble-2: rgba(0, 148, 255, 0.4);
+  --tux-v2-color-search-task-coin-1: rgb(255, 175, 55);
+  --tux-v2-color-search-task-coin-2: rgb(255, 138, 0);
+  --tux-v2-color-social-avatar-brand-1: rgb(112, 89, 255);
+  --tux-v2-color-social-avatar-profile-01-1: rgb(222, 210, 250);
+  --tux-v2-color-social-avatar-profile-01-2: rgb(26, 19, 18);
+  --tux-v2-color-social-avatar-profile-01-3: rgb(204, 179, 245);
+  --tux-v2-color-social-avatar-profile-02-1: rgb(98, 95, 255);
+  --tux-v2-color-social-avatar-profile-02-2: rgb(252, 221, 73);
+  --tux-v2-color-social-avatar-profile-02-3: rgb(148, 146, 249);
+  --tux-v2-color-social-avatar-profile-03-1: rgb(114, 109, 144);
+  --tux-v2-color-social-avatar-profile-03-2: rgb(239, 229, 204);
+  --tux-v2-color-social-avatar-profile-03-3: rgb(178, 170, 226);
+  --tux-v2-color-social-avatar-profile-04-1: rgb(251, 196, 54);
+  --tux-v2-color-social-avatar-profile-04-2: rgb(61, 61, 61);
+  --tux-v2-color-social-avatar-profile-04-3: rgb(251, 196, 54);
+  --tux-v2-color-social-avatar-profile-05-1: rgb(248, 99, 99);
+  --tux-v2-color-social-avatar-profile-05-2: rgb(61, 75, 148);
+  --tux-v2-color-social-avatar-profile-05-3: rgb(255, 115, 115);
+  --tux-v2-color-social-avatar-profile-06-1: rgb(234, 232, 224);
+  --tux-v2-color-social-avatar-profile-06-2: rgb(115, 127, 150);
+  --tux-v2-color-social-avatar-profile-06-3: rgb(191, 191, 191);
+  --tux-v2-color-social-chat-gradient-blue-1: rgb(0, 184, 211);
+  --tux-v2-color-social-chat-gradient-blue-2: rgb(0, 173, 210);
+  --tux-v2-color-social-chat-gradient-blue-3: rgb(23, 135, 217);
+  --tux-v2-color-social-relation-connect-now: rgb(145, 98, 245);
+  --tux-v2-color-social-relation-contact: rgb(30, 178, 5);
+  --tux-v2-color-social-relation-facebook: rgb(0, 117, 250);
+  --tux-v2-color-social-relation-invite: rgb(242, 174, 0);
+  --tux-v2-color-social-relation-qr-code: rgb(242, 104, 45);
+  --tux-v2-color-social-relation-share: rgb(0, 171, 244);
+  --tux-v2-color-social-share-group-share-icon: rgb(84, 118, 255);
+  --tux-v2-color-social-snail-1: rgb(221, 15, 136);
+  --tux-v2-color-social-story-create: rgb(131, 87, 255);
+  --tux-v2-color-social-story-gradient-green-1: rgb(0, 148, 255);
+  --tux-v2-color-social-story-gradient-green-2: rgb(32, 213, 236);
+  --tux-v2-color-social-story-gradient-green-3: rgb(0, 255, 163);
+  --tux-v2-color-social-story-gradient-purple-1: rgb(199, 87, 255);
+  --tux-v2-color-social-story-gradient-purple-2: rgb(111, 82, 255);
+  --tux-v2-color-social-story-gradient-purple-3: rgb(131, 87, 255);
+  --tux-v2-color-social-story-plus-background: rgb(19, 191, 229);
+  --tux-v2-color-social-story-shape-purple: rgba(124, 92, 253, 0.66);
+  --tux-v2-color-social-streak-01-1: rgb(247, 240, 212);
+  --tux-v2-color-social-streak-01-2: rgb(255, 211, 56);
+  --tux-v2-color-social-streak-01-3: rgb(186, 148, 7);
+  --tux-v2-color-social-streak-02-1: rgb(247, 226, 212);
+  --tux-v2-color-social-streak-02-2: rgb(255, 140, 56);
+  --tux-v2-color-social-streak-02-3: rgb(255, 94, 59);
+  --tux-v2-color-social-streak-03-1: rgb(255, 209, 217);
+  --tux-v2-color-social-streak-03-2: rgb(255, 98, 136);
+  --tux-v2-color-social-streak-03-3: rgb(213, 15, 50);
+  --tux-v2-color-social-streak-04-1: rgb(253, 203, 236);
+  --tux-v2-color-social-streak-04-2: rgb(242, 98, 193);
+  --tux-v2-color-social-streak-04-3: rgb(217, 33, 143);
+  --tux-v2-color-social-streak-05-1: rgb(234, 202, 242);
+  --tux-v2-color-social-streak-05-2: rgb(229, 88, 241);
+  --tux-v2-color-social-streak-05-3: rgb(175, 16, 250);
+  --tux-v2-color-social-text-streak: rgb(255, 102, 18);
+  --tux-v2-color-ui-image-overlay-black: rgb(0, 0, 0);
+  --tux-v2-color-ui-image-overlay-black-a15: rgba(0, 0, 0, 0.15);
+  --tux-v2-color-ui-image-overlay-black-a25: rgba(0, 0, 0, 0.25);
+  --tux-v2-color-ui-image-overlay-black-a50: rgba(0, 0, 0, 0.5);
+  --tux-v2-color-ui-image-overlay-black-a80: rgba(0, 0, 0, 0.8);
+  --tux-v2-color-ui-image-overlay-dark-gray-a30: rgba(51, 51, 51, 0.3);
+  --tux-v2-color-ui-image-overlay-dark-gray-a40: rgba(51, 51, 51, 0.4);
+  --tux-v2-color-ui-image-overlay-dark-gray-a60: rgba(51, 51, 51, 0.6);
+  --tux-v2-color-ui-image-overlay-dark-gray-a85: rgba(51, 51, 51, 0.85);
+  --tux-v2-color-ui-image-overlay-white: rgb(255, 255, 255);
+  --tux-v2-color-ui-image-overlay-white-a20: rgba(255, 255, 255, 0.2);
+  --tux-v2-color-ui-image-overlay-white-a40: rgba(255, 255, 255, 0.4);
+  --tux-v2-color-ui-image-overlay-white-a75: rgba(255, 255, 255, 0.75);
+  --tux-v2-color-ui-page-flat-1: rgb(0, 0, 0);
+  --tux-v2-color-ui-page-flat-2: rgb(30, 30, 30);
+  --tux-v2-color-ui-page-flat-3: rgb(44, 44, 44);
+  --tux-v2-color-ui-page-grouped-1: rgb(0, 0, 0);
+  --tux-v2-color-ui-page-grouped-2: rgb(30, 30, 30);
+  --tux-v2-color-ui-page-grouped-3: rgb(44, 44, 44);
+  --tux-v2-color-ui-shape-danger: rgb(255, 76, 58);
+  --tux-v2-color-ui-shape-danger-2: rgba(255, 76, 58, 0.68);
+  --tux-v2-color-ui-shape-danger-3: rgba(255, 76, 58, 0.5);
+  --tux-v2-color-ui-shape-danger-4: rgba(255, 76, 58, 0.29);
+  --tux-v2-color-ui-shape-info: rgb(0, 117, 220);
+  --tux-v2-color-ui-shape-info-2: rgba(32, 151, 255, 0.6);
+  --tux-v2-color-ui-shape-info-3: rgba(32, 151, 255, 0.47);
+  --tux-v2-color-ui-shape-info-4: rgba(32, 151, 255, 0.29);
+  --tux-v2-color-ui-shape-neutral: rgb(250, 250, 250);
+  --tux-v2-color-ui-shape-neutral-2: rgba(255, 255, 255, 0.32);
+  --tux-v2-color-ui-shape-neutral-3: rgba(255, 255, 255, 0.19);
+  --tux-v2-color-ui-shape-neutral-4: rgba(255, 255, 255, 0.13);
+  --tux-v2-color-ui-shape-primary: rgb(254, 44, 85);
+  --tux-v2-color-ui-shape-primary-2: rgba(254, 44, 85, 0.6);
+  --tux-v2-color-ui-shape-primary-3: rgba(254, 44, 85, 0.43);
+  --tux-v2-color-ui-shape-primary-4: rgba(254, 44, 85, 0.27);
+  --tux-v2-color-ui-shape-primary-5: rgba(254, 44, 85, 0.13);
+  --tux-v2-color-ui-shape-secondary: rgb(32, 213, 236);
+  --tux-v2-color-ui-shape-secondary-2: rgba(32, 213, 236, 0.5);
+  --tux-v2-color-ui-shape-secondary-3: rgba(32, 213, 236, 0.32);
+  --tux-v2-color-ui-shape-secondary-4: rgba(32, 213, 236, 0.21);
+  --tux-v2-color-ui-shape-secondary-5: rgba(32, 213, 236, 0.13);
+  --tux-v2-color-ui-shape-secondary-muted: rgb(0, 162, 201);
+  --tux-v2-color-ui-shape-secondary-muted-2: rgba(0, 162, 201, 0.66);
+  --tux-v2-color-ui-shape-secondary-muted-3: rgba(0, 162, 201, 0.46);
+  --tux-v2-color-ui-shape-secondary-muted-4: rgba(0, 162, 201, 0.3);
+  --tux-v2-color-ui-shape-secondary-muted-5: rgba(0, 162, 201, 0.13);
+  --tux-v2-color-ui-shape-success: rgb(11, 224, 155);
+  --tux-v2-color-ui-shape-success-2: rgba(11, 224, 155, 0.66);
+  --tux-v2-color-ui-shape-success-3: rgba(11, 224, 155, 0.46);
+  --tux-v2-color-ui-shape-success-4: rgba(11, 224, 155, 0.25);
+  --tux-v2-color-ui-shape-text-1-on-danger: rgb(255, 255, 255);
+  --tux-v2-color-ui-shape-text-1-on-info: rgb(231, 244, 255);
+  --tux-v2-color-ui-shape-text-1-on-neutral: rgb(0, 0, 0);
+  --tux-v2-color-ui-shape-text-1-on-primary: rgb(255, 255, 255);
+  --tux-v2-color-ui-shape-text-1-on-secondary: rgb(0, 52, 60);
+  --tux-v2-color-ui-shape-text-1-on-secondary-muted: rgb(255, 255, 255);
+  --tux-v2-color-ui-shape-text-1-on-success: rgb(0, 54, 40);
+  --tux-v2-color-ui-shape-text-1-on-warning: rgb(45, 18, 1);
+  --tux-v2-color-ui-shape-text-2-on-danger: rgb(255, 203, 190);
+  --tux-v2-color-ui-shape-text-2-on-info: rgb(142, 202, 255);
+  --tux-v2-color-ui-shape-text-2-on-neutral: rgba(0, 0, 0, 0.48);
+  --tux-v2-color-ui-shape-text-2-on-primary: rgb(255, 217, 218);
+  --tux-v2-color-ui-shape-text-2-on-secondary: rgb(0, 102, 116);
+  --tux-v2-color-ui-shape-text-2-on-secondary-muted: rgb(177, 240, 255);
+  --tux-v2-color-ui-shape-text-2-on-success: rgb(0, 133, 104);
+  --tux-v2-color-ui-shape-text-2-on-warning: rgb(146, 72, 15);
+  --tux-v2-color-ui-shape-text-on-secondary-2-or-3: rgb(160, 237, 250);
+  --tux-v2-color-ui-shape-text-on-secondary-4-or-5: rgb(129, 204, 216);
+  --tux-v2-color-ui-shape-text-on-secondary-muted-2-or-3: rgb(173, 233, 255);
+  --tux-v2-color-ui-shape-text-on-secondary-muted-4-or-5: rgb(134, 201, 226);
+  --tux-v2-color-ui-shape-warning: rgb(254, 124, 2);
+  --tux-v2-color-ui-shape-warning-2: rgba(254, 124, 2, 0.67);
+  --tux-v2-color-ui-shape-warning-3: rgba(254, 124, 2, 0.51);
+  --tux-v2-color-ui-shape-warning-4: rgba(254, 124, 2, 0.28);
+  --tux-v2-color-ui-sheet-backdrop-1: rgba(0, 0, 0, 0.7);
+  --tux-v2-color-ui-sheet-backdrop-2: rgba(0, 0, 0, 0.5);
+  --tux-v2-color-ui-sheet-flat-1: rgb(30, 30, 30);
+  --tux-v2-color-ui-sheet-flat-2: rgb(44, 44, 44);
+  --tux-v2-color-ui-sheet-flat-3: rgb(58, 58, 58);
+  --tux-v2-color-ui-sheet-grouped-1: rgb(30, 30, 30);
+  --tux-v2-color-ui-sheet-grouped-2: rgb(44, 44, 44);
+  --tux-v2-color-ui-sheet-grouped-3: rgb(58, 58, 58);
+  --tux-v2-color-ui-text-1: rgb(246, 246, 246);
+  --tux-v2-color-ui-text-1-display: rgb(240, 240, 240);
+  --tux-v2-color-ui-text-2: rgba(255, 255, 255, 0.88);
+  --tux-v2-color-ui-text-3: rgba(255, 255, 255, 0.6);
+  --tux-v2-color-ui-text-danger: rgb(255, 118, 96);
+  --tux-v2-color-ui-text-danger-display: rgb(255, 91, 72);
+  --tux-v2-color-ui-text-info: rgb(96, 179, 255);
+  --tux-v2-color-ui-text-info-display: rgb(96, 179, 255);
+  --tux-v2-color-ui-text-placeholder: rgba(255, 255, 255, 0.4);
+  --tux-v2-color-ui-text-primary: rgb(255, 87, 111);
+  --tux-v2-color-ui-text-primary-display: rgb(255, 59, 92);
+  --tux-v2-color-ui-text-secondary: rgb(32, 213, 236);
+  --tux-v2-color-ui-text-secondary-display: rgb(32, 213, 236);
+  --tux-v2-color-ui-text-success: rgb(11, 224, 155);
+  --tux-v2-color-ui-text-success-display: rgb(11, 224, 155);
+  --tux-v2-color-ui-text-warning: rgb(255, 173, 124);
+  --tux-v2-color-ui-text-warning-display: rgb(254, 124, 2);
+  --tux-v2-color-brand-tiktok-background: rgb(0, 0, 0);
+  --tux-v2-color-brand-tiktok-background-element: rgb(255, 255, 255);
+  --tux-v2-color-brand-tiktok-razzmatazz: rgb(254, 44, 85);
+  --tux-v2-color-brand-tiktok-splash: rgb(37, 244, 238);
+  --tux-v2-color-brand-tiktok-spotlight: rgb(255, 255, 255);
+  --tux-v2-color-brand-tiktok-subject-in-spotlight: rgb(0, 0, 0);
+  --tux-v2-color-shadow-attached: rgba(0, 0, 0, 0.21);
+  --tux-v2-color-shadow-blocking: rgba(0, 0, 0, 0.24);
+  --tux-v2-color-shadow-contrast: rgba(0, 0, 0, 0.3);
+  --tux-v2-color-shadow-floating: rgba(0, 0, 0, 0.15);
+  --tux-v2-color-shadow-notice: rgba(0, 0, 0, 0.15);
+  --tux-v2-color-shadow-subtle: rgba(0, 0, 0, 0.07);
+}
+
+@keyframes spring-quick-scale-enter {
+  0% {
+    transform: scale(0, 0);
+  }
+  14.516% {
+    transform: scale(0.684, 0.684);
+  }
+  27.419% {
+    transform: scale(0.947, 0.947);
+  }
+  53.225% {
+    transform: scale(1, 1);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
+@keyframes spring-quick-scale-leave {
+  0% {
+    transform: scale(1, 1);
+  }
+  14.516% {
+    transform: scale(0.947, 0.947);
+  }
+  27.419% {
+    transform: scale(0.684, 0.684);
+  }
+  53.225% {
+    transform: scale(0, 0);
+  }
+  100% {
+    transform: scale(0, 0);
+  }
+}
+
+:root {
+  --tux-v2-pressed-state-light-scale: 0.99;
+  --tux-v2-pressed-state-medium-scale: 0.95;
+  --tux-v2-pressed-state-strong-scale: 0.9;
+}
+
+[data-tux-color-scheme=light] {
+  --tux-v2-pressed-state-strong-opacity: 0.2;
+}
+
+[data-tux-color-scheme=dark] {
+  --tux-v2-pressed-state-strong-opacity: 0.4;
+}
+
+:root {
+  --tux-v2-radius-control-tiny: 4px;
+  --tux-v2-radius-control-small: 5px;
+  --tux-v2-radius-control-medium: 6px;
+  --tux-v2-radius-control-large: 8px;
+  --tux-v2-radius-control-old: 2px;
+  --tux-v2-radius-control-capsule: 9999px;
+  --tux-v2-radius-content-tiny: 4px;
+  --tux-v2-radius-content-small: 5px;
+  --tux-v2-radius-content-medium: 6px;
+  --tux-v2-radius-content-large: 8px;
+  --tux-v2-radius-container-level0-small: 8px;
+  --tux-v2-radius-container-level1-small: 10px;
+  --tux-v2-radius-container-level2-small: 12px;
+  --tux-v2-radius-container-level0-large: 10px;
+  --tux-v2-radius-container-level1-large: 12px;
+  --tux-v2-radius-container-level2-large: 14px;
+}
+
+.radius-control-tiny {
+  border-radius: var(--tux-v2-radius-control-tiny);
+}
+
+.radius-control-small {
+  border-radius: var(--tux-v2-radius-control-small);
+}
+
+.radius-control-medium {
+  border-radius: var(--tux-v2-radius-control-medium);
+}
+
+.radius-control-large {
+  border-radius: var(--tux-v2-radius-control-large);
+}
+
+.radius-control-old {
+  border-radius: var(--tux-v2-radius-control-old);
+}
+
+.radius-control-capsule {
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.radius-content-tiny {
+  border-radius: var(--tux-v2-radius-content-tiny);
+}
+
+.radius-content-small {
+  border-radius: var(--tux-v2-radius-content-small);
+}
+
+.radius-content-medium {
+  border-radius: var(--tux-v2-radius-content-medium);
+}
+
+.radius-content-large {
+  border-radius: var(--tux-v2-radius-content-large);
+}
+
+.radius-container-level0-small {
+  border-radius: var(--tux-v2-radius-container-level0-small);
+}
+
+.radius-container-level1-small {
+  border-radius: var(--tux-v2-radius-container-level1-small);
+}
+
+.radius-container-level2-small {
+  border-radius: var(--tux-v2-radius-container-level2-small);
+}
+
+.radius-container-level0-large {
+  border-radius: var(--tux-v2-radius-container-level0-large);
+}
+
+.radius-container-level1-large {
+  border-radius: var(--tux-v2-radius-container-level1-large);
+}
+
+.radius-container-level2-large {
+  border-radius: var(--tux-v2-radius-container-level2-large);
+}
+
+:root {
+  --tux-v2-font-display: TikTokDisplayFont, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Open Sans, Helvetica Neue, sans-serif;
+  --tux-v2-font-text: TikTokFont, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Open Sans, Helvetica Neue, sans-serif;
+  --tux-v2-typography-bold-weight: 700;
+  --tux-v2-typography-semibold-weight: 500;
+  --tux-v2-typography-regular-weight: 400;
+  --tux-v2-typography-h1-size: 24px;
+  --tux-v2-typography-h1-line-height: 1.25em;
+  --tux-v2-typography-h1-letter-spacing: 0.01em;
+  --tux-v2-typography-h2-size: 20px;
+  --tux-v2-typography-h2-line-height: 1.25em;
+  --tux-v2-typography-h2-letter-spacing: 0.015em;
+  --tux-v2-typography-h3-size: 17px;
+  --tux-v2-typography-h3-line-height: 1.3em;
+  --tux-v2-typography-h3-letter-spacing: 0em;
+  --tux-v2-typography-h4-size: 15px;
+  --tux-v2-typography-h4-line-height: 1.3em;
+  --tux-v2-typography-h4-letter-spacing: 0.004em;
+  --tux-v2-typography-p1-size: 14px;
+  --tux-v2-typography-p1-line-height: 1.3em;
+  --tux-v2-typography-p1-letter-spacing: 0.0067em;
+  --tux-v2-typography-p2-size: 13px;
+  --tux-v2-typography-p2-line-height: 1.3em;
+  --tux-v2-typography-p2-letter-spacing: 0.0097em;
+  --tux-v2-typography-p3-size: 12px;
+  --tux-v2-typography-p3-line-height: 1.3em;
+  --tux-v2-typography-p3-letter-spacing: 0.0134em;
+  --tux-v2-typography-smalltext1-size: 11px;
+  --tux-v2-typography-smalltext1-line-height: 1.3em;
+  --tux-v2-typography-smalltext1-letter-spacing: 0.0177em;
+  --tux-v2-typography-smalltext2-size: 10px;
+  --tux-v2-typography-smalltext2-line-height: 1.3em;
+  --tux-v2-typography-smalltext2-letter-spacing: 0.0229em;
+  --tux-v2-typography-headline-size: 16px;
+  --tux-v2-typography-headline-line-height: 1.3em;
+  --tux-v2-typography-headline-letter-spacing: 0.0019em;
+  --tux-v2-typography-longform-size: 16px;
+  --tux-v2-typography-longform-line-height: 1.5em;
+  --tux-v2-typography-longform-letter-spacing: 0.0019em;
+  --tux-v2-typography-largetitle-size: 32px;
+  --tux-v2-typography-largetitle-line-height: 1.2em;
+  --tux-v2-typography-largetitle-letter-spacing: 0em;
+}
+
+.H1-Bold {
+  font-size: var(--tux-v2-typography-h1-size);
+  line-height: var(--tux-v2-typography-h1-line-height);
+  letter-spacing: var(--tux-v2-typography-h1-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+.H1-Semibold {
+  font-size: var(--tux-v2-typography-h1-size);
+  line-height: var(--tux-v2-typography-h1-line-height);
+  letter-spacing: var(--tux-v2-typography-h1-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+.H1-Regular {
+  font-size: var(--tux-v2-typography-h1-size);
+  line-height: var(--tux-v2-typography-h1-line-height);
+  letter-spacing: var(--tux-v2-typography-h1-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+.H2-Bold {
+  font-size: var(--tux-v2-typography-h2-size);
+  line-height: var(--tux-v2-typography-h2-line-height);
+  letter-spacing: var(--tux-v2-typography-h2-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+.H2-Semibold {
+  font-size: var(--tux-v2-typography-h2-size);
+  line-height: var(--tux-v2-typography-h2-line-height);
+  letter-spacing: var(--tux-v2-typography-h2-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+.H2-Regular {
+  font-size: var(--tux-v2-typography-h2-size);
+  line-height: var(--tux-v2-typography-h2-line-height);
+  letter-spacing: var(--tux-v2-typography-h2-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+.H3-Bold {
+  font-size: var(--tux-v2-typography-h3-size);
+  line-height: var(--tux-v2-typography-h3-line-height);
+  letter-spacing: var(--tux-v2-typography-h3-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.H3-Semibold {
+  font-size: var(--tux-v2-typography-h3-size);
+  line-height: var(--tux-v2-typography-h3-line-height);
+  letter-spacing: var(--tux-v2-typography-h3-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.H3-Regular {
+  font-size: var(--tux-v2-typography-h3-size);
+  line-height: var(--tux-v2-typography-h3-line-height);
+  letter-spacing: var(--tux-v2-typography-h3-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.H4-Bold {
+  font-size: var(--tux-v2-typography-h4-size);
+  line-height: var(--tux-v2-typography-h4-line-height);
+  letter-spacing: var(--tux-v2-typography-h4-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.H4-Semibold {
+  font-size: var(--tux-v2-typography-h4-size);
+  line-height: var(--tux-v2-typography-h4-line-height);
+  letter-spacing: var(--tux-v2-typography-h4-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.H4-Regular {
+  font-size: var(--tux-v2-typography-h4-size);
+  line-height: var(--tux-v2-typography-h4-line-height);
+  letter-spacing: var(--tux-v2-typography-h4-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.P1-Bold {
+  font-size: var(--tux-v2-typography-p1-size);
+  line-height: var(--tux-v2-typography-p1-line-height);
+  letter-spacing: var(--tux-v2-typography-p1-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.P1-Semibold {
+  font-size: var(--tux-v2-typography-p1-size);
+  line-height: var(--tux-v2-typography-p1-line-height);
+  letter-spacing: var(--tux-v2-typography-p1-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.P1-Regular {
+  font-size: var(--tux-v2-typography-p1-size);
+  line-height: var(--tux-v2-typography-p1-line-height);
+  letter-spacing: var(--tux-v2-typography-p1-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.P2-Bold {
+  font-size: var(--tux-v2-typography-p2-size);
+  line-height: var(--tux-v2-typography-p2-line-height);
+  letter-spacing: var(--tux-v2-typography-p2-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.P2-Semibold {
+  font-size: var(--tux-v2-typography-p2-size);
+  line-height: var(--tux-v2-typography-p2-line-height);
+  letter-spacing: var(--tux-v2-typography-p2-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.P2-Regular {
+  font-size: var(--tux-v2-typography-p2-size);
+  line-height: var(--tux-v2-typography-p2-line-height);
+  letter-spacing: var(--tux-v2-typography-p2-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.P3-Bold {
+  font-size: var(--tux-v2-typography-p3-size);
+  line-height: var(--tux-v2-typography-p3-line-height);
+  letter-spacing: var(--tux-v2-typography-p3-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.P3-Semibold {
+  font-size: var(--tux-v2-typography-p3-size);
+  line-height: var(--tux-v2-typography-p3-line-height);
+  letter-spacing: var(--tux-v2-typography-p3-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.P3-Regular {
+  font-size: var(--tux-v2-typography-p3-size);
+  line-height: var(--tux-v2-typography-p3-line-height);
+  letter-spacing: var(--tux-v2-typography-p3-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.SmallText1-Bold {
+  font-size: var(--tux-v2-typography-smalltext1-size);
+  line-height: var(--tux-v2-typography-smalltext1-line-height);
+  letter-spacing: var(--tux-v2-typography-smalltext1-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.SmallText1-Semibold {
+  font-size: var(--tux-v2-typography-smalltext1-size);
+  line-height: var(--tux-v2-typography-smalltext1-line-height);
+  letter-spacing: var(--tux-v2-typography-smalltext1-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.SmallText1-Regular {
+  font-size: var(--tux-v2-typography-smalltext1-size);
+  line-height: var(--tux-v2-typography-smalltext1-line-height);
+  letter-spacing: var(--tux-v2-typography-smalltext1-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.SmallText2-Bold {
+  font-size: var(--tux-v2-typography-smalltext2-size);
+  line-height: var(--tux-v2-typography-smalltext2-line-height);
+  letter-spacing: var(--tux-v2-typography-smalltext2-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.SmallText2-Semibold {
+  font-size: var(--tux-v2-typography-smalltext2-size);
+  line-height: var(--tux-v2-typography-smalltext2-line-height);
+  letter-spacing: var(--tux-v2-typography-smalltext2-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.SmallText2-Regular {
+  font-size: var(--tux-v2-typography-smalltext2-size);
+  line-height: var(--tux-v2-typography-smalltext2-line-height);
+  letter-spacing: var(--tux-v2-typography-smalltext2-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.Headline-Bold {
+  font-size: var(--tux-v2-typography-headline-size);
+  line-height: var(--tux-v2-typography-headline-line-height);
+  letter-spacing: var(--tux-v2-typography-headline-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.Headline-Semibold {
+  font-size: var(--tux-v2-typography-headline-size);
+  line-height: var(--tux-v2-typography-headline-line-height);
+  letter-spacing: var(--tux-v2-typography-headline-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.Headline-Regular {
+  font-size: var(--tux-v2-typography-headline-size);
+  line-height: var(--tux-v2-typography-headline-line-height);
+  letter-spacing: var(--tux-v2-typography-headline-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.Longform-Bold {
+  font-size: var(--tux-v2-typography-longform-size);
+  line-height: var(--tux-v2-typography-longform-line-height);
+  letter-spacing: var(--tux-v2-typography-longform-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.Longform-Semibold {
+  font-size: var(--tux-v2-typography-longform-size);
+  line-height: var(--tux-v2-typography-longform-line-height);
+  letter-spacing: var(--tux-v2-typography-longform-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.Longform-Regular {
+  font-size: var(--tux-v2-typography-longform-size);
+  line-height: var(--tux-v2-typography-longform-line-height);
+  letter-spacing: var(--tux-v2-typography-longform-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.LargeTitle-Bold {
+  font-size: var(--tux-v2-typography-largetitle-size);
+  line-height: var(--tux-v2-typography-largetitle-line-height);
+  letter-spacing: var(--tux-v2-typography-largetitle-letter-spacing);
+  font-weight: var(--tux-v2-typography-bold-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+.LargeTitle-Semibold {
+  font-size: var(--tux-v2-typography-largetitle-size);
+  line-height: var(--tux-v2-typography-largetitle-line-height);
+  letter-spacing: var(--tux-v2-typography-largetitle-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+.LargeTitle-Regular {
+  font-size: var(--tux-v2-typography-largetitle-size);
+  line-height: var(--tux-v2-typography-largetitle-line-height);
+  letter-spacing: var(--tux-v2-typography-largetitle-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+:root {
+  --tux-illustration-color-primary: var(--tux-v2-color-illustration-color-primary);
+  --tux-illustration-color-secondary: var(--tux-v2-color-illustration-color-secondary);
+  --tux-illustration-color-tertiary: var(--tux-v2-color-illustration-color-tertiary);
+  --tux-illustration-color-symbol: var(--tux-v2-color-illustration-color-symbol);
+  --tux-illustration-color-stroke: var(--tux-v2-color-illustration-color-stroke);
+  --tux-illustration-color-gray-fill: var(--tux-v2-color-illustration-gray-fill);
+  --tux-illustration-color-gray-stroke: var(--tux-v2-color-illustration-gray-stroke);
+}
+
+[data-tux-color-scheme=light] {
+  --tux-v2-shadow-blocking: 0 24px 120px rgba(0, 0, 0, 0.16);
+  --tux-v2-shadow-global-notice: 0 12px 50px rgba(0, 0, 0, 0.1);
+  --tux-v2-shadow-floating: 0 6px 24px rgba(0, 0, 0, 0.1);
+  --tux-v2-shadow-attached: 0 2px 10px rgba(0, 0, 0, 0.14);
+  --tux-v2-shadow-subtle: 0 2px 10px rgba(0, 0, 0, 0.07);
+  --tux-v2-shadow-contrast: 0 1px 5px rgba(0, 0, 0, 0.3);
+}
+
+[data-tux-color-scheme=dark] {
+  --tux-v2-shadow-blocking: 0 24px 120px rgba(0, 0, 0, 0.24);
+  --tux-v2-shadow-global-notice: 0 12px 50px rgba(0, 0, 0, 0.15);
+  --tux-v2-shadow-floating: 0 6px 24px rgba(0, 0, 0, 0.15);
+  --tux-v2-shadow-attached: 0 2px 10px rgba(0, 0, 0, 0.21);
+  --tux-v2-shadow-subtle: 0 2px 10px rgba(0, 0, 0, 0.07);
+  --tux-v2-shadow-contrast: 0 1px 5px rgba(0, 0, 0, 0.3);
+}
+.text--truncate-Q49nU9 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.text--line-break-miu6QG {
+  white-space: normal;
+  word-break: break-word;
+}
+.spinner-n46Rbm {
+  display: inline-block;
+}
+
+.spinner-n46Rbm path {
+  will-change: transform;
+  transform-origin: center center;
+  animation: rotate-QRFq8s 1s linear infinite;
+}
+
+@keyframes rotate-QRFq8s {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.tux-grid-container-rp_OgD {
+  display: grid;
+  width: 100%;
+}
+.tux-interaction-container-ohUjRG {
+  position: relative;
+  overflow: hidden;
+}
+
+.tux-interaction-container--opacity-FJgzQh:active {
+  opacity: var(--tux-v2-pressed-state-strong-opacity);
+}
+
+.tux-interaction-container__overlay-AwMyOJ {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.tux-interaction-container__overlay--light-AzMmM8 {
+  background-color: var(--tux-v2-color-ui-shape-neutral-3);
+}
+
+.tux-interaction-container__overlay--strong-eeDnjB {
+  background-color: var(--tux-v2-color-ui-image-overlay-dark-gray-a30);
+}
+.tux-button-rFq4rS {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.tux-button--tiny-FKtM0h {
+  border-radius: var(--tux-v2-radius-control-tiny);
+}
+
+.tux-button--tiny-FKtM0h .tux-button__icon-container-fmBczR {
+  font-size: 14px;
+}
+
+.tux-button--small-GwB4zx {
+  border-radius: var(--tux-v2-radius-control-small);
+}
+
+.tux-button--small-GwB4zx .tux-button__icon-container-fmBczR {
+  font-size: 16px;
+}
+
+.tux-button--medium-R3_Njm {
+  border-radius: var(--tux-v2-radius-control-medium);
+}
+
+.tux-button--medium-R3_Njm .tux-button__icon-container-fmBczR {
+  font-size: 20px;
+}
+
+.tux-button--large-I21hun {
+  border-radius: var(--tux-v2-radius-control-large);
+}
+
+.tux-button--large-I21hun .tux-button__icon-container-fmBczR {
+  font-size: 20px;
+}
+
+.tux-button-rFq4rS.tux-button--capsule-_8kVNR {
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-button--disabled-lkF3kg {
+  opacity: .4;
+}
+
+.tux-button__element-ZBq38f {
+  display: block;
+  position: relative;
+  height: 100%;
+  width: 100%;
+  cursor: pointer;
+  border: none;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+       user-select: none;
+}
+
+.tux-button__element-ZBq38f:disabled {
+  pointer-events: none;
+}
+
+.tux-button__content-box-vweMKF {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+[dir="ltr"] .tux-button__content-naVKgq .item-ZxfZxl {
+  margin-left: 4px;
+}
+
+[dir="rtl"] .tux-button__content-naVKgq .item-ZxfZxl {
+  margin-right: 4px;
+}
+
+[dir="ltr"] .tux-button__content-naVKgq .item-ZxfZxl:first-child {
+  margin-left: 0;
+}
+
+[dir="rtl"] .tux-button__content-naVKgq .item-ZxfZxl:first-child {
+  margin-right: 0;
+}
+
+.tux-button__text-container-oMVxoQ {
+  overflow: hidden;
+  flex: 1;
+}
+
+.tux-button__icon-container-fmBczR {
+  flex-shrink: 0;
+}
+
+.tux-button__loading-cOrV6h .tux-button__content-naVKgq {
+  visibility: hidden;
+}
+
+.tux-button__loading-container-KzIRMl {
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: auto;
+}
+.tux-sheet__overlay-alhW5r,.tux-sheet__container-D28R73 {
+  transition-timing-function: cubic-bezier(0.33, 0.86, 0.2, 1);
+}
+
+.tux-sheet__overlay-alhW5r {
+  background-color: var(--tux-v2-color-ui-sheet-backdrop-1);
+}
+
+@media (min-width: 950px) {
+  .tux-sheet__overlay-alhW5r {
+    background-color: var(--tux-v2-color-ui-sheet-backdrop-2);
+  }
+}
+
+.tux-sheet__container-D28R73 {
+  position: fixed;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--tux-v2-color-ui-sheet-flat-1);
+}
+
+.tux-sheet__container--auto-ygbDNr {
+  max-height: 73%;
+  min-height: 166px;
+}
+
+.tux-sheet__container--fixed-eeigT1 {
+  height: calc(.95*(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+}
+
+.tux-sheet__container--bottom-kzVuFk {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-top-left-radius: var(--tux-v2-radius-container-level1-large);
+  border-top-right-radius: var(--tux-v2-radius-container-level1-large);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tux-sheet__container--left-h6_kRO,.tux-sheet__container--right-kRKSwN {
+  top: 0;
+  bottom: 0;
+  height: 100%;
+  width: min(100vw,100vh);
+}
+
+.tux-sheet__container--left-h6_kRO {
+  left: 0;
+  border-top-right-radius: var(--tux-v2-radius-container-level1-large);
+  border-bottom-right-radius: var(--tux-v2-radius-container-level1-large);
+  padding-left: env(safe-area-inset-top);
+}
+
+.tux-sheet__container--right-kRKSwN {
+  right: 0;
+  border-top-left-radius: var(--tux-v2-radius-container-level1-large);
+  border-bottom-left-radius: var(--tux-v2-radius-container-level1-large);
+  padding-right: env(safe-area-inset-bottom);
+}
+.tux-modal__overlay-AbELNe {
+  background-color: var(--tux-v2-color-ui-sheet-backdrop-1);
+}
+
+@media (min-width: 950px) {
+  .tux-modal__overlay-AbELNe {
+    background-color: var(--tux-v2-color-ui-sheet-backdrop-2);
+  }
+}
+
+.tux-modal__container-PDEFYU {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 16px;
+  right: 16px;
+  margin: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--tux-v2-radius-container-level2-small);
+  background-color: var(--tux-v2-color-ui-sheet-flat-1);
+  height: -moz-fit-content;
+  height: fit-content;
+  max-width: 360px;
+  min-height: 166px;
+  max-height: 480px;
+}
+
+.tux-modal__container--open-f2OtdU {
+  animation: spring-quick-scale-enter 350ms linear forwards;
+}
+
+@media (min-width: 296px) {
+  .tux-modal__container-PDEFYU {
+    left: 32px;
+    right: 32px;
+  }
+}
+
+@media (min-width: 600px) {
+  .tux-modal__container-PDEFYU {
+    width: 540px;
+    max-width: none;
+    min-height: 200px;
+    max-height: 640px;
+    left: 0;
+    right: 0;
+  }
+}
+
+@media (max-height: 599px) {
+  .tux-modal__container--landscape-KfTJs_ {
+    width: 360px;
+    max-width: 360px;
+    min-height: 166px;
+    max-height: calc(100% - 68px);
+    left: 0;
+    right: 0;
+    margin-bottom: 34px;
+  }
+}
+.tux-separator-Kkpk3W {
+  background-color: var(--tux-v2-color-ui-shape-neutral-3);
+}
+
+.tux-separator--horizontal-ddg3fB {
+  width: 100%;
+}
+
+.tux-separator--horizontal-ddg3fB.tux-separator--thin-q9aN30 {
+  height: 1px;
+  transform: scaleY(0.5);
+}
+
+.tux-separator--horizontal-ddg3fB.tux-separator--thick-lSkmyO {
+  height: 8px;
+}
+
+.tux-separator--vertical-t6bdqb {
+  height: 100%;
+}
+
+.tux-separator--vertical-t6bdqb.tux-separator--thin-q9aN30 {
+  width: 1px;
+  transform: scaleX(0.5);
+}
+
+.tux-separator--vertical-t6bdqb.tux-separator--thick-lSkmyO {
+  width: 8px;
+}
+.tux-checkbox-cNxBCR {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.tux-checkbox--small-GixqLG {
+  width: 16px;
+  height: 16px;
+}
+
+.tux-checkbox--large-Oo7bis {
+  width: 20px;
+  height: 20px;
+}
+
+.tux-checkbox--square--small-Jc8jZa {
+  border-radius: var(--tux-v2-radius-control-tiny);
+}
+
+.tux-checkbox--square--large-PNPaL0 {
+  border-radius: var(--tux-v2-radius-control-small);
+}
+
+.tux-checkbox--circle-IrfQEs {
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-checkbox--disabled-cqNFbB {
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  border-color: var(--tux-v2-color-ui-shape-neutral-4);
+}
+
+.tux-checkbox__input-cUpcBn {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  cursor: pointer;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  z-index: 1;
+}
+
+.tux-checkbox__input-cUpcBn:disabled {
+  cursor: not-allowed;
+}
+
+.tux-checkbox__indicator-EqLy6s {
+  width: 100%;
+  height: 100%;
+  border: 1.5px solid var(--tux-v2-color-ui-shape-neutral-2);
+}
+
+.tux-checkbox--checked-mUxix3 {
+  background-color: var(--tux-v2-color-ui-shape-primary);
+  border: none;
+}
+
+.tux-checkbox--checked-mUxix3.tux-checkbox--disabled-cqNFbB {
+  opacity: .34;
+}
+
+.tux-checkbox--error-hpm2cO {
+  border: 1.5px solid var(--tux-v2-color-ui-shape-danger);
+}
+.tux-radio-CCFCUI {
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-radio--small-yGCAZP {
+  width: 16px;
+  height: 16px;
+}
+
+.tux-radio--large-IlkUMl {
+  width: 22px;
+  height: 22px;
+}
+
+.tux-radio__input-IYOya6 {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  cursor: pointer;
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  opacity: 0;
+  z-index: 1;
+}
+
+.tux-radio__input-IYOya6:disabled {
+  cursor: not-allowed;
+}
+
+.tux-radio__indicator-KjSdAQ {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  border: 1.5px solid var(--tux-v2-color-ui-shape-neutral-2);
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-radio__indicator--center-dot-Q3iwAk {
+  background-color: var(--tux-v2-color-ui-image-overlay-white);
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-radio__indicator--center-dot--small-X_KXlB {
+  width: 6px;
+  height: 6px;
+}
+
+.tux-radio__indicator--center-dot--large-MM0mSM {
+  width: 9px;
+  height: 9px;
+}
+
+.tux-radio--disabled-jy4ac2 {
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  border-color: var(--tux-v2-color-ui-shape-neutral-4);
+}
+
+.tux-radio--error-Vk0KZK {
+  border-color: var(--tux-v2-color-ui-shape-danger);
+}
+
+.tux-radio--checked-1wxisF {
+  background-color: var(--tux-v2-color-ui-shape-primary);
+  border: none;
+}
+
+.tux-radio--checked-1wxisF.tux-radio--disabled-jy4ac2 {
+  opacity: .34;
+}
+.tux-tag-rqTAU_ {
+  min-width: 20px;
+  width: -moz-fit-content;
+  width: fit-content;
+  height: -moz-fit-content;
+  height: fit-content;
+  max-width: 160px;
+  border-radius: var(--tux-v2-radius-control-tiny);
+  overflow: hidden;
+}
+
+.tux-tag--primary-FQiFgC {
+  background-color: var(--tux-v2-color-ui-shape-primary);
+  color: var(--tux-v2-color-ui-shape-text-1-on-primary);
+}
+
+.tux-tag--neutral-E1ae9z {
+  background-color: var(--tux-v2-color-ui-shape-neutral);
+  color: var(--tux-v2-color-ui-shape-text-1-on-neutral);
+}
+
+.tux-tag--subtle-g8UF2I {
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+.tux-tag--overlayWhite-VnttxA {
+  background-color: var(--tux-v2-color-ui-image-overlay-white);
+  color: var(--tux-v2-color-ui-image-overlay-black-a80);
+}
+
+.tux-tag--overlayGray-jwEmHK {
+  background-color: var(--tux-v2-color-ui-image-overlay-dark-gray-a60);
+  color: var(--tux-v2-color-ui-image-overlay-white);
+}
+
+.tux-tag__container-zDeD_e {
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 6px;
+  padding-right: 6px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+[dir="ltr"] .tux-tag__container--with-leading-icon-UukFlz {
+  padding-left: 2px;
+}
+
+[dir="rtl"] .tux-tag__container--with-leading-icon-UukFlz {
+  padding-right: 2px;
+}
+
+[dir="ltr"] .tux-tag__container--with-trailing-icon-f7ZckZ {
+  padding-right: 2px;
+}
+
+[dir="rtl"] .tux-tag__container--with-trailing-icon-f7ZckZ {
+  padding-left: 2px;
+}
+
+.tux-tag__icon-container-Usoo6w {
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.tux-tag__icon-container--H3-wEI8_E {
+  font-size: var(--tux-v2-typography-h3-size);
+}
+
+.tux-tag__icon-container--H4-rjzB_B {
+  font-size: var(--tux-v2-typography-h4-size);
+}
+
+.tux-tag__icon-container--P1-vtatby {
+  font-size: var(--tux-v2-typography-p1-size);
+}
+
+.tux-tag__icon-container--P2-aYLlpP {
+  font-size: var(--tux-v2-typography-p2-size);
+}
+
+.tux-tag__icon-container--P3-l_HaVB {
+  font-size: var(--tux-v2-typography-p3-size);
+}
+
+.tux-tag__icon-container--SmallText1-aBO5kD {
+  font-size: var(--tux-v2-typography-smalltext1-size);
+}
+
+.tux-tag__icon-container--SmallText2-i1_H9G {
+  font-size: var(--tux-v2-typography-smalltext2-size);
+}
+
+.tux-tag__icon-container--Headline-NT5Ybh {
+  font-size: var(--tux-v2-typography-headline-size);
+}
+
+.tux-tag--disabled-FSLtry {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.tux-tag--interactive-H2Og0l {
+  cursor: pointer;
+}
+.tux-switch-CROO4u {
+  flex-shrink: 0;
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-switch--small-A4RTad {
+  width: 38px;
+  height: 22px;
+}
+
+.tux-switch--large-t2ICYU {
+  width: 48px;
+  height: 28px;
+}
+
+.tux-switch__input-bqC_6D {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  cursor: pointer;
+  position: absolute;
+  height: 100%;
+  width: 100%;
+}
+
+.tux-switch__input-bqC_6D:disabled {
+  cursor: not-allowed;
+}
+
+.tux-switch__indicator-lpTKE8 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--tux-v2-color-ui-image-overlay-white);
+  border-radius: var(--tux-v2-radius-control-capsule);
+  transition: transform .2s;
+  box-shadow: 0px .8px 3px rgba(0,0,0,.25);
+}
+
+.tux-switch__indicator--small-Jyo6jR {
+  width: 16px;
+  height: 16px;
+}
+
+.tux-switch__indicator--large-ykAuMP {
+  width: 22px;
+  height: 22px;
+}
+
+.tux-switch__indicator__container-RaBP4D {
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+  background-color: var(--tux-v2-color-ui-shape-neutral-3);
+  border-radius: var(--tux-v2-radius-control-capsule);
+  pointer-events: none;
+}
+
+.tux-switch--disabled-jrOGFH {
+  opacity: .5;
+}
+
+.tux-switch--checked-DNZDje {
+  background-color: var(--tux-v2-color-ui-shape-secondary);
+}
+
+.tux-switch--checked-DNZDje .tux-switch__indicator--small-Jyo6jR {
+  transform: translateX(16px);
+}
+
+.tux-switch--checked-DNZDje .tux-switch__indicator--large-ykAuMP {
+  transform: translateX(20px);
+}
+
+[dir=rtl] .tux-switch--checked-DNZDje .tux-switch__indicator--small-Jyo6jR {
+  transform: translateX(-16px);
+}
+
+[dir=rtl] .tux-switch--checked-DNZDje .tux-switch__indicator--large-ykAuMP {
+  transform: translateX(-20px);
+}
+.tux-navbar-a9Viej {
+  position: relative;
+}
+
+.tux-navbar--top-safe-xvNwG7 {
+  padding-top: env(safe-area-inset-top);
+}
+
+.tux-navbar--fixed-xGsNeo {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.tux-navbar__container-RISkll {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.tux-navbar__leading-area-E87JOm,.tux-navbar__trailing-area-lEhGEG {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  flex: 1 1 0;
+}
+
+.tux-navbar__leading-area-E87JOm {
+  justify-content: flex-start;
+}
+
+.tux-navbar__trailing-area-lEhGEG {
+  justify-content: flex-end;
+}
+
+.tux-navbar__title-area-sVCVJa {
+  overflow: hidden;
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
+.tux-navbar__background-ppymBD {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  background-color: var(--tux-v2-color-ui-page-flat-1);
+}
+
+.tux-navbar__separator-NJYyOp {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+@keyframes flash-oWUbX3 {
+  0% {
+    opacity: .4;
+  }
+  50.0% {
+    opacity: 1;
+  }
+  100.0% {
+    opacity: .4;
+  }
+}
+
+.tux-skeleton-KoQk5s {
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  animation: flash-oWUbX3 1600ms linear infinite;
+}
+.tux-loading__container-ocgIp8 {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tux-loading__black-hole-OCLQBQ {
+  fill: #161823;
+  stroke-width: 0;
+  animation: greenAnimation-IVVJtP 910ms linear infinite;
+}
+
+.tux-loading__green-hole-oMbZF0 {
+  fill: var(--tux-v2-color-ui-shape-secondary);
+  stroke: var(--tux-v2-color-ui-shape-secondary);
+  animation: greenAnimation-IVVJtP 910ms linear infinite;
+}
+
+.tux-loading__red-hole-AsIpBg {
+  fill: var(--tux-v2-color-ui-shape-primary);
+  stroke: var(--tux-v2-color-ui-shape-primary);
+  animation: redAnimation-QFeqhu 910ms linear infinite;
+}
+
+.tux-loading__black-mask-g1N0Gr {
+  fill: #000;
+}
+
+@keyframes greenAnimation-IVVJtP {
+  0% {
+    cx: 17%;
+    r: 17%;
+  }
+  10% {
+    cx: 18%;
+    r: 17%;
+  }
+  13.3% {
+    cx: 19.5%;
+    r: 17.8%;
+  }
+  16.7% {
+    cx: 21.5%;
+    r: 18.5%;
+  }
+  20% {
+    cx: 24%;
+    r: 20%;
+  }
+  23.3% {
+    cx: 30%;
+    r: 21.5%;
+  }
+  26.7% {
+    cx: 42%;
+    r: 21.5%;
+  }
+  30% {
+    cx: 46.5%;
+    r: 19.8%;
+  }
+  33.3% {
+    cx: 49.5%;
+    r: 18.2%;
+  }
+  36.7% {
+    cx: 50.5%;
+    r: 17.8%;
+  }
+  40% {
+    cx: 51.5%;
+    r: 17.2%;
+  }
+  43.3% {
+    cx: 53%;
+    r: 17%;
+  }
+  56.7% {
+    cx: 53%;
+    r: 17%;
+  }
+  60% {
+    cx: 52%;
+    r: 17%;
+  }
+  63.3% {
+    cx: 51%;
+    r: 16%;
+  }
+  66.7% {
+    cx: 49%;
+    r: 15%;
+  }
+  70% {
+    cx: 46.5%;
+    r: 12.8%;
+  }
+  73.3% {
+    cx: 41.5%;
+    r: 11.2%;
+  }
+  76.7% {
+    cx: 28.5%;
+    r: 11.2%;
+  }
+  80% {
+    cx: 24%;
+    r: 13%;
+  }
+  83.3% {
+    cx: 21%;
+    r: 15%;
+  }
+  86.7% {
+    cx: 19%;
+    r: 16%;
+  }
+  90% {
+    cx: 18%;
+    r: 17%;
+  }
+  100% {
+    cx: 17%;
+    r: 17%;
+  }
+}
+
+@keyframes redAnimation-QFeqhu {
+  0% {
+    cx: 53%;
+    r: 17%;
+  }
+  6.7% {
+    cx: 52.5%;
+    r: 17%;
+  }
+  10% {
+    cx: 51.8%;
+    r: 16.9%;
+  }
+  13.3% {
+    cx: 51%;
+    r: 16%;
+  }
+  16.7% {
+    cx: 49%;
+    r: 15%;
+  }
+  20% {
+    cx: 46%;
+    r: 13%;
+  }
+  23.3% {
+    cx: 41.5%;
+    r: 11.2%;
+  }
+  26.7% {
+    cx: 28.5%;
+    r: 11.2%;
+  }
+  30% {
+    cx: 24%;
+    r: 13%;
+  }
+  33.3% {
+    cx: 21%;
+    r: 15%;
+  }
+  36.7% {
+    cx: 19%;
+    r: 16%;
+  }
+  40% {
+    cx: 18%;
+    r: 16.5%;
+  }
+  43.3% {
+    cx: 17%;
+    r: 17%;
+  }
+  53.3% {
+    cx: 17%;
+    r: 17%;
+  }
+  56.7% {
+    cx: 17.5%;
+    r: 17.2%;
+  }
+  60% {
+    cx: 18.5%;
+    r: 17.2%;
+  }
+  63.3% {
+    cx: 19.5%;
+    r: 17.8%;
+  }
+  66.7% {
+    cx: 21%;
+    r: 18%;
+  }
+  70% {
+    cx: 23.5%;
+    r: 19.8%;
+  }
+  73.3% {
+    cx: 28%;
+    r: 21%;
+  }
+  76.7% {
+    cx: 42%;
+    r: 21%;
+  }
+  80% {
+    cx: 46.5%;
+    r: 19.8%;
+  }
+  83.3% {
+    cx: 49%;
+    r: 18%;
+  }
+  86.7% {
+    cx: 50%;
+    r: 17.5%;
+  }
+  90% {
+    cx: 51.5%;
+    r: 17.2%;
+  }
+  93.3% {
+    cx: 52.5%;
+    r: 17.2%;
+  }
+  100% {
+    cx: 53%;
+    r: 17%;
+  }
+}
+.tux-popover-oNF64o {
+  border-radius: var(--tux-v2-radius-container-level2-small);
+  border: .33px solid var(--tux-v2-color-ui-shape-neutral-3);
+  box-shadow: 0 5px 26px rgba(0,0,0,.1);
+  display: flex;
+}
+
+.tux-popover-width-nkbMXr {
+  min-width: 220px;
+  max-width: calc(100vw - 32px);
+}
+
+.tux-popover-height-GuhvwC {
+  max-height: calc(100vh - 96px);
+}
+
+@media screen and (min-width: 651px) {
+  .tux-popover-width-nkbMXr {
+    max-width: 430px;
+  }
+  .tux-popover-height-GuhvwC {
+    min-height: 166px;
+  }
+}
+
+.tux-popover__inner-QJ4Cdu {
+  flex: 1;
+  border-radius: var(--tux-v2-radius-container-level2-small);
+  overflow: hidden;
+}
+.tux-input-Rf3_1y {
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+  width: 100%;
+}
+
+.tux-input__box-yQnKGK {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  width: 100%;
+}
+
+.tux-input__box--tiny-Jbi2S5 {
+  border-radius: var(--tux-v2-radius-control-tiny);
+  height: 28px;
+  padding-left: 4px;
+  padding-right: 4px;
+  font-size: var(--tux-v2-typography-p1-size);
+  line-height: var(--tux-v2-typography-p1-line-height);
+  letter-spacing: var(--tux-v2-typography-p1-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.tux-input__box--small-Et1541 {
+  border-radius: var(--tux-v2-radius-control-small);
+  height: 32px;
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: var(--tux-v2-typography-h4-size);
+  line-height: var(--tux-v2-typography-h4-line-height);
+  letter-spacing: var(--tux-v2-typography-h4-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.tux-input__box--medium-iS9JFC {
+  border-radius: var(--tux-v2-radius-control-medium);
+  height: 40px;
+  padding-left: 8px;
+  padding-right: 8px;
+  font-size: var(--tux-v2-typography-headline-size);
+  line-height: var(--tux-v2-typography-headline-line-height);
+  letter-spacing: var(--tux-v2-typography-headline-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.tux-input__box--large-QuvkK9 {
+  border-radius: var(--tux-v2-radius-control-large);
+  height: 48px;
+  padding-left: 12px;
+  padding-right: 12px;
+  font-size: var(--tux-v2-typography-headline-size);
+  line-height: var(--tux-v2-typography-headline-line-height);
+  letter-spacing: var(--tux-v2-typography-headline-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.tux-input__box--error-DjZenI {
+  box-shadow: 0 0 0 2px var(--tux-v2-color-ui-text-danger-display);
+  background-color: rgba(0,0,0,0);
+}
+
+.tux-input__box--disabled-PZYyYR {
+  opacity: .7;
+  cursor: not-allowed;
+}
+
+.tux-input__box--intractable-tNXO5Y {
+  cursor: pointer;
+}
+
+.tux-input__core-_u2Hyx {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding-left: 2px;
+  padding-right: 2px;
+  height: 100%;
+  color: var(--tux-v2-color-ui-text-3);
+}
+
+.tux-input__element-zY3KBY {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 2px;
+  padding-right: 2px;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  background-color: rgba(0,0,0,0);
+  caret-color: var(--tux-v2-color-ui-shape-primary);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tux-input__element-zY3KBY:disabled {
+  pointer-events: none;
+}
+
+.tux-input__element-zY3KBY:focus-within {
+  outline: none;
+}
+
+.tux-input__element-zY3KBY:-moz-read-only {
+  text-overflow: ellipsis;
+}
+
+.tux-input__element-zY3KBY:read-only {
+  text-overflow: ellipsis;
+}
+
+.tux-input__element-zY3KBY::-moz-placeholder {
+  color: var(--tux-v2-color-ui-text-placeholder);
+}
+
+.tux-input__element-zY3KBY::placeholder {
+  color: var(--tux-v2-color-ui-text-placeholder);
+}
+
+.tux-input__element-zY3KBY[type=password] {
+  font-family: small-caption;
+  font-size: inherit;
+  letter-spacing: .125em;
+}
+
+.tux-input__icon-container-zgmAwy {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.tux-input__icon-container--tiny-lkF2Em {
+  padding: 3px;
+  font-size: 14px;
+}
+
+.tux-input__icon-container--small-V0FVEL {
+  padding: 4px;
+  font-size: 16px;
+}
+
+.tux-input__icon-container--medium-zJ_4mb {
+  padding: 5px;
+  font-size: 20px;
+}
+
+.tux-input__icon-container--large-WmRjBP {
+  padding: 5px;
+  font-size: 20px;
+}
+
+.tux-input__icon-container-zgmAwy.tux-input__leading-icon-dYI97E {
+  padding: 2px;
+}
+
+.tux-input-like__value-container-WW67HB {
+  flex: 1;
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+[dir="ltr"] .tux-input-like__value-container-WW67HB {
+  padding-left: 2px;
+}
+
+[dir="rtl"] .tux-input-like__value-container-WW67HB {
+  padding-right: 2px;
+}
+.tux-form-item-footer-QOFmjH {
+  display: flex;
+  margin-top: 8px;
+}
+
+[dir="ltr"] .tux-form-item-footer-QOFmjH {
+  padding-right: 4px;
+}
+
+[dir="rtl"] .tux-form-item-footer-QOFmjH {
+  padding-left: 4px;
+}
+
+.tux-form-item-footer__message-sIIDJk {
+  display: flex;
+  color: var(--tux-v2-color-ui-text-3);
+  word-break: break-word;
+}
+
+[dir="ltr"] .tux-form-item-footer__message-sIIDJk {
+  margin-right: 24px;
+}
+
+[dir="rtl"] .tux-form-item-footer__message-sIIDJk {
+  margin-left: 24px;
+}
+
+.tux-form-item-footer__message-sIIDJk.tux-form-item-footer--error-o5K_P6 {
+  color: var(--tux-v2-color-ui-text-danger);
+}
+
+.tux-form-item-footer__icon-container-vJP_Yk {
+  padding-top: 2.5px;
+  padding-bottom: 2.5px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+[dir="ltr"] .tux-form-item-footer__icon-container-vJP_Yk {
+  margin-right: 4px;
+}
+
+[dir="rtl"] .tux-form-item-footer__icon-container-vJP_Yk {
+  margin-left: 4px;
+}
+
+.tux-form-item-footer__counter-rja8zX {
+  display: flex;
+}
+
+[dir="ltr"] .tux-form-item-footer__counter-rja8zX {
+  margin-left: auto;
+}
+
+[dir="rtl"] .tux-form-item-footer__counter-rja8zX {
+  margin-right: auto;
+}
+.tux-form-item-header-C2i3YR {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding-left: 4px;
+  padding-right: 4px;
+  margin-bottom: 8px;
+  word-break: break-word;
+  width: 100%;
+}
+
+.tux-form-item-header__header-pHHBoo {
+  display: flex;
+  margin-bottom: 2px;
+}
+
+[dir="ltr"] .tux-form-item-header__title-Q3LIPC {
+  margin-right: 2px;
+}
+
+[dir="rtl"] .tux-form-item-header__title-Q3LIPC {
+  margin-left: 2px;
+}
+
+.tux-form-item-header__icon-container-fVP0gK {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 21px;
+  font-size: 14px;
+  color: var(--tux-v2-color-ui-text-3);
+}
+
+.tux-form-item-header__optional-text-Bjmoii {
+  padding-top: 1.5px;
+  padding-bottom: 1.5px;
+}
+.tux-top-toast-portal-l0mWE6 {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding-top: 8px;
+  margin-top: env(safe-area-inset-top, 52px);
+  pointer-events: none;
+}
+
+.tux-top-toast-view-E8gnlV {
+  width: -moz-fit-content;
+  width: fit-content;
+  min-width: 120px;
+  max-width: 560px;
+  margin-left: 16px;
+  margin-right: 16px;
+  margin-bottom: 8px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  padding-left: 16px;
+  padding-right: 16px;
+  border-radius: var(--tux-v2-radius-container-level2-small);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--tux-v2-color-ui-sheet-flat-3);
+  color: var(--tux-v2-color-ui-text-1);
+  transition: opacity 150ms linear;
+}
+
+.tux-top-toast-view--enter-J0K0Pk {
+  opacity: 1;
+  animation: spring-quick-scale-enter 350ms linear forwards;
+}
+
+.tux-top-toast-view--leave-Ckc3rS {
+  opacity: 0;
+  animation: spring-quick-scale-leave 350ms linear forwards;
+}
+
+.tux-top-toast-view__leading-area-DmvwzF {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+[dir="ltr"] .tux-top-toast-view__leading-area-DmvwzF {
+  margin-right: 8px;
+}
+
+[dir="rtl"] .tux-top-toast-view__leading-area-DmvwzF {
+  margin-left: 8px;
+}
+.tux-tooltip-Mp1Ge5 {
+  display: flex;
+  border-radius: var(--tux-v2-radius-container-level2-small);
+  box-shadow: 0 2px 10px 0 rgba(0,0,0,.14);
+  max-width: 240px;
+  min-width: 48px;
+  min-height: 36px;
+}
+
+@media (max-width: 1264px) {
+  .tux-tooltip-Mp1Ge5 {
+    min-height: 48px;
+    min-width: 80px;
+  }
+}
+
+.tux-tooltip__inner-f7oJG6 {
+  flex: 1;
+  display: flex;
+  border-radius: var(--tux-v2-radius-container-level2-small);
+  overflow: hidden;
+}
+.tux-tooltip-content-yeqvLA {
+  color: var(--tux-v2-color-ui-text-1);
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+@media (max-width: 1264px) {
+  .tux-tooltip-content-yeqvLA {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+[dir="ltr"] .tux-tooltip-content--leading-S0rZ8J {
+  padding-left: 8px;
+  padding-right: 12px;
+}
+
+[dir="rtl"] .tux-tooltip-content--leading-S0rZ8J {
+  padding-right: 8px;
+  padding-left: 12px;
+}
+
+.tux-tooltip-content__leading-rEE1jg,.tux-tooltip-content__trailing-TqS1HG {
+  flex: 0 0 auto;
+}
+
+.tux-tooltip-content__leading--small-icon-tCRQ88 {
+  width: 16px;
+  height: 16px;
+}
+
+[dir="ltr"] .tux-tooltip-content__leading--small-icon-tCRQ88 {
+  margin-right: 4px;
+}
+
+[dir="rtl"] .tux-tooltip-content__leading--small-icon-tCRQ88 {
+  margin-left: 4px;
+}
+
+.tux-tooltip-content__leading--large-icon-W8bpe3 {
+  width: 24px;
+  height: 24px;
+}
+
+[dir="ltr"] .tux-tooltip-content__leading--large-icon-W8bpe3 {
+  margin-right: 6px;
+}
+
+[dir="rtl"] .tux-tooltip-content__leading--large-icon-W8bpe3 {
+  margin-left: 6px;
+}
+
+.tux-tooltip-content__leading--others-kiTz2g {
+  width: 32px;
+  height: 32px;
+}
+
+[dir="ltr"] .tux-tooltip-content__leading--others-kiTz2g {
+  margin-right: 8px;
+}
+
+[dir="rtl"] .tux-tooltip-content__leading--others-kiTz2g {
+  margin-left: 8px;
+}
+
+[dir="ltr"] .tux-tooltip-content__trailing-TqS1HG {
+  margin-left: 4px;
+}
+
+[dir="rtl"] .tux-tooltip-content__trailing-TqS1HG {
+  margin-right: 4px;
+}
+
+.tux-tooltip-content__text-x0VAVg {
+  flex: 1;
+  word-wrap: break-word;
+  word-break: break-word;
+  -webkit-hyphens: auto;
+          hyphens: auto;
+}
+.tux-tooltip-leading-amK8E4 {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--tux-v2-radius-content-large);
+}
+
+.tux-tooltip-leading__image-gTw2TI {
+  flex: 1;
+}
+
+.tux-tooltip-leading__placeholder-jyd_0W {
+  display: flex;
+  background-color: var(--tux-v2-color-ui-shape-neutral-3);
+}
+
+.tux-tooltip-leading__placeholder--round-oBS1KH {
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+.tux-link-NBx2Sz {
+  background-color: rgba(0,0,0,0);
+  -webkit-text-decoration: none;
+  text-decoration: none;
+  display: inline;
+  cursor: pointer;
+}
+
+.tux-link--block-PgOgc9 {
+  display: block;
+}
+
+.tux-link--disabled-cEhFLO {
+  cursor: not-allowed;
+  opacity: .4;
+}
+
+.tux-link__leading-INTN30 {
+  font-size: .94em;
+}
+
+[dir="ltr"] .tux-link__leading-INTN30 {
+  margin-right: 4px;
+}
+
+[dir="rtl"] .tux-link__leading-INTN30 {
+  margin-left: 4px;
+}
+
+.tux-link__trailing-jcJ11j {
+  font-size: .94em;
+}
+
+[dir="ltr"] .tux-link__trailing-jcJ11j {
+  margin-left: 4px;
+}
+
+[dir="rtl"] .tux-link__trailing-jcJ11j {
+  margin-right: 4px;
+}
+
+.tux-link-NBx2Sz .tux-link-icon-kJHaqF svg {
+  display: inline;
+  line-height: 1em;
+  vertical-align: -0.125em;
+}
+.tux-tabbar-item-CPPB0K {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tux-tabbar-LbKhTM {
+  position: relative;
+  width: 100%;
+}
+
+.tux-tabbar--fading-M_KOA8 {
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, var(--tux-v2-color-ui-text-1) 30px, var(--tux-v2-color-ui-text-1) calc(100% - 30px), transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0%, var(--tux-v2-color-ui-text-1) 30px, var(--tux-v2-color-ui-text-1) calc(100% - 30px), transparent 100%);
+}
+
+.tux-tabbar__item-container-DjjDux {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+}
+
+.tux-tabbar__item-container-DjjDux::-webkit-scrollbar {
+  display: none;
+}
+
+.tux-tabbar__indicator-rH9F3U {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background-color: var(--tux-v2-color-ui-shape-neutral);
+  transition: transform 100ms cubic-bezier(0.33, 0.86, 0.2, 1);
+}
+.tux-textarea-ptp4Tq {
+  display: flex;
+  flex-direction: column;
+}
+
+.tux-textarea__box-sDxg2L {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 16px;
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  border-radius: var(--tux-v2-radius-control-large);
+}
+
+.tux-textarea__box-sDxg2L::-webkit-scrollbar {
+  display: none;
+}
+
+.tux-textarea__box--disabled-DGYXl1 {
+  opacity: .7;
+  cursor: not-allowed;
+}
+
+.tux-textarea__box--error-sCzLLH {
+  box-shadow: 0 0 0 2px var(--tux-v2-color-ui-shape-danger);
+  background-color: rgba(0,0,0,0);
+}
+
+.tux-textarea__core-XUsavC {
+  position: relative;
+  flex: 1;
+  color: var(--tux-v2-color-ui-text-1);
+  overflow-y: hidden;
+  font-size: var(--tux-v2-typography-headline-size);
+  line-height: var(--tux-v2-typography-headline-line-height);
+  letter-spacing: var(--tux-v2-typography-headline-letter-spacing);
+  font-weight: var(--tux-v2-typography-regular-weight);
+  font-family: var(--tux-v2-font-text);
+}
+
+.tux-textarea__element-uOC0K2 {
+  position: absolute;
+  top: 0;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  background-color: rgba(0,0,0,0);
+  outline: none;
+  resize: none;
+  caret-color: var(--tux-v2-color-ui-text-primary-display);
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tux-textarea__element-uOC0K2:disabled {
+  pointer-events: none;
+}
+
+.tux-textarea__element-uOC0K2:-moz-read-only {
+  text-overflow: ellipsis;
+}
+
+.tux-textarea__element-uOC0K2:read-only {
+  text-overflow: ellipsis;
+}
+
+.tux-textarea__element-uOC0K2::-moz-placeholder {
+  color: var(--tux-v2-color-ui-text-placeholder);
+}
+
+.tux-textarea__element-uOC0K2::placeholder {
+  color: var(--tux-v2-color-ui-text-placeholder);
+}
+
+.tux-textarea__hidden-text-RaXaXQ {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  visibility: hidden;
+  overflow-y: hidden;
+}
+
+.tux-textarea__trailing-area-MHqHz3 {
+  position: sticky;
+  bottom: 0px;
+}
+.tux-menu-item-kqm_rM {
+  display: flex;
+  flex-direction: row;
+  padding: 14px;
+  align-items: center;
+  border-radius: var(--tux-v2-radius-control-large);
+  cursor: pointer;
+}
+
+.tux-menu-item--disabled-RkqCWR {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.tux-menu-item__leading-UL_v7y,.tux-menu-item__trailing-De_K_P {
+  flex: 0 0 auto;
+  font-size: 20px;
+}
+
+[dir="ltr"] .tux-menu-item__leading-UL_v7y {
+  margin-right: 8px;
+}
+
+[dir="rtl"] .tux-menu-item__leading-UL_v7y {
+  margin-left: 8px;
+}
+
+[dir="ltr"] .tux-menu-item__trailing-De_K_P {
+  margin-left: 8px;
+}
+
+[dir="rtl"] .tux-menu-item__trailing-De_K_P {
+  margin-right: 8px;
+}
+
+.tux-menu-item__text-UjgMVx {
+  flex: 1;
+  text-align: left;
+}
+
+.tux-menu-item__text--truncate-cNdNGs {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tux-menu-item__text--line-break-tokijx {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.tux-menu-item__separator-container-q7TpY_ {
+  padding-left: 12px;
+  padding-right: 12px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.tux-menu-item-group__title-oJVqdP {
+  padding-left: 14px;
+  padding-right: 14px;
+  padding-top: 16px;
+  padding-bottom: 8px;
+  color: var(--tux-v2-color-ui-text-2);
+  white-space: normal;
+  word-break: break-word;
+}
+.tux-menu-KDV5P1 {
+  padding: 4px;
+  border-radius: var(--tux-v2-radius-container-level2-small);
+  overflow-y: auto;
+}
+.tux-list-cell-EZi8WH {
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.tux-list-cell__header-do5UJW {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.tux-list-cell__leading-GQVE9Z {
+  flex-shrink: 0;
+  font-size: 20px;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+[dir="ltr"] .tux-list-cell__leading-GQVE9Z {
+  margin-right: 8px;
+}
+
+[dir="rtl"] .tux-list-cell__leading-GQVE9Z {
+  margin-left: 8px;
+}
+
+.tux-list-cell__leading--normal-Ahqbtf {
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+.tux-list-cell__leading--destructive-etmUcf {
+  color: var(--tux-v2-color-ui-text-danger);
+}
+
+.tux-list-cell__main-nW5tZ2 {
+  display: flex;
+  flex: 1 0 0;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.tux-list-cell__content-KFQVMV {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 0;
+}
+
+.tux-list-cell__trailing-eeUVA7 {
+  flex-shrink: 0;
+  display: flex;
+  grid-column: 3;
+  grid-row: 1;
+}
+
+[dir="ltr"] .tux-list-cell__trailing-eeUVA7 {
+  margin-left: 8px;
+}
+
+[dir="rtl"] .tux-list-cell__trailing-eeUVA7 {
+  margin-right: 8px;
+}
+
+.tux-list-cell__description-dHxwUM {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.tux-list-cell--stacked-PSYTOv {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  justify-content: center;
+  align-items: center;
+}
+
+.tux-list-cell--segmented-Lrb6AZ .tux-list-cell__leading-GQVE9Z {
+  margin-top: 5.5px;
+}
+
+.tux-list-cell--segmented-Lrb6AZ .tux-list-cell__main-nW5tZ2 {
+  align-items: center;
+}
+
+.tux-list-cell--disabled-uRhOSb {
+  opacity: .34;
+  cursor: not-allowed;
+}
+
+.tux-list-cell--interactive-gt0SKj {
+  cursor: pointer;
+}
+.tux-avatar-gdsj89 {
+  border-radius: var(--tux-v2-radius-control-capsule);
+  flex-shrink: 0;
+}
+
+.tux-avatar__container-rv7yQk {
+  position: relative;
+  width: -moz-fit-content;
+  width: fit-content;
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-avatar__indicator-Cwjsrs {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border-radius: var(--tux-v2-radius-control-capsule);
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+}
+
+.tux-avatar__badge-VTvLhD {
+  position: absolute;
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-avatar--interactive-oJP_Hs {
+  cursor: pointer;
+}
+.tux-list-header-lo9Qv7 {
+  display: flex;
+  flex-direction: column;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.tux-list-header--small-qr8fBq {
+  padding-top: 18px;
+  padding-bottom: 4px;
+}
+
+.tux-list-header--small-qr8fBq .tux-list-header__icon-UG4rv1 {
+  font-size: 16px;
+}
+
+.tux-list-header--medium-YswKdN {
+  padding-top: 16px;
+  padding-bottom: 8px;
+}
+
+.tux-list-header--medium-YswKdN .tux-list-header__icon-UG4rv1 {
+  font-size: 18px;
+}
+
+.tux-list-header--large-hJY7DC {
+  padding-top: 16px;
+  padding-bottom: 8px;
+}
+
+.tux-list-header--large-hJY7DC .tux-list-header__icon-UG4rv1 {
+  font-size: 20px;
+}
+
+.tux-list-header__main-h0Stot {
+  display: flex;
+  align-items: center;
+}
+
+.tux-list-header__title-JFJV3H {
+  flex: 1 0 0;
+}
+
+.tux-list-header__title-content-iAkLx9 {
+  display: flex;
+  align-items: center;
+  width: -moz-fit-content;
+  width: fit-content;
+}
+
+.tux-list-header__icon-UG4rv1 {
+  flex-shrink: 0;
+  color: var(--tux-v2-color-ui-text-3);
+}
+
+.tux-list-header__trailing-area-KtAgj0 {
+  flex-shrink: 0;
+  display: flex;
+}
+
+[dir="ltr"] .tux-list-header__trailing-area-KtAgj0 {
+  margin-left: 12px;
+}
+
+[dir="rtl"] .tux-list-header__trailing-area-KtAgj0 {
+  margin-right: 12px;
+}
+
+.tux-list-header__subtitle-UoKGbT {
+  margin-top: 4px;
+}
+.tux-list-view__header-hn1jWU {
+  margin-bottom: 8px;
+}
+
+.tux-list-view__footer-Ue4zEe {
+  margin-top: 8px;
+}
+
+.tux-list-view--grouped-V36gRV {
+  padding-left: 12px;
+  padding-right: 12px;
+  background-color: var(--tux-v2-color-ui-page-grouped-1);
+}
+
+.tux-list-view--grouped-V36gRV .tux-list-view__content-FQD8dl {
+  border-radius: var(--tux-v2-radius-content-large);
+  overflow: hidden;
+  background-color: var(--tux-v2-color-ui-page-grouped-2);
+}
+.tux-form-view-S4pnzB {
+  display: flex;
+  flex-direction: column;
+}
+
+.tux-form-view__header-E1kdG0 {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px 8px;
+  margin-bottom: 24px;
+}
+
+[dir="ltr"] .tux-form-view__title-SY_exn {
+  margin-right: 4px;
+}
+
+[dir="rtl"] .tux-form-view__title-SY_exn {
+  margin-left: 4px;
+}
+
+.tux-form-view__title-container-FPsYB9 {
+  display: flex;
+}
+
+.tux-form-view__icon-container-bQCwMH {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 16px;
+  color: var(--tux-v2-color-ui-text-3);
+}
+
+.tux-form-view__subtitle-IcLqsr {
+  margin-top: 4px;
+}
+
+.tux-form-view__content-VN8dSM {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.tux-form-view__footer-zQ0e2r {
+  padding-left: 20px;
+  padding-right: 20px;
+  margin-top: 16px;
+}
+
+.tux-form-view__separator-NUbNf8 {
+  margin-bottom: 4px;
+}
+.tux-form-item-BPvLIr:not(:last-child) {
+  margin-bottom: 24px;
+}
+.tux-calendar-OzsnA0 {
+  --calendar-cell-size: 50px;
+  --calendar-cell-round-size: 40px;
+  --calendar-cell-today-size: 42px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.tux-calendar__month-container-k74Ulj {
+  text-align: center;
+  padding-top: 16px;
+  padding-bottom: 8px;
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+.tux-calendar__day-container-Ef6MiV {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  justify-content: center;
+}
+
+.tux-calendar__cell-Ch2hXY {
+  position: relative;
+  width: 100%;
+  min-width: var(--calendar-cell-size);
+  height: var(--calendar-cell-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tux-calendar__cell-bg-half-start-Pm7_nm,.tux-calendar__cell-bg-half-end-Zb5O6A {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 50%;
+  height: var(--calendar-cell-round-size);
+  background-color: rgba(0,0,0,0);
+}
+
+[dir="ltr"] .tux-calendar__cell-bg-half-start-Pm7_nm {
+  left: 0;
+}
+
+[dir="rtl"] .tux-calendar__cell-bg-half-start-Pm7_nm {
+  right: 0;
+}
+
+[dir="ltr"] .tux-calendar__cell-bg-half-end-Zb5O6A {
+  right: 0;
+}
+
+[dir="rtl"] .tux-calendar__cell-bg-half-end-Zb5O6A {
+  left: 0;
+}
+
+.tux-calendar__cell-circle-HSJx6I {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--calendar-cell-round-size);
+  height: var(--calendar-cell-round-size);
+  border-radius: 50%;
+  background-color: rgba(0,0,0,0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tux-calendar__cell-today-OYcyal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: content-box;
+  width: var(--calendar-cell-today-size);
+  height: var(--calendar-cell-today-size);
+  border-radius: 50%;
+  border: 1px solid var(--tux-v2-color-ui-shape-neutral-2);
+}
+
+.tux-calendar__cell-text-qMdpEj {
+  z-index: 1;
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+.tux-calendar__cell-Ch2hXY[data-status=disabled] {
+  cursor: not-allowed;
+}
+
+.tux-calendar__cell-Ch2hXY[data-status=disabled] .tux-calendar__cell-text-qMdpEj {
+  color: var(--tux-v2-color-ui-text-placeholder);
+}
+
+.tux-calendar__cell-Ch2hXY[data-status=selected] .tux-calendar__cell-circle-HSJx6I {
+  background-color: var(--tux-v2-color-ui-shape-primary);
+}
+
+.tux-calendar__cell-Ch2hXY[data-status=selected] .tux-calendar__cell-today-OYcyal {
+  border-color: var(--tux-v2-color-ui-shape-primary);
+}
+
+.tux-calendar__cell-Ch2hXY[data-status=selected] .tux-calendar__cell-text-qMdpEj {
+  color: var(--tux-v2-color-ui-shape-text-1-on-primary);
+}
+
+.tux-calendar__cell-Ch2hXY:not([data-status=disabled])[data-range-status=start] .tux-calendar__cell-bg-half-end-Zb5O6A {
+  background-color: var(--tux-v2-color-ui-shape-primary-4);
+}
+
+.tux-calendar__cell-Ch2hXY:not([data-status=disabled])[data-range-status=end] .tux-calendar__cell-bg-half-start-Pm7_nm {
+  background-color: var(--tux-v2-color-ui-shape-primary-4);
+}
+
+.tux-calendar__cell-Ch2hXY:not([data-status=disabled])[data-range-status=in] .tux-calendar__cell-bg-half-start-Pm7_nm,.tux-calendar__cell-Ch2hXY:not([data-status=disabled])[data-range-status=in] .tux-calendar__cell-bg-half-end-Zb5O6A {
+  background-color: var(--tux-v2-color-ui-shape-primary-4);
+}
+.tux-week-bar__container-VLwLkq {
+  height: 40px;
+  padding-left: 16px;
+  padding-right: 16px;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  justify-content: center;
+}
+
+.tux-week-bar__week-day-rcimnQ {
+  color: var(--tux-v2-color-ui-text-3);
+  min-width: var(--calendar-cell-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tux-date-picker__title-container-ElLTX6 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  padding-bottom: 8px;
+  padding-left: 16px;
+  padding-right: 16px;
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+.tux-date-picker__title-icon-VR8qNr {
+  flex: 0 0 auto;
+  padding: 4px;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.tux-date-picker__title-center-N7zDhc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tux-date-picker__input-icon-Iu9QLD {
+  color: var(--tux-v2-color-ui-text-3);
+}
+
+.tux-date-picker__button-container-hrlM5F {
+  padding: 16px;
+}
+.tux-date-picker-sheet__header-NN6J0o {
+  flex-shrink: 0;
+  background-color: var(--tux-v2-color-ui-sheet-flat-1);
+}
+
+.tux-date-picker-sheet__body-UXAaYX {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  overscroll-behavior-y: none;
+}
+
+.tux-date-picker-sheet__body-UXAaYX::-webkit-scrollbar {
+  display: none;
+}
+
+.tux-date-picker-sheet__footer-gKtK9W {
+  flex-shrink: 0;
+  padding-top: 16px;
+  padding-bottom: 12px;
+  padding-left: 16px;
+  padding-right: 16px;
+  background-color: var(--tux-v2-color-ui-sheet-flat-1);
+  border-top: solid .5px var(--tux-v2-color-ui-shape-neutral-3);
+}
+
+.tux-date-picker-sheet__prompt-kSp2we {
+  margin-bottom: 16px;
+}
+.tux-item-picker-view__body-sBCPG6 {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+.tux-status-view-WyNrbQ {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: -moz-fit-content;
+  height: fit-content;
+  padding-bottom: 16px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.tux-status-view__image-container-yofKh9 {
+  margin-bottom: 8px;
+}
+
+.tux-status-view__content-cjLMLc {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.tux-status-view__text-container-lPhByT {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  padding-left: 48px;
+  padding-right: 48px;
+  text-align: center;
+}
+
+.tux-status-view__message-h554Q9:nth-child(2) {
+  margin-top: 8px;
+}
+
+.tux-status-view__footer-button-btrsHY {
+  display: flex;
+  margin-top: 8px;
+}
+.tux-select-Zt5kfl {
+  position: relative;
+}
+
+.tux-select-box__value-container-AU8fVP {
+  flex: 1;
+}
+
+[dir="ltr"] .tux-select-box__value-container-AU8fVP {
+  padding-left: 2px;
+}
+
+[dir="rtl"] .tux-select-box__value-container-AU8fVP {
+  padding-right: 2px;
+}
+
+.tux-select-box__value-ndWrWX {
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+.tux-select-box__placeholder-YaMAYw {
+  color: var(--tux-v2-color-ui-text-placeholder);
+}
+.tux-dialog-view-VMkydv {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  width: 280px;
+}
+
+.tux-dialog-view__close-button-H_CYkQ {
+  padding: 0;
+  cursor: pointer;
+}
+
+.tux-dialog-view__close-button-container-b2khVE {
+  display: flex;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.tux-dialog-view__banner-container-GXgM3g {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-bottom: 24px;
+}
+
+.tux-dialog-view__icon-container-FWonit {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 20px 16px;
+  font-size: 48px;
+}
+
+.tux-dialog-view__illustration-container-pBwXTc {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 16px;
+}
+
+.tux-dialog-view__top-spacing-sOwyDD {
+  height: 24px;
+}
+
+.tux-dialog-view__text-container-fT2hrY {
+  padding-left: 20px;
+  padding-right: 20px;
+  text-align: center;
+}
+
+.tux-dialog-view__message-g8dISb:not(:first-child) {
+  margin-top: 12px;
+}
+
+.tux-dialog-view__accessory-SKES0p {
+  padding: 20px 20px 0px;
+}
+
+.tux-dialog-view__footer-OY9xEJ {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 20px;
+}
+
+.tux-dialog-view__footer--horizontal-align-vrywjp {
+  flex-direction: row-reverse;
+}
+
+.tux-dialog-view-button-action-bqoytx {
+  flex: 1;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+[dir="ltr"] .tux-dialog-view-button-action--horizontal-align-bsxwNR:not(:first-child) {
+  margin-left: 8px;
+}
+
+[dir="rtl"] .tux-dialog-view-button-action--horizontal-align-bsxwNR:not(:first-child) {
+  margin-right: 8px;
+}
+
+.tux-dialog-view-button-action--vertical-align-uMsoNg:first-child {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.tux-dialog-view-secondary-button-action-vB6v0P {
+  height: 48px;
+  width: 100%;
+  display: inline-flex;
+  border-radius: var(--tux-v2-radius-control-large);
+}
+
+.tux-dialog-view-secondary-button-action__element-L7rPJo {
+  width: 100%;
+  height: 100%;
+  padding-left: 0px;
+  padding-right: 0px;
+  cursor: pointer;
+}
+
+.tux-dialog-view-text-action-KC68cn {
+  height: 100%;
+}
+
+.tux-dialog-view-text-action__container-uGhU5c {
+  flex-grow: 1;
+  height: 48px;
+  width: 100%;
+  border-top: .5px solid var(--tux-v2-color-ui-shape-neutral-3);
+}
+
+.tux-dialog-view-text-action__element-IuPa3A {
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.tux-dialog-view-text-action--horizontal-align-wo2ZoJ:first-child {
+  border-left: .5px solid var(--tux-v2-color-ui-shape-neutral-3);
+}
+.tux-action-item-Hav9m8 {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  cursor: pointer;
+}
+
+.tux-action-item--disabled-glkFli {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.tux-action-item-text-container-SeoAuk {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tux-action-item-title-PTWOxd {
+  padding: 1px 0;
+  width: 100%;
+}
+
+.tux-action-item-subtitle-TjPcTy {
+  color: var(--tux-v2-color-ui-text-3);
+  margin-top: 1px;
+  width: 100%;
+}
+
+.tux-action-item__textVariant-DeJnky {
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  min-height: 48px;
+}
+
+.tux-action-item__textVariant-text-container-bYrHOh {
+  align-items: center;
+  text-align: center;
+}
+
+.tux-action-item__iconVariant-tBNQgz {
+  padding-left: 12px;
+  padding-right: 12px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  min-height: 52px;
+}
+
+.tux-action-item__iconVariant-iconContainer-jSNdV_ {
+  font-size: 20px;
+  line-height: 0;
+}
+
+[dir="ltr"] .tux-action-item__iconVariant-iconContainer-jSNdV_ {
+  margin-right: 8px;
+}
+
+[dir="rtl"] .tux-action-item__iconVariant-iconContainer-jSNdV_ {
+  margin-left: 8px;
+}
+
+.tux-action-item__iconVariant-iconContainer--title-DZKlG9 {
+  align-items: center;
+}
+
+.tux-action-item__iconVariant-iconContainer--subtitle-QzVclQ {
+  align-self: flex-start;
+}
+
+.tux-action-item__iconVariant-text-container-nrcf6Y {
+  align-items: flex-start;
+  text-align: left;
+}
+.tux-action-sheet-header-hQsCAZ {
+  text-align: center;
+  padding: 12px 16px;
+  color: var(--tux-v2-color-ui-text-3);
+}
+.tux-center-toast-portal-CApTRB {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.tux-center-toast-view-ZFGq3B {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  width: -moz-fit-content;
+  width: fit-content;
+  min-width: 100px;
+  max-width: 260px;
+  position: relative;
+  background-color: var(--tux-v2-color-ui-sheet-flat-3);
+  border-radius: var(--tux-v2-radius-container-level2-small);
+}
+
+.tux-center-toast-view__close-button-LiWEFC {
+  all: unset;
+  display: flex;
+  cursor: pointer;
+}
+
+.tux-center-toast-view__close-button-container-FGbK9t {
+  display: flex;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+.tux-center-toast-view__icon-container-y3naA_ {
+  display: flex;
+  color: var(--tux-v2-color-ui-text-1);
+  font-size: 32px;
+}
+
+.tux-center-toast-view__text-container-Mo9hde {
+  margin-top: 8px;
+  word-break: break-word;
+}
+
+.tux-center-toast-view--enter-os9l8N {
+  opacity: 1;
+  transition: opacity 150ms linear;
+  animation: spring-quick-scale-enter 350ms linear forwards;
+}
+
+.tux-center-toast-view--leave-UloSho {
+  opacity: 0;
+  transition: opacity 100ms linear;
+  animation: spring-quick-scale-leave 350ms linear forwards;
+}
+.tux-icon-button-JtMg7v {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--tux-v2-color-ui-text-2);
+}
+.tux-loading-toast-RTw44o {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.tux-loading-toast__overlay-uJ2lu6 {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.tux-loading-progress-J7K0IK {
+  transform: rotate(-90deg);
+}
+
+.tux-loading-progress__container-Gh_QDm {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: -moz-fit-content;
+  width: fit-content;
+  position: relative;
+}
+
+.tux-loading-progress__progress-number-F0cajN {
+  position: absolute;
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+.tux-chip-group-n_s511 {
+  display: flex;
+  overflow-x: auto;
+}
+
+[dir="ltr"] .tux-chip-group-n_s511 .tux-chip-vCXLGx:not(:last-child) {
+  margin-right: 8px;
+}
+
+[dir="rtl"] .tux-chip-group-n_s511 .tux-chip-vCXLGx:not(:last-child) {
+  margin-left: 8px;
+}
+
+.tux-chip-group--fill-container-E6IBb_>.tux-chip-vCXLGx {
+  flex: 1;
+}
+
+.tux-chip-group-n_s511::-webkit-scrollbar {
+  display: none;
+}
+
+.tux-chip-vCXLGx {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: -moz-fit-content;
+  height: fit-content;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: var(--tux-v2-radius-control-capsule);
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  color: var(--tux-v2-color-ui-text-2);
+  flex-shrink: 0;
+}
+
+.tux-chip__element-O_AW1u {
+  display: flex;
+  pointer-events: none;
+  padding: 0;
+}
+
+.tux-chip__icon-container-BuRc9p {
+  font-size: 16px;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.tux-chip__text-container-btJBnF {
+  padding-left: 4px;
+  padding-right: 4px;
+  min-width: 32px;
+}
+
+.tux-chip--selected-AuYpMJ {
+  background-color: var(--tux-v2-color-ui-shape-neutral);
+  color: var(--tux-v2-color-ui-shape-text-1-on-neutral);
+}
+
+.tux-chip--selected-AuYpMJ.tux-chip--multi-select-sw1yf2 {
+  background-color: var(--tux-v2-color-ui-page-flat-3);
+  color: var(--tux-v2-color-ui-text-1);
+  box-shadow: inset 0 0 0 1.5px var(--tux-v2-color-ui-shape-neutral);
+}
+
+.tux-chip--selected-AuYpMJ.tux-chip--quiet-ruZWac {
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+.tux-chip--quiet-ruZWac {
+  background-color: rgba(0,0,0,0);
+}
+
+.tux-chip--rectangle-Xrev7l {
+  border-radius: var(--tux-v2-radius-control-small);
+}
+
+.tux-chip--disabled-WWFbJy {
+  opacity: .4;
+  cursor: not-allowed;
+}
+.tux-segment-item-ZJPi_F {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.tux-segment-item__main-UfLoVA {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tux-segmented-control-AF_nfs {
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+}
+
+.tux-segmented-control--capsule-Hn02MC {
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-segmented-control--capsule-Hn02MC .tux-segmented-control__indicator-i6SrUH {
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-segmented-control--small-ZM7Woo.tux-segmented-control--rectangle-febfJC {
+  border-radius: 9px;
+}
+
+.tux-segmented-control--small-ZM7Woo.tux-segmented-control--rectangle-febfJC .tux-segmented-control__indicator-i6SrUH {
+  border-radius: var(--tux-v2-radius-control-medium);
+}
+
+.tux-segmented-control--tiny-euGcQ8.tux-segmented-control--rectangle-febfJC {
+  border-radius: var(--tux-v2-radius-control-medium);
+}
+
+.tux-segmented-control--tiny-euGcQ8.tux-segmented-control--rectangle-febfJC .tux-segmented-control__indicator-i6SrUH {
+  border-radius: var(--tux-v2-radius-control-tiny);
+}
+
+.tux-segmented-control--disabled-JapGnl {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.tux-segmented-control__indicator-i6SrUH {
+  position: absolute;
+  overflow: hidden;
+  background-color: var(--tux-v2-color-ui-sheet-flat-3);
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tux-segmented-control__indicator-i6SrUH::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-color: var(--tux-v2-color-ui-image-overlay-white-a20);
+  border-radius: inherit;
+}
+
+.tux-segmented-control-AF_nfs::-webkit-scrollbar {
+  display: none;
+}
+.tux-accordion-xTwn7W {
+  --trailing-arrow-rotate: 0deg;
+}
+
+.tux-accordion__item-woprmk {
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.tux-accordion__item--disabled-Q3EGJB {
+  opacity: .34;
+  cursor: not-allowed;
+}
+
+.tux-accordion__item--disabled-Q3EGJB .tux-accordion__item-header-a2us9z {
+  cursor: not-allowed;
+}
+
+.tux-accordion__item--active-VY50en {
+  --trailing-arrow-rotate: 180deg;
+}
+
+[dir=rtl] .tux-accordion__item--active-VY50en {
+  --trailing-arrow-rotate: -180deg;
+}
+
+.tux-accordion__item--active-VY50en .tux-accordion__item-content-lO1qNG {
+  height: auto;
+  padding-bottom: 4px;
+}
+
+.tux-accordion__item-header-a2us9z {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.tux-accordion__item-leading-B0EaW9 {
+  flex-shrink: 0;
+  font-size: 20px;
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+[dir="ltr"] .tux-accordion__item-leading-B0EaW9 {
+  margin-right: 8px;
+}
+
+[dir="rtl"] .tux-accordion__item-leading-B0EaW9 {
+  margin-left: 8px;
+}
+
+.tux-accordion__item-title-Fk3PMe {
+  flex: 1 0 0;
+  color: var(--tux-v2-color-ui-text-1);
+}
+
+.tux-accordion__item-trailing-DLFswB {
+  flex-shrink: 0;
+  font-size: 16px;
+  transition: transform 200ms cubic-bezier(0.33, 0.86, 0.2, 1);
+  color: var(--tux-v2-color-ui-text-3);
+  transform: rotate(var(--trailing-arrow-rotate));
+}
+
+[dir="ltr"] .tux-accordion__item-trailing-DLFswB {
+  margin-left: 8px;
+}
+
+[dir="rtl"] .tux-accordion__item-trailing-DLFswB {
+  margin-right: 8px;
+}
+
+.tux-accordion__item-content-lO1qNG {
+  height: 0px;
+  overflow: hidden;
+  transition: height 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.tux-pin-aqhI0R {
+  display: inline-flex;
+}
+
+[dir="ltr"] .tux-pin-aqhI0R>*:not(:last-child) {
+  margin-right: 6px;
+}
+
+[dir="rtl"] .tux-pin-aqhI0R>*:not(:last-child) {
+  margin-left: 6px;
+}
+
+.tux-pin__dash-gXS92p {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+.tux-pin__gap-TyJ0VH {
+  width: 14px;
+}
+
+.tux-pin--disabled-geR5zD {
+  opacity: .4;
+}
+
+.tux-pin-item-NUiz1S {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 52px;
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  border-radius: var(--tux-v2-radius-control-large);
+  flex: 1;
+  font-size: var(--tux-v2-typography-h2-size);
+  line-height: var(--tux-v2-typography-h2-line-height);
+  letter-spacing: var(--tux-v2-typography-h2-letter-spacing);
+  font-weight: var(--tux-v2-typography-semibold-weight);
+  font-family: var(--tux-v2-font-display);
+}
+
+.tux-pin-item__core-u48wZV {
+  width: 100%;
+  height: 100%;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  outline: none;
+  background-color: rgba(0,0,0,0);
+  text-align: center;
+  caret-color: var(--tux-v2-color-ui-shape-primary);
+}
+
+.tux-pin-item__core-u48wZV:disabled {
+  cursor: not-allowed;
+}
+
+.tux-pin-item--fit-u58SkF {
+  width: 48px;
+}
+
+.tux-pin-item--invalid-IYhpeh {
+  box-shadow: inset 0 0 0 2px var(--tux-v2-color-ui-shape-danger);
+  background-color: rgba(0,0,0,0);
+}
+.tux-index-picker-view-M9ToKK {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tux-index-picker-view__search-jyb6F_ {
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-bottom: 8px;
+}
+
+.tux-index-picker-view__body-aG9krq {
+  flex: 1;
+  overflow: auto;
+}
+
+.tux-index-picker-view__body-aG9krq::-webkit-scrollbar {
+  display: none;
+}
+
+.tux-index-picker-view__body-header-h3SolK {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin-bottom: 8px;
+}
+
+.tux-index-picker-view__placeholder-YXLWU7 {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.tux-index-picker-view__anchor-GCHuRk {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  padding-left: 2px;
+  padding-right: 2px;
+  display: flex;
+  flex-direction: column;
+}
+
+[dir="ltr"] .tux-index-picker-view__anchor-GCHuRk {
+  right: 0;
+}
+
+[dir="rtl"] .tux-index-picker-view__anchor-GCHuRk {
+  left: 0;
+}
+.tux-avatar-stack-item__container-UxuLdX {
+  position: relative;
+  background-color: var(--tux-v2-color-ui-shape-neutral-3);
+  border-radius: var(--tux-v2-radius-control-capsule);
+  overflow: hidden;
+}
+
+.tux-avatar-stack-item__container-UxuLdX::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--tux-v2-radius-control-capsule);
+  border: .33px solid var(--tux-v2-color-ui-shape-neutral-2);
+  z-index: 2;
+}
+
+.tux-avatar-stack-item--large-FGKj2h {
+  width: 32px;
+  height: 32px;
+}
+
+.tux-avatar-stack-item--medium-l3PHeK {
+  width: 24px;
+  height: 24px;
+}
+
+.tux-avatar-stack-item--small-jwB2sD {
+  width: 20px;
+  height: 20px;
+}
+
+.tux-avatar-stack-item--tiny-Eibk02 {
+  width: 16px;
+  height: 16px;
+}
+
+.tux-avatar-stack-item__image-jRU7r2 {
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1;
+}
+
+.tux-avatar-stack-item__notch-border-mock-RmfQZB {
+  position: absolute;
+  box-sizing: content-box;
+  background-color: var(--tux-v2-color-ui-shape-neutral-2);
+  outline: .33px solid var(--tux-v2-color-ui-shape-neutral-2);
+  top: 0;
+  z-index: 3;
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-avatar-stack-item__number-H2k7fk {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1em;
+  border-radius: var(--tux-v2-radius-control-capsule);
+  letter-spacing: -0.05em;
+}
+
+.tux-avatar-stack-item__number-plus-GtqqBC {
+  position: relative;
+  top: -0.1em;
+  margin-left: -0.05em;
+  margin-right: -0.05em;
+}
+.tux-avatar-stack--container-tDSt9_ {
+  width: -moz-fit-content;
+  width: fit-content;
+  height: -moz-fit-content;
+  height: fit-content;
+  display: flex;
+  flex-direction: row;
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-avatar-stack--container-tDSt9_:focus-visible {
+  outline: 2px solid var(--tux-v2-color-ui-shape-neutral);
+  outline-offset: 2px;
+}
+
+.tux-avatar-stack--item-container-DNqcbT {
+  flex: 1;
+}
+.tux-wheel-picker-column-kPff7x {
+  position: relative;
+  overflow: hidden;
+  flex: 1;
+  cursor: default;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 45%, black 65%, transparent 100%);
+          mask-image: linear-gradient(to bottom, transparent 0%, black 45%, black 65%, transparent 100%);
+}
+
+.tux-wheel-picker-column__options-container-wxDaSV {
+  position: absolute;
+  top: 50%;
+  display: block;
+  width: 100%;
+  height: 0;
+  -webkit-font-smoothing: subpixel-antialiased;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  list-style: none;
+  list-style-position: outside;
+}
+
+.tux-wheel-picker-column__options-container--unit-EEi0Fi {
+  right: 0;
+  width: 50%;
+}
+
+.tux-wheel-picker-column__option-item-WTDd6m {
+  position: absolute;
+  top: 0;
+  left: 0;
+  text-align: center;
+  list-style: none;
+  width: 100%;
+  -webkit-font-smoothing: subpixel-antialiased;
+  will-change: visibility;
+  visibility: hidden;
+}
+
+.tux-wheel-picker-column__option-item--unit-tWPtbu {
+  visibility: visible;
+  left: 0;
+  text-align: left;
+  width: 50%;
+}
+.tux-wheel-picker-wrapper-EA4m3l {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  width: 100%;
+  align-items: stretch;
+  justify-content: space-between;
+  perspective: 2000px;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+
+.tux-wheel-picker-wrapper__highlight-ZxQ1I7 {
+  position: absolute;
+  left: 0;
+  right: 0;
+  width: 100%;
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 1;
+}
+.tux-intro-panel-w7cbz9 {
+  position: fixed;
+  bottom: 50%;
+  left: 50%;
+  transform: translateX(-50%) translateY(50%);
+  background-color: var(--tux-v2-color-ui-sheet-flat-1);
+  border-radius: 18px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.1);
+  width: calc(100% - 32px);
+  max-width: 420px;
+  height: -moz-fit-content;
+  height: fit-content;
+}
+
+@media (max-width: 600px) {
+  .tux-intro-panel-w7cbz9 {
+    bottom: 34px;
+    transform: translateX(-50%);
+    border-radius: 32px;
+  }
+  .tux-intro-panel-w7cbz9.tux-intro-panel__android-vpmZnu {
+    border-radius: 20px;
+  }
+}
+
+.tux-intro-panel__close-button-z1gfhi {
+  position: absolute;
+  bottom: 0px;
+  left: 0px;
+}
+
+.tux-intro-panel__close-button-container-LsStsg {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  width: 52px;
+  height: 52px;
+  cursor: pointer;
+  color: var(--tux-v2-color-ui-text-2);
+}
+
+.tux-intro-panel__overlay-g3cNjC {
+  background-color: var(--tux-v2-color-ui-sheet-backdrop-1);
+}
+
+@media (min-width: 600px) {
+  .tux-intro-panel__overlay-g3cNjC {
+    background-color: var(--tux-v2-color-ui-sheet-backdrop-2);
+  }
+}
+
+.tux-intro-panel--overlay-visible-vQ3Dnu {
+  box-shadow: none;
+}
+
+[data-tux-color-scheme=dark] .tux-intro-panel-w7cbz9 {
+  box-shadow: 0 6px 24px rgba(0,0,0,.15);
+}
+
+[data-tux-color-scheme=dark] .tux-intro-panel--overlay-visible-vQ3Dnu {
+  box-shadow: none;
+}
+.tux-intro-view-footer-SeBFFV {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 28px 28px;
+}
+
+.tux-intro-view-footer--horizontal-Dhl02y {
+  display: grid;
+  grid-template-columns: 1fr 12px 1fr;
+}
+
+.tux-intro-view-footer--horizontal-Dhl02y>:first-child {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.tux-intro-view-footer--horizontal-Dhl02y>:nth-child(2) {
+  grid-column: 1;
+  grid-row: 1;
+}
+.tux-intro-view-list-cell-DFwBQ3 {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  justify-content: center;
+  align-items: center;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.tux-intro-view-list-cell__leading-tsaYWD {
+  flex-shrink: 0;
+  font-size: 20px;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.tux-intro-view-list-cell__title-AOkZJS {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+[dir="ltr"] .tux-intro-view-list-cell__title-AOkZJS {
+  padding-left: 12px;
+}
+
+[dir="rtl"] .tux-intro-view-list-cell__title-AOkZJS {
+  padding-right: 12px;
+}
+
+.tux-intro-view-list-cell__trailing-aloBut {
+  flex-shrink: 0;
+}
+
+[dir="ltr"] .tux-intro-view-list-cell__trailing-aloBut {
+  padding-left: 12px;
+}
+
+[dir="rtl"] .tux-intro-view-list-cell__trailing-aloBut {
+  padding-right: 12px;
+}
+
+.tux-intro-view-list-cell__description-FWYSVH {
+  margin-top: 4px;
+  grid-column: 2;
+  grid-row: 2;
+}
+
+[dir="ltr"] .tux-intro-view-list-cell__description-FWYSVH {
+  padding-left: 12px;
+}
+
+[dir="rtl"] .tux-intro-view-list-cell__description-FWYSVH {
+  padding-right: 12px;
+}
+
+.tux-intro-view-list-cell--interactive-JaWSFP {
+  cursor: pointer;
+}
+.tux-intro-view__main-BKKRpY {
+  position: relative;
+  max-height: 408px;
+  overflow-y: scroll;
+}
+
+.tux-intro-view__main-BKKRpY::-webkit-scrollbar {
+  display: none;
+}
+
+.tux-intro-view__image-container-jkYc6S {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 40px;
+  padding-bottom: 20px;
+}
+
+.tux-intro-view__content-container-mkEaF6 {
+  padding-left: 28px;
+  padding-right: 28px;
+  padding-bottom: 12px;
+}
+
+.tux-intro-view__title-njjImD {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tux-intro-view__message-eOCwNc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  text-align: center;
+}
+
+.tux-intro-view__content--with-trailing-FH28Um {
+  background-color: var(--tux-v2-color-ui-sheet-flat-2);
+  border-radius: var(--tux-v2-radius-control-large);
+  padding: 6px 12px;
+}
+
+.tux-intro-view__bottom-spacing-ZZaPbO {
+  height: 28px;
+}
+.tux-dual-avatar__container-EFY5xE {
+  position: relative;
+  width: -moz-fit-content;
+  width: fit-content;
+}
+
+.tux-dual-avatar__front-image-VNbNlq {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+.tux-dual-avatar__front-image-VNbNlq::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 .5px var(--tux-v2-color-ui-shape-neutral-3);
+}
+
+.tux-dual-avatar__back-image-GYvp9z {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.tux-dual-avatar__back-image-GYvp9z::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 .5px var(--tux-v2-color-ui-shape-neutral-3);
+}
+
+.tux-dual-avatar__indicator-mukjiN {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border-radius: var(--tux-v2-radius-control-capsule);
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+}
+
+.tux-dual-avatar__badge-fQMMr3 {
+  position: absolute;
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-dual-avatar--interactive-vEw3mY {
+  cursor: pointer;
+}
+.tux-vertical-step-item-Li75Dj {
+  display: flex;
+  max-width: 430px;
+  height: 100%;
+}
+
+.tux-vertical-step-item__connector-Oqe0qs {
+  width: 9px;
+  height: 14px;
+  background-color: var(--tux-v2-color-ui-shape-neutral-4);
+  border-top-left-radius: var(--tux-v2-radius-control-capsule);
+  border-top-right-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-vertical-step-item__leading-bpUhvc {
+  position: relative;
+  width: 9px;
+  flex-shrink: 0;
+}
+
+.tux-vertical-step-item__progress-line-p7Vvk1 {
+  width: 100%;
+  height: 100%;
+}
+
+.tux-vertical-step-item__dot-VHWMST {
+  position: absolute;
+  left: 3px;
+  width: 3px;
+  height: 3px;
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-vertical-step-item__text-container-xqfOTx {
+  display: flex;
+  flex-direction: column;
+}
+
+[dir="ltr"] .tux-vertical-step-item__text-container-xqfOTx {
+  padding-left: 12px;
+}
+
+[dir="rtl"] .tux-vertical-step-item__text-container-xqfOTx {
+  padding-right: 12px;
+}
+
+.tux-vertical-step-item__gap-ms6XTV {
+  height: 20px;
+}
+.tux-vertical-steps-L4v7cv {
+  height: -moz-fit-content;
+  height: fit-content;
+}
+
+.tux-vertical-steps__collapse-toggle-ng9tZ5 {
+  display: flex;
+  cursor: pointer;
+}
+
+.tux-vertical-steps__collapse-icon-hT_k2W {
+  color: var(--tux-v2-color-ui-text-2);
+  font-size: 16px;
+}
+
+[dir="ltr"] .tux-vertical-steps__collapse-icon-hT_k2W {
+  margin-left: 4px;
+}
+
+[dir="rtl"] .tux-vertical-steps__collapse-icon-hT_k2W {
+  margin-right: 4px;
+}
+.tux-horizontal-step-item-uVOPhD {
+  max-width: 128px;
+}
+
+.tux-horizontal-step-item__progress-line-jhHPtY {
+  position: relative;
+  display: flex;
+  height: 9px;
+  margin-top: 11px;
+  margin-bottom: 15px;
+}
+
+.tux-horizontal-step-item__dot-kgLem2 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 3px;
+  border-radius: var(--tux-v2-radius-control-capsule);
+}
+
+.tux-horizontal-step-item__icon-7l0Gc0 {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 17px;
+  width: 31px;
+  height: 31px;
+  border-radius: var(--tux-v2-radius-control-capsule);
+  color: var(--tux-v2-color-ui-shape-text-1-on-neutral);
+}
+
+.tux-horizontal-step-item__icon-connector-JyXckz {
+  width: calc(50% - 14.5px);
+  height: 100%;
+  z-index: 100;
+  background-color: var(--tux-v2-color-ui-page-flat-1);
+}
+
+[dir="ltr"] .tux-horizontal-step-item__icon-connector-JyXckz {
+  margin-right: auto;
+}
+
+[dir="rtl"] .tux-horizontal-step-item__icon-connector-JyXckz {
+  margin-left: auto;
+}
+
+.tux-horizontal-step-item__transition-line-DwF0ew {
+  height: 100%;
+}
+
+[dir="ltr"] .tux-horizontal-step-item__transition-line-DwF0ew {
+  margin-left: 4px;
+}
+
+[dir="rtl"] .tux-horizontal-step-item__transition-line-DwF0ew {
+  margin-right: 4px;
+}
+
+.tux-horizontal-step-item__text-hgKUgW {
+  padding-left: 4px;
+  padding-right: 4px;
+  text-align: center;
+}
+.tux-horizontal-steps-XoxvXI {
+  display: flex;
+}

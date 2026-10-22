@@ -1,0 +1,686 @@
+{
+  "id": "@webapp-shared/login-vmok",
+  "name": "@webapp-shared/login-vmok",
+  "metaData": {
+    "name": "@webapp-shared/login-vmok",
+    "type": "app",
+    "buildInfo": {
+      "buildVersion": "2.0.0.594",
+      "buildName": "tiktok/web/tiktok_fe_login_vmok"
+    },
+    "remoteEntry": {
+      "name": "vmok-remote-entry.82538229.js",
+      "path": "",
+      "type": "global"
+    },
+    "types": {
+      "path": "",
+      "name": "index.8d6747a8c9d1e7544ba4176fef010af7.d.ts",
+      "zip": "@mf-types.1792096720310.zip",
+      "api": "@mf-types.1792096720310.d.ts"
+    },
+    "globalName": "__VMOK_@webapp-shared/login-vmok:2.0.0.594__",
+    "pluginVersion": "1.15.0",
+    "prefetchInterface": false,
+    "publicPath": "https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/web/tiktok_fe_login_vmok/",
+    "region": {},
+    "netType": "EXTRANET",
+    "getPublicPath": "return 'https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/web/tiktok_fe_login_vmok/'"
+  },
+  "shared": [
+    {
+      "id": "@webapp-shared/login-vmok:react",
+      "name": "react",
+      "version": "18.2.0",
+      "singleton": true,
+      "requiredVersion": "^18.2.0",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/6738.7c5731a9.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@sigi/di",
+      "name": "@sigi/di",
+      "version": "^2.11.3",
+      "singleton": true,
+      "requiredVersion": "^2.11.3",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/7615.8d21b111.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:react-dom",
+      "name": "react-dom",
+      "version": "18.3.1",
+      "singleton": true,
+      "requiredVersion": "^18.3.1",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/6738.7c5731a9.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@sigi/react",
+      "name": "@sigi/react",
+      "version": "^2.12.2",
+      "singleton": true,
+      "requiredVersion": "^2.12.2",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/2115.c494b38e.js",
+            "static/js/async/7346.de4c2146.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@sigi/core",
+      "name": "@sigi/core",
+      "version": "^2.13.2",
+      "singleton": true,
+      "requiredVersion": "^2.13.2",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/1669.76d26025.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:jotai",
+      "name": "jotai",
+      "version": "2.6.5",
+      "singleton": true,
+      "requiredVersion": "^2.6.5",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/5595.51c604d1.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:react-helmet-async",
+      "name": "react-helmet-async",
+      "version": "1.3.0",
+      "singleton": true,
+      "requiredVersion": "^1.3.0",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/4511.398107fc.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@ies/starling_intl",
+      "name": "@ies/starling_intl",
+      "version": "^1.5.12",
+      "singleton": true,
+      "requiredVersion": "^1.5.12",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/4817.48f89c45.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@tiktok-fe/singleton-helper",
+      "name": "@tiktok-fe/singleton-helper",
+      "version": "^0.0.4",
+      "singleton": true,
+      "requiredVersion": "^0.0.4",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/1422.623890da.js",
+            "static/js/async/5024.82521004.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@tiktok-arch/react-router-dom-compat",
+      "name": "@tiktok-arch/react-router-dom-compat",
+      "version": "^0.0.2",
+      "singleton": true,
+      "requiredVersion": "^0.0.2",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/6522.5cc44d21.js",
+            "static/js/async/9188.7c9d236a.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@emotion/react",
+      "name": "@emotion/react",
+      "version": "^11.11.4",
+      "singleton": true,
+      "requiredVersion": "^11.11.4",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/6275.85025e91.js",
+            "static/js/async/6920.548589e4.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@sigi/react-router",
+      "name": "@sigi/react-router",
+      "version": "^2.12.2",
+      "singleton": true,
+      "requiredVersion": "^2.12.2",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/24.1f619c85.js",
+            "static/js/async/9154.de871ff1.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@ttastra/core/runtime/router",
+      "name": "@ttastra/core/runtime/router",
+      "version": "^1.13.8",
+      "singleton": true,
+      "requiredVersion": "^1.13.8",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/6694.b9e38970.js",
+            "static/js/async/9310.8d8826ce.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:jotai/vanilla",
+      "name": "jotai/vanilla",
+      "version": "2.6.5",
+      "singleton": true,
+      "requiredVersion": "^2.6.5",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/451.a2e13c98.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:jotai/react",
+      "name": "jotai/react",
+      "version": "2.6.5",
+      "singleton": true,
+      "requiredVersion": "^2.6.5",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/1235.d7751ba2.js",
+            "static/js/async/2587.5490acbd.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@dp/byted-tea-sdk-oversea",
+      "name": "@dp/byted-tea-sdk-oversea",
+      "version": "^5.3.17",
+      "singleton": true,
+      "requiredVersion": "^5.3.17",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/2510.7233490a.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:@tiktok-arch/solution-slardar/runtime",
+      "name": "@tiktok-arch/solution-slardar/runtime",
+      "version": "^1.4.17",
+      "singleton": true,
+      "requiredVersion": "^1.4.17",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/4591.489629cf.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:react-router-dom",
+      "name": "react-router-dom",
+      "version": "6.30.3",
+      "singleton": true,
+      "requiredVersion": "^6.30.3",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": []
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:jotai/vanilla/utils",
+      "name": "jotai/vanilla/utils",
+      "version": "2.6.5",
+      "singleton": true,
+      "requiredVersion": "^2.6.5",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/5946.a5297993.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    },
+    {
+      "id": "@webapp-shared/login-vmok:jotai/react/utils",
+      "name": "jotai/react/utils",
+      "version": "2.6.5",
+      "singleton": true,
+      "requiredVersion": "^2.6.5",
+      "assets": {
+        "js": {
+          "async": [],
+          "sync": [
+            "static/js/async/3239.d00985e9.js",
+            "static/js/async/95.8e5042b6.js"
+          ]
+        },
+        "css": {
+          "async": [],
+          "sync": []
+        }
+      }
+    }
+  ],
+  "remotes": [],
+  "exposes": [
+    {
+      "id": "@webapp-shared/login-vmok:.",
+      "name": ".",
+      "assets": {
+        "js": {
+          "sync": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/argus-builder-strategy.37ff13e4.js",
+            "static/js/async/3978.cd6d98a9.js",
+            "static/js/async/1265.eff90613.js",
+            "static/js/async/6869.d2746b1a.js",
+            "static/js/async/3911.d48607ed.js",
+            "static/js/async/9300.56a6c6d4.js",
+            "static/js/async/3191.2535dc6c.js",
+            "static/js/async/__federation_expose_default_export.b1525c51.js"
+          ],
+          "async": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/3520.35d74aa1.js",
+            "static/js/async/1733.ed0bc298.js",
+            "static/js/async/async-main.651a4c0a.js",
+            "static/js/async/6892.47347bd2.js",
+            "static/js/async/3690.1dc0aaec.js",
+            "static/js/async/8381.ba526bb3.js",
+            "static/js/async/account.sdk.064b330f.js",
+            "static/js/async/1709.a0ecdb28.js",
+            "static/js/async/1484.982cacf3.js",
+            "static/js/async/2014.8e574737.js",
+            "static/js/async/captcha-sg.02c9e207.js",
+            "static/js/async/captcha-va.e1f7b18c.js",
+            "static/js/async/captcha-in.9bf2c643.js",
+            "static/js/async/captcha-ttp.9c1efcb9.js",
+            "static/js/async/captcha-no1a.3643823b.js",
+            "static/js/async/captcha-useastred.605d4c12.js",
+            "static/js/async/captcha-ie.b3027081.js",
+            "static/js/async/2270.3ec27f88.js",
+            "static/js/async/7.1ecaf2fb.js",
+            "static/js/async/captcha-ttp2.2abbe0af.js",
+            "static/js/async/4253.7f2b2af5.js",
+            "static/js/async/apple-js.357b4ab3.js",
+            "static/js/async/1516.2e5a9685.js",
+            "static/js/async/6210.2467fdce.js",
+            "static/js/async/4828.1d74b335.js",
+            "static/js/async/cookie-banner.eb090262.js"
+          ]
+        },
+        "css": {
+          "sync": [],
+          "async": []
+        }
+      },
+      "path": "."
+    },
+    {
+      "id": "@webapp-shared/login-vmok:pure",
+      "name": "pure",
+      "assets": {
+        "js": {
+          "sync": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/argus-builder-strategy.37ff13e4.js",
+            "static/js/async/3978.cd6d98a9.js",
+            "static/js/async/1265.eff90613.js",
+            "static/js/async/6869.d2746b1a.js",
+            "static/js/async/3911.d48607ed.js",
+            "static/js/async/9300.56a6c6d4.js",
+            "static/js/async/3191.2535dc6c.js",
+            "static/js/async/__federation_expose_pure.f79dcbc9.js"
+          ],
+          "async": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/3520.35d74aa1.js",
+            "static/js/async/1733.ed0bc298.js",
+            "static/js/async/async-main.651a4c0a.js",
+            "static/js/async/6892.47347bd2.js",
+            "static/js/async/3690.1dc0aaec.js",
+            "static/js/async/8381.ba526bb3.js",
+            "static/js/async/account.sdk.064b330f.js",
+            "static/js/async/1709.a0ecdb28.js",
+            "static/js/async/1484.982cacf3.js",
+            "static/js/async/2014.8e574737.js",
+            "static/js/async/captcha-sg.02c9e207.js",
+            "static/js/async/captcha-va.e1f7b18c.js",
+            "static/js/async/captcha-in.9bf2c643.js",
+            "static/js/async/captcha-ttp.9c1efcb9.js",
+            "static/js/async/captcha-no1a.3643823b.js",
+            "static/js/async/captcha-useastred.605d4c12.js",
+            "static/js/async/captcha-ie.b3027081.js",
+            "static/js/async/2270.3ec27f88.js",
+            "static/js/async/7.1ecaf2fb.js",
+            "static/js/async/captcha-ttp2.2abbe0af.js",
+            "static/js/async/4253.7f2b2af5.js",
+            "static/js/async/apple-js.357b4ab3.js",
+            "static/js/async/1516.2e5a9685.js",
+            "static/js/async/6210.2467fdce.js",
+            "static/js/async/4828.1d74b335.js",
+            "static/js/async/cookie-banner.eb090262.js"
+          ]
+        },
+        "css": {
+          "sync": [],
+          "async": []
+        }
+      },
+      "path": "./pure"
+    },
+    {
+      "id": "@webapp-shared/login-vmok:mobile",
+      "name": "mobile",
+      "assets": {
+        "js": {
+          "sync": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/argus-builder-strategy.37ff13e4.js",
+            "static/js/async/3978.cd6d98a9.js",
+            "static/js/async/1265.eff90613.js",
+            "static/js/async/6869.d2746b1a.js",
+            "static/js/async/3911.d48607ed.js",
+            "static/js/async/9300.56a6c6d4.js",
+            "static/js/async/3191.2535dc6c.js",
+            "static/js/async/__federation_expose_mobile.4305b2fa.js"
+          ],
+          "async": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/3520.35d74aa1.js",
+            "static/js/async/1733.ed0bc298.js",
+            "static/js/async/async-main.651a4c0a.js",
+            "static/js/async/6892.47347bd2.js",
+            "static/js/async/3690.1dc0aaec.js",
+            "static/js/async/8381.ba526bb3.js",
+            "static/js/async/account.sdk.064b330f.js",
+            "static/js/async/1709.a0ecdb28.js",
+            "static/js/async/1484.982cacf3.js",
+            "static/js/async/2014.8e574737.js",
+            "static/js/async/captcha-sg.02c9e207.js",
+            "static/js/async/captcha-va.e1f7b18c.js",
+            "static/js/async/captcha-in.9bf2c643.js",
+            "static/js/async/captcha-ttp.9c1efcb9.js",
+            "static/js/async/captcha-no1a.3643823b.js",
+            "static/js/async/captcha-useastred.605d4c12.js",
+            "static/js/async/captcha-ie.b3027081.js",
+            "static/js/async/2270.3ec27f88.js",
+            "static/js/async/7.1ecaf2fb.js",
+            "static/js/async/captcha-ttp2.2abbe0af.js",
+            "static/js/async/4253.7f2b2af5.js",
+            "static/js/async/apple-js.357b4ab3.js",
+            "static/js/async/1516.2e5a9685.js",
+            "static/js/async/6210.2467fdce.js",
+            "static/js/async/4828.1d74b335.js",
+            "static/js/async/cookie-banner.eb090262.js"
+          ]
+        },
+        "css": {
+          "sync": [],
+          "async": []
+        }
+      },
+      "path": "./mobile"
+    },
+    {
+      "id": "@webapp-shared/login-vmok:modal-content",
+      "name": "modal-content",
+      "assets": {
+        "js": {
+          "sync": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/argus-builder-strategy.37ff13e4.js",
+            "static/js/async/3978.cd6d98a9.js",
+            "static/js/async/1265.eff90613.js",
+            "static/js/async/6869.d2746b1a.js",
+            "static/js/async/3911.d48607ed.js",
+            "static/js/async/9300.56a6c6d4.js",
+            "static/js/async/3191.2535dc6c.js",
+            "static/js/async/__federation_expose_modal_content.ff060478.js"
+          ],
+          "async": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/3520.35d74aa1.js",
+            "static/js/async/1733.ed0bc298.js",
+            "static/js/async/async-main.651a4c0a.js",
+            "static/js/async/6892.47347bd2.js",
+            "static/js/async/3690.1dc0aaec.js",
+            "static/js/async/8381.ba526bb3.js",
+            "static/js/async/account.sdk.064b330f.js",
+            "static/js/async/1709.a0ecdb28.js",
+            "static/js/async/1484.982cacf3.js",
+            "static/js/async/2014.8e574737.js",
+            "static/js/async/captcha-sg.02c9e207.js",
+            "static/js/async/captcha-va.e1f7b18c.js",
+            "static/js/async/captcha-in.9bf2c643.js",
+            "static/js/async/captcha-ttp.9c1efcb9.js",
+            "static/js/async/captcha-no1a.3643823b.js",
+            "static/js/async/captcha-useastred.605d4c12.js",
+            "static/js/async/captcha-ie.b3027081.js",
+            "static/js/async/2270.3ec27f88.js",
+            "static/js/async/7.1ecaf2fb.js",
+            "static/js/async/captcha-ttp2.2abbe0af.js",
+            "static/js/async/4253.7f2b2af5.js",
+            "static/js/async/apple-js.357b4ab3.js",
+            "static/js/async/1516.2e5a9685.js",
+            "static/js/async/6210.2467fdce.js",
+            "static/js/async/4828.1d74b335.js",
+            "static/js/async/cookie-banner.eb090262.js"
+          ]
+        },
+        "css": {
+          "sync": [],
+          "async": []
+        }
+      },
+      "path": "./modal-content"
+    },
+    {
+      "id": "@webapp-shared/login-vmok:account",
+      "name": "account",
+      "assets": {
+        "js": {
+          "sync": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/argus-builder-strategy.37ff13e4.js",
+            "static/js/async/3978.cd6d98a9.js",
+            "static/js/async/1265.eff90613.js",
+            "static/js/async/6869.d2746b1a.js",
+            "static/js/async/3911.d48607ed.js",
+            "static/js/async/9300.56a6c6d4.js",
+            "static/js/async/3191.2535dc6c.js",
+            "static/js/async/__federation_expose_account.317b4834.js"
+          ],
+          "async": [
+            "static/js/async/lib-axios.c88e0a48.js",
+            "static/js/async/3520.35d74aa1.js",
+            "static/js/async/1733.ed0bc298.js",
+            "static/js/async/async-main.651a4c0a.js",
+            "static/js/async/6892.47347bd2.js",
+            "static/js/async/3690.1dc0aaec.js",
+            "static/js/async/8381.ba526bb3.js",
+            "static/js/async/account.sdk.064b330f.js",
+            "static/js/async/1709.a0ecdb28.js",
+            "static/js/async/1484.982cacf3.js",
+            "static/js/async/2014.8e574737.js",
+            "static/js/async/captcha-sg.02c9e207.js",
+            "static/js/async/captcha-va.e1f7b18c.js",
+            "static/js/async/captcha-in.9bf2c643.js",
+            "static/js/async/captcha-ttp.9c1efcb9.js",
+            "static/js/async/captcha-no1a.3643823b.js",
+            "static/js/async/captcha-useastred.605d4c12.js",
+            "static/js/async/captcha-ie.b3027081.js",
+            "static/js/async/2270.3ec27f88.js",
+            "static/js/async/7.1ecaf2fb.js",
+            "static/js/async/captcha-ttp2.2abbe0af.js",
+            "static/js/async/4253.7f2b2af5.js",
+            "static/js/async/apple-js.357b4ab3.js",
+            "static/js/async/1516.2e5a9685.js",
+            "static/js/async/6210.2467fdce.js",
+            "static/js/async/4828.1d74b335.js",
+            "static/js/async/cookie-banner.eb090262.js"
+          ]
+        },
+        "css": {
+          "sync": [],
+          "async": []
+        }
+      },
+      "path": "./account"
+    }
+  ]
+}
