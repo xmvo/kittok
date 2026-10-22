@@ -81,35 +81,54 @@ export function ReplaceJsonScript(Html, Id, Value) {
 		(_, Open, Close) => Open + JSON.stringify(Value).replaceAll('<', '\\u003c') + Close);
 }
 
-let LoginCapture;
-export async function CaptureLoginPage(Refresh = false) {
+const Captures = new Map();
+async function CapturePage(Source, Name, Label, Scripts, Refresh) {
 	if (!Refresh) {
-		try { return await readFile(join(ClientDir, 'login.html'), 'utf8'); }
+		try { return await readFile(join(ClientDir, `${Name}.html`), 'utf8'); }
 		catch (Error) { if (Error.code !== 'ENOENT') throw Error; }
 	}
-	if (LoginCapture) return LoginCapture;
-	LoginCapture = (async () => {
-		const Response = await fetch('https://www.tiktok.com/login', {
+	if (Captures.has(Name)) return Captures.get(Name);
+	const Job = (async () => {
+		const Response = await fetch(Source, {
 			headers: { 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36' },
 			signal: AbortSignal.timeout(30000),
 		});
-		if (!Response.ok) throw new Error(`LoginPageHTTP${Response.status}`);
+		if (!Response.ok) throw new Error(`${Label}PageHTTP${Response.status}`);
 		const Html = await Response.text();
-		ReadJsonScript(Html, 'SIGI_STATE');
-		ReadJsonScript(Html, '__UNIVERSAL_DATA_FOR_REHYDRATION__');
+		for (const Id of Scripts) ReadJsonScript(Html, Id);
 		const Entries = new Set();
 		for (const Match of Html.matchAll(/<(?:script|link)\b[^>]*(?:src|href)="((?:https:)?\/\/[^"<>]+)"/g)) {
 			const Url = new URL(Match[1].startsWith('//') ? `https:${Match[1]}` : Match[1]);
 			if (AssetHosts.has(Url.hostname) && /\.(?:js|css|woff2?)(?:\?|$)/.test(Url.href)) Entries.add(Url.href);
 		}
-		if (Entries.size < 5) throw new Error('IncompleteLoginPage');
+		if (Entries.size < 5) throw new Error(`Incomplete${Label}Page`);
 		const Queue = [...Entries];
 		await Promise.all(Array.from({ length: 6 }, async () => { while (Queue.length) await Asset(Queue.pop()); }));
 		await mkdir(ClientDir, { recursive: true });
-		await writeFile(join(ClientDir, 'login.html.pending'), Html);
-		await rename(join(ClientDir, 'login.html.pending'), join(ClientDir, 'login.html'));
-		await writeFile(join(ClientDir, 'login-build.json'), JSON.stringify({ source: 'https://www.tiktok.com/login', capturedAt: new Date().toISOString(), sha256: createHash('sha256').update(Html).digest('hex'), entries: [...Entries] }, null, '\t'));
+		await writeFile(join(ClientDir, `${Name}.html.pending`), Html);
+		await rename(join(ClientDir, `${Name}.html.pending`), join(ClientDir, `${Name}.html`));
+		await writeFile(join(ClientDir, `${Name}-build.json`), JSON.stringify({ source: Source, capturedAt: new Date().toISOString(), sha256: createHash('sha256').update(Html).digest('hex'), entries: [...Entries] }, null, '\t'));
 		return Html;
 	})();
-	try { return await LoginCapture; } finally { LoginCapture = null; }
+	Captures.set(Name, Job);
+	try { return await Job; } finally { Captures.delete(Name); }
 }
+export const CaptureLoginPage = (Refresh = false) => CapturePage('https://www.tiktok.com/login', 'login', 'Login', ['SIGI_STATE', '__UNIVERSAL_DATA_FOR_REHYDRATION__'], Refresh);
+export const CaptureNotFoundPage = (Refresh = false) => CapturePage('https://www.tiktok.com/404?fromUrl=/', 'notfound', 'NotFound', ['tiktok-environment'], Refresh);
+const NotFoundSources = {
+	'importmap.json': 'https://www.tiktok.com/node-webapp/api/importmap',
+	'common-app-context.json': 'https://www.tiktok.com/node-webapp/api/common-app-context?lang=en',
+	'biz-context.json': 'https://www.tiktok.com/node-webapp/api/biz-context?lang=en',
+	'text-webapp.json': 'https://starling.tiktokv.us/check_and_get_text/5dc26cf008d511e9b571e1bc0c9e23b5/normal/Webapp?lang=en',
+};
+export async function CaptureNotFoundData() {
+	await mkdir(join(ClientDir, 'notfound'), { recursive: true });
+	for (const [Name, Source] of Object.entries(NotFoundSources)) {
+		const Response = await fetch(Source, { headers: { 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36' }, signal: AbortSignal.timeout(30000) });
+		if (!Response.ok) throw new Error(`NotFoundDataHTTP${Response.status}`);
+		const Value = await Response.json();
+		if (Name === 'common-app-context.json') Object.assign(Value, { wid: '1000000000000000000', odinId: '1000000000000000000', encryptedWebid: '', csrfToken: '', nonce: '', requestId: 'local', webIdCreatedTime: '0', userAgent: '' });
+		await writeFile(join(ClientDir, 'notfound', Name), JSON.stringify(Value));
+	}
+}
+export const NotFoundData = Name => readFile(join(ClientDir, 'notfound', Name), 'utf8');

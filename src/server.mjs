@@ -6,12 +6,12 @@ import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { Asset, AssetUrl, CaptureLoginPage, LoginManifestPath, LoginManifestUrl, ClientDir, MessageUploader, Root, RewriteAssets } from './client/archive.mjs';
+import { Asset, AssetUrl, CaptureLoginPage, CaptureNotFoundPage, NotFoundData, LoginManifestPath, LoginManifestUrl, ClientDir, MessageUploader, Root, RewriteAssets } from './client/archive.mjs';
 import { Shell } from './client/shell.mjs';
 import { LoadConfig } from './config.mjs';
 import { Database, Migrate } from './db.mjs';
 import { Viewer, RateLimiter } from './auth.mjs';
-import { HttpError, Json, RequireMethod, ReadBody } from './http.mjs';
+import { Escape, HttpError, Json, RequireMethod, ReadBody } from './http.mjs';
 import { Mime, ServeMedia, SweepStories, WarmDownloads } from './media.mjs';
 import { Api } from './routes/api.mjs';
 import { Compatibility } from './routes/compatibility.mjs';
@@ -130,6 +130,17 @@ const Server = createServer(async (Request, Response) => {
 			if (Path === '/_debug/unknown') return Json(Response, Object.fromEntries(Unknown));
 			if (Path === '/_debug/blocked') return Json(Response, Object.fromEntries(Blocked));
 		}
+		const NotFoundApi = { '/node-webapp/api/importmap': 'importmap.json', '/node-webapp/api/common-app-context': 'common-app-context.json', '/node-webapp/api/biz-context': 'biz-context.json' }[Path]
+			?? (/^\/check_and_get_text\/[0-9a-f]+\/normal\/Webapp$/.test(Path) ? 'text-webapp.json' : null);
+		if (NotFoundApi) {
+			RequireMethod(Request, ['GET']);
+			let Text = await NotFoundData(NotFoundApi).catch(() => null);
+			if (!Text) throw new HttpError(404, 'NotFound');
+			if (NotFoundApi === 'importmap.json') Text = RewriteAssets(Text, Config.Origin);
+			if (NotFoundApi === 'common-app-context.json') Text = JSON.stringify({ ...JSON.parse(Text), host: new URL(Config.Origin).host, csrfToken: User?.csrf_token ?? '' });
+			Response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': NotFoundApi === 'common-app-context.json' ? 'no-store' : 'public, max-age=3600' });
+			return Response.end(Text);
+		}
 		if (await Admin(Context) || await Studio(Context) || await Account(Context) || await Api(Context) || await Pns(Context) || await Passport(Context) || await Im(Context) || await Stories(Context) || await Compatibility(Context)) return;
 		if (/^\/(?:api|passport|node-webapp|tiktok|tns-api|aweme|node|v[1-3])\//.test(Path)) {
 			const Key = `${Request.method} ${Path}`;
@@ -137,7 +148,15 @@ const Server = createServer(async (Request, Response) => {
 			return Json(Response, { statusCode: 501, status_code: 501, error: 'NotImplemented', path: Path }, 501);
 		}
 		RequireMethod(Request, ['GET', 'HEAD']);
-		if (!/^\/(?:$|login(?:\/[a-z-]+)*\/?$|signup(?:\/[a-z-]+)*\/?$|explore\/?$|following\/?$|friends\/?$|messages\/?$|setting(?:\/[a-z-]+)*\/?$|search(?:\/user|\/video)?\/?$|@[^/]+(?:\/video\/\d+|\/collection\/[^/]+)?\/?$|music\/[^/]+\/?$|tag\/[^/]+\/?$)/.test(Path)) throw new HttpError(404, 'NotImplemented');
+		if (/^\/404\/?$/.test(Path)) {
+			const Html = RewriteAssets(await CaptureNotFoundPage(), Config.Origin).replaceAll('https://starling.tiktokv.us', Config.Origin).replace('<head>', '<head><link rel="icon" href="/brand/favicon">').replace(/<title>[\s\S]*?<\/title>/, `<title>${Escape(Config.Name)}</title>`);
+			Response.writeHead(404, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+			return Response.end(Request.method === 'HEAD' ? undefined : Html);
+		}
+		if (!/^\/(?:$|login(?:\/[a-z-]+)*\/?$|signup(?:\/[a-z-]+)*\/?$|explore\/?$|following\/?$|friends\/?$|messages\/?$|setting(?:\/[a-z-]+)*\/?$|search(?:\/user|\/video)?\/?$|@[^/]+(?:\/video\/\d+|\/collection\/[^/]+)?\/?$|music\/[^/]+\/?$|tag\/[^/]+\/?$)/.test(Path)) {
+			if (!/text\/html/.test(Request.headers.accept ?? '')) throw new HttpError(404, 'NotImplemented');
+			Response.writeHead(302, { location: `/404?fromUrl=${encodeURI(Path)}` }); return Response.end();
+		}
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
 		const Page = /^\/(login|signup)(\/|$)/.test(Path) ? await CaptureLoginPage() : Raw;
 		Response.end(Request.method === 'HEAD' ? undefined : Shell(Page, Config.Origin, { Config, User }));

@@ -838,19 +838,23 @@
 		else if (Routed && Root.isConnected !== IsAdminPath()) location.reload();
 	}, 150);
 	let Restored = false;
+	const Began = Date.now();
+	const Ready = () => Boolean(document.querySelector('[data-e2e="challenge-title"]')) || Date.now() - Began > 6000;
 	const Restore = () => {
-		if (Restored || !document.querySelector('#app > *')) return;
+		if (Restored) return;
 		Restored = true; history.replaceState(null, '', window.__KittokAdminPath ?? '/admin');
 	};
 	const Start = () => {
+		if (!Ready()) return false;
 		Restore();
 		if (!Mount()) return false;
-		Restore(); Route();
+		Route();
 		return true;
 	};
 	if (!Start()) {
-		const Waiting = new MutationObserver(() => { if (Start()) Waiting.disconnect(); });
+		const Waiting = new MutationObserver(() => { if (Start()) { Waiting.disconnect(); clearTimeout(Fallback); } });
 		Waiting.observe(document.documentElement, { childList: true, subtree: true });
+		const Fallback = setTimeout(() => { if (Start()) Waiting.disconnect(); }, 6100);
 	}
 	new MutationObserver(() => { if (IsAdminPath() && !Root.isConnected && Column()) Mount(); }).observe(document.documentElement, { childList: true, subtree: true });
 })();

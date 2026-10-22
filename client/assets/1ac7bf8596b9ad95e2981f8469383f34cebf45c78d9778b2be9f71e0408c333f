@@ -1,0 +1,1 @@
+"use strict";(self.__LOADABLE_LOADED_CHUNKS__=self.__LOADABLE_LOADED_CHUNKS__||[]).push([[1183],{11183(_,s,D){D.d(s,{D:()=>e,x:()=>L});const A=[950111,950113,950112],L=_=>void 0!==_&&A.includes(_),e=_=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(_)}}]);
