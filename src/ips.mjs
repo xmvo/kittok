@@ -99,3 +99,17 @@ export async function SetIpConsent(Pool, UserId, Allow) {
 	if (!Allow) await Promise.all([Pool.query('UPDATE user_events SET ip_sealed = NULL WHERE user_id = $1 AND ip_sealed IS NOT NULL', [UserId]), Pool.query('UPDATE sessions SET ip_sealed = NULL WHERE user_id = $1 AND ip_sealed IS NOT NULL', [UserId])]);
 	return Allow;
 }
+
+const LocalKey = () => createHash('sha256').update('kittok-local:' + IpHashKey()).digest();
+export function LocalSeal(Text) {
+	const Nonce = randomBytes(12), Cipher = createCipheriv('aes-256-gcm', LocalKey(), Nonce);
+	const Body = Buffer.concat([Cipher.update(String(Text), 'utf8'), Cipher.final()]);
+	return Buffer.concat([Nonce, Cipher.getAuthTag(), Body]).toString('base64');
+}
+export function LocalOpen(Value) {
+	try {
+		const Raw = Buffer.from(String(Value), 'base64'), Decipher = createDecipheriv('aes-256-gcm', LocalKey(), Raw.subarray(0, 12));
+		Decipher.setAuthTag(Raw.subarray(12, 28));
+		return Buffer.concat([Decipher.update(Raw.subarray(28)), Decipher.final()]).toString('utf8');
+	} catch { return null; }
+}

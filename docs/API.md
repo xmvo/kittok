@@ -96,11 +96,13 @@ Admins open `/admin` (also linked from the sidebar and `/account`). It runs insi
 | POST | `/_kittok/admin/invites/HASH/delete` | Revokes an invite |
 | GET | `/_kittok/admin/settings` | Sign-up mode, instance name, features, upload limits, announcement, rules, and brand images |
 | POST | `/_kittok/admin/settings/KEY` | JSON `{value}` for `registration`, `name`, `features`, `misc`, `limits`, `announcement`, `rules`, or `moderation` (`{strikeDays, feature, total, policy: {category: n}}`); applied immediately without a restart. `misc` takes booleans for Kittok's own additions: `verifiedBadges`, `profileBadges`, `reposts`, `collections`, `hashtags`, `groupedLikes`, `commentLabels`, `messageRequests`, `readReceipts`, and `unsend`; omitted keys stay on |
-| POST | `/_kittok/admin/brand/SLOT` | Multipart `file` (PNG, JPEG, or WebP, up to 2 MB) for `wordmarkDark`, `wordmarkLight`, `icon`, or `favicon`; re-encoded to PNG |
+| POST | `/_kittok/admin/brand/SLOT` | Multipart `file` (PNG, JPEG, or WebP, up to 2 MB) for `wordmarkDark`, `wordmarkLight`, `icon`, `favicon`, or `avatar` (the profile photo of accounts without one); re-encoded to PNG |
+| POST | `/_kittok/admin/settings/mail` | JSON `{value: {host, port, secure, username, password, from}}`; `secure` is `starttls` or `tls`. A blank `password` keeps the saved one; a blank `host` clears these and goes back to `SMTP_URL`/`MAIL_FROM`. The password is stored encrypted with the instance's local key and never returned; settings show `mail` with `hasPassword` and `source` (`admin`, `env`, `none`) |
+| POST | `/_kittok/admin/mail/test` | JSON `{to}`: sends a test email with the current mail settings. 502 `MailFailed` when the server refuses |
 | POST | `/_kittok/admin/brand/SLOT/reset` | Restores the shipped image |
 | GET | `/_kittok/admin/audit?before=ID` | Admin actions, newest first, 50 per page |
 
-Settings stored in the database override the environment values for `REGISTRATION_MODE`, `INSTANCE_NAME`, `MAX_VIDEO_MB`, and `MAX_VIDEO_SECONDS`. Public routes `/brand/SLOT` serve the current brand images and `/rules` shows the rules.
+Settings stored in the database override the environment values for `REGISTRATION_MODE`, `INSTANCE_NAME`, `MAX_VIDEO_MB`, `MAX_VIDEO_SECONDS`, `SMTP_URL`, and `MAIL_FROM`. Public routes `/brand/SLOT` serve the current brand images and `/rules` shows the rules.
 
 To manage verification, open **Admin → Accounts**, select an account, and choose **Verify account** or **Remove verification**. The `users.verified` flag defaults to false and persists in PostgreSQL. Registration and profile-edit requests cannot set it. Public user shapes expose `verified`; the original client's snake-case user shapes receive `custom_verify: "Verified account"` (the exact string its comment list checks) and `verification_type: 1` for verified accounts. This badge is granted by the local instance and does not represent verification by TikTok.
 

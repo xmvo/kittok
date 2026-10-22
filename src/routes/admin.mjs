@@ -2,11 +2,12 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Escape, HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { Hash, RateLimiter, RequireCsrf, Token } from '../auth.mjs';
-import { HashIp, InstanceKey, Open, Unlock } from '../ips.mjs';
+import { HashIp, InstanceKey, LocalSeal, Open, Unlock } from '../ips.mjs';
+import { SendMail } from '../mail.mjs';
 import { RemoveMedia, SaveBrandImage, WarmDownloads } from '../media.mjs';
 import { AvatarUrl, UserStats } from '../store.mjs';
 import { ClientDir, Root } from '../client/archive.mjs';
-import { BrandSlots, Features, MiscFeatures, SaveSetting, Settings } from '../settings.mjs';
+import { BrandSlots, Features, MiscFeatures, RestoreEnvMail, SaveSetting, Settings } from '../settings.mjs';
 import { Page } from './account.mjs';
 import { Enforce, DecideReport, ReverseDecision, LiftRestriction, MessageText, ReviewAppeal, Standing } from '../moderation.mjs';
 import { Transaction } from '../db.mjs';
@@ -52,7 +53,7 @@ export async function Admin(Context) {
 		const Custom = Config.Brand?.[BrandMatch[1]];
 		const Default = join(Root, BrandSlots[BrandMatch[1]]);
 		const Body = Custom ? await readFile(join(Config.MediaDir, Custom)).catch(() => null) : null;
-		Response.writeHead(200, { 'content-type': Body ? 'image/png' : 'image/svg+xml', 'cache-control': 'no-cache' });
+		Response.writeHead(200, { 'content-type': Body ? 'image/png' : 'image/svg+xml', 'cache-control': Url.searchParams.has('v') ? 'public, max-age=31536000, immutable' : 'no-cache' });
 		Response.end(Request.method === 'HEAD' ? undefined : Body ?? await readFile(Default)); return true;
 	}
 	if (Path === '/rules') {
@@ -275,6 +276,28 @@ export async function Admin(Context) {
 		Json(Response, Settings(Config).brand); return true;
 	}
 	const Body = await ReadBody(Request, 32768);
+	if (Route === 'settings/mail') {
+		const Input = Body.value ?? {};
+		if (!String(Input.host ?? '').trim()) {
+			await Pool.query("DELETE FROM settings WHERE key = 'mail'");
+			RestoreEnvMail(Config);
+			await Audit(Pool, User, 'settings.mail', 'mail', 'cleared');
+			Json(Response, Settings(Config)); return true;
+		}
+		const Previous = Config.MailSetting;
+		const Password = typeof Input.password === 'string' && Input.password ? LocalSeal(Input.password) : Input.keepPassword === false ? '' : Previous?.password ?? '';
+		const Saved = await SaveSetting(Pool, Config, 'mail', { host: String(Input.host).trim(), port: Number(Input.port), secure: Input.secure, username: String(Input.username ?? '').trim(), password: Password, from: String(Input.from ?? '') });
+		await Audit(Pool, User, 'settings.mail', 'mail', `${Saved.host}:${Saved.port}`);
+		Json(Response, Settings(Config)); return true;
+	}
+	if (Route === 'mail/test') {
+		const To = String(Body.to ?? '').trim();
+		if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(To) || To.length > 254) throw new HttpError(400, 'InvalidEmail');
+		try { await SendMail(Config, { To, Subject: `${Config.Name} test email`, Text: `This is a test email from ${Config.Name}. Your mail settings work.`, Html: `<p>This is a test email from ${Escape(Config.Name)}. Your mail settings work.</p>` }); }
+		catch (Failure) { throw Failure instanceof HttpError ? Failure : new HttpError(502, 'MailFailed'); }
+		await Audit(Pool, User, 'mail.test', To);
+		Json(Response, { ok: true }); return true;
+	}
 	const SettingMatch = Route.match(/^settings\/([a-z]+)$/);
 	if (SettingMatch && SettingMatch[1] !== 'brand') {
 		const Saved = await SaveSetting(Pool, Config, SettingMatch[1], Body.value);

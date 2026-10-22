@@ -1709,6 +1709,37 @@ test('IPs are stored as hashes, sealed only for people who allow it, and shown t
 	assert.equal((await Admin(`users/${Sharing.Id}/ips`, { key: Secret })).status, 409);
 });
 
+test('admins can set the default profile photo and the mail server', async () => {
+	const Admin = (Route, Body) => Call('/_kittok/admin/' + Route, Body ? 'POST' : 'GET', Body, Auth());
+	const Plain = (await Pool.query('SELECT id FROM users WHERE avatar_name IS NULL ORDER BY id LIMIT 1')).rows[0].id;
+	const Photo = async () => (await (await Admin(`users/${Plain}`)).json()).user.avatar;
+	assert.match(await Photo(), /\/public\/avatar\.svg$/);
+	const Form = new FormData(); Form.append('file', new Blob([await readFile(join(Directory, 'avatar.png'))], { type: 'image/png' }), 'cat.png');
+	const Uploaded = await fetch(Origin + '/_kittok/admin/brand/avatar', { method: 'POST', headers: Auth(), body: Form });
+	assert.equal(Uploaded.status, 200); assert.equal((await Uploaded.json()).avatar.custom, true);
+	const Custom = await Photo();
+	assert.match(Custom, /\/brand\/avatar\?v=brand-avatar-/);
+	const Served = await fetch(Custom);
+	assert.equal(Served.headers.get('content-type'), 'image/png'); assert.match(Served.headers.get('cache-control'), /immutable/);
+	assert.equal((await Admin('brand/avatar/reset', {})).status, 200);
+	assert.match(await Photo(), /\/public\/avatar\.svg$/);
+	assert.equal((await (await Admin('settings')).json()).mail.source, 'env');
+	const Mail = Value => Admin('settings/mail', { value: Value });
+	assert.equal((await Mail({ host: '127.0.0.1', port: 0, secure: 'starttls', username: '', password: '', from: 'Club <club@example.com>' })).status, 400);
+	assert.equal((await Mail({ host: '127.0.0.1', port: 25, secure: 'starttls', username: '', password: '', from: 'not an address' })).status, 400);
+	const Saved = await (await Mail({ host: '127.0.0.1', port: MailSink.address().port, secure: 'starttls', username: 'kit', password: 'hunter2-secret', from: 'Club <club@example.com>' })).json();
+	assert.deepEqual([Saved.mail.source, Saved.mail.hasPassword, 'password' in Saved.mail], ['admin', true, false]);
+	assert.ok(!JSON.stringify((await Pool.query("SELECT value FROM settings WHERE key = 'mail'")).rows[0].value).includes('hunter2'));
+	assert.equal((await (await Mail({ host: '127.0.0.1', port: MailSink.address().port, secure: 'starttls', username: 'kit', password: '', from: 'Club <club@example.com>' })).json()).mail.hasPassword, true);
+	assert.equal((await Mail({ host: '127.0.0.1', port: MailSink.address().port, secure: 'starttls', username: '', password: '', from: 'Club <club@example.com>' })).status, 200);
+	assert.equal((await Admin('mail/test', { to: 'nope' })).status, 400);
+	const Sent = Mailbox.length;
+	assert.equal((await Admin('mail/test', { to: 'kit@example.com' })).status, 200);
+	assert.equal(Mailbox.length, Sent + 1); assert.match(Mailbox.at(-1), /club@example\.com/);
+	assert.equal((await (await Mail({ host: '' })).json()).mail.source, 'env');
+	assert.equal((await Pool.query("SELECT 1 FROM settings WHERE key = 'mail'")).rowCount, 0);
+});
+
 test('the comment box can list and search people to mention', async () => {
 	const Signed = await Login(Pool, 'pride_kitten', Password);
 	const As = { cookie: `kittok_session=${Signed.Token}` };

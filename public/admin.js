@@ -24,6 +24,7 @@
 		copyright: ['Reuploaded content they do not own'], other: ['Violates the instance rules'],
 	};
 	const Errors = {
+		InvalidMailSettings: 'Check the server, port, and From address.', MailFailed: 'Couldn’t send the test email. Check the settings.', MailNotConfigured: 'Save email settings first.', InvalidEmail: 'Enter an email address.',
 		WrongSecurityKey: 'That isn’t the security key.', NoSecurityKey: 'Set up a security key on the server first.', OptedOut: 'User has opted out from their ip being visible',
 		CannotModerateAdmin: 'Admins and your own account can’t be moderated here.', CannotChangeYourself: 'You can’t do that to your own account.', InvalidCsrf: 'Your session changed. Refresh and try again.',
 		InvalidReason: 'Write a reason, up to 1,000 characters.', InvalidDecision: 'That combination of actions isn’t allowed for this content.', InvalidRestriction: 'Pick each feature once with a listed duration.',
@@ -714,7 +715,17 @@
 		const MB = El('input', { class: 'Input Num', type: 'number', value: S.limits.videoMB, min: 1, max: 2048 }), Seconds = El('input', { class: 'Input Num', type: 'number', value: S.limits.videoSeconds, min: 1, max: 3600 });
 		const Announcement = El('textarea', { class: 'Text', maxlength: 500, value: S.announcement.text, placeholder: 'Shown as a banner across the app' }), AnnouncementLink = El('input', { class: 'Input', value: S.announcement.link, placeholder: 'https://… or /path (optional)' });
 		const Rules = El('textarea', { class: 'Text', style: 'min-height:160px', maxlength: 10000, value: S.rules, placeholder: 'Shown at /rules and during sign-up' });
-		const Slots = { wordmarkDark: 'Wordmark on dark', wordmarkLight: 'Wordmark on light', icon: 'App icon', favicon: 'Favicon' };
+		const Slots = { wordmarkDark: 'Wordmark on dark', wordmarkLight: 'Wordmark on light', icon: 'App icon', favicon: 'Favicon', avatar: 'Default profile photo' };
+		const M = S.mail;
+		const MailHost = El('input', { class: 'Input', value: M.host, placeholder: 'smtp.example.com', autocomplete: 'off' });
+		const MailPort = El('input', { class: 'Input Num', type: 'number', value: M.port, min: 1, max: 65535, style: 'width:110px' });
+		const MailSecure = El('select', { class: 'Select' }, [['starttls', 'STARTTLS'], ['tls', 'SSL/TLS']].map(([Value, Label]) => El('option', { value: Value, selected: M.secure === Value }, Label)));
+		MailSecure.addEventListener('change', () => { if (['465', '587', ''].includes(MailPort.value)) MailPort.value = MailSecure.value === 'tls' ? 465 : 587; });
+		const MailUser = El('input', { class: 'Input', value: M.username, autocomplete: 'off', placeholder: 'Optional' });
+		const MailPassword = El('input', { class: 'Input', type: 'password', autocomplete: 'new-password', placeholder: M.hasPassword ? 'Unchanged' : 'Optional' });
+		const MailFrom = El('input', { class: 'Input', value: M.from, placeholder: 'Kittok <no-reply@example.com>' });
+		const MailTo = El('input', { class: 'Input', type: 'email', placeholder: 'you@example.com' });
+		const MailSource = El('span', { class: 'Faint' }, M.source === 'env' ? 'From .env' : M.source === 'admin' ? 'Set here' : 'Not set up');
 		Fill(Body, El('div', { class: 'Page Stack', style: 'max-width:980px' },
 			El('div', { class: 'Columns' },
 				El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Identity and sign-up'), El('div', { class: 'PanelBody Form' }, El('label', { class: 'Field' }, El('span', {}, 'Instance name'), Name), El('label', { class: 'Field' }, El('span', {}, 'Registration'), Registration),
@@ -722,6 +733,12 @@
 					El('div', { class: 'Row' }, El('span', { class: 'Grow' }), Btn('Save', async () => { await Saver('name', () => Name.value.trim(), 'Name')(); await Saver('registration', () => Registration.value, 'Registration')(); }, 'Primary')))),
 				El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Uploads'), El('div', { class: 'PanelBody Form' }, El('label', { class: 'Field' }, El('span', {}, 'Largest video (MB)'), MB), El('label', { class: 'Field' }, El('span', {}, 'Longest video (seconds)'), Seconds),
 					El('div', { class: 'Row' }, El('span', { class: 'Grow' }), Btn('Save', Saver('limits', () => ({ videoMB: Number(MB.value), videoSeconds: Number(Seconds.value) }), 'Upload limits'), 'Primary'))))),
+			El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Email (SMTP)', MailSource), El('div', { class: 'PanelBody Form' },
+				El('div', { class: 'Row', style: 'gap:12px;flex-wrap:wrap;align-items:flex-end' }, El('label', { class: 'Field Grow' }, El('span', {}, 'Server'), MailHost), El('label', { class: 'Field' }, El('span', {}, 'Port'), MailPort), El('label', { class: 'Field' }, El('span', {}, 'Security'), MailSecure)),
+				El('div', { class: 'Row', style: 'gap:12px;flex-wrap:wrap' }, El('label', { class: 'Field Grow' }, El('span', {}, 'Username'), MailUser), El('label', { class: 'Field Grow' }, El('span', {}, 'Password'), MailPassword)),
+				El('label', { class: 'Field' }, El('span', {}, 'From'), MailFrom),
+				El('div', { class: 'Row', style: 'gap:12px;flex-wrap:wrap;align-items:flex-end' }, El('label', { class: 'Field Grow' }, El('span', {}, 'Send a test to'), MailTo), Btn('Send test', async () => { try { await Api('mail/test', { to: MailTo.value.trim() }); Toast('Test email sent'); } catch (Error) { Fail(Error); } }),
+					El('span', { class: 'Grow' }), Btn('Save', async () => { try { await Api('settings/mail', { value: { host: MailHost.value.trim(), port: Number(MailPort.value), secure: MailSecure.value, username: MailUser.value.trim(), password: MailPassword.value, from: MailFrom.value.trim() } }); Toast(MailHost.value.trim() ? 'Email settings saved' : 'Email settings cleared'); Navigate(location.pathname, true); } catch (Error) { Fail(Error); } }, 'Primary')))),
 			El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Features', El('span', { class: 'Faint' }, 'Turning one off hides it in the app')), El('div', { class: 'PanelBody' }, El('div', { class: 'Toggles' }, Object.keys(FeatureNames).map(Key => El('label', { class: 'ToggleRow' }, El('span', { class: 'Switch' }, El('input', { type: 'checkbox', checked: Features[Key], onchange: async Event => { Features[Key] = Event.target.checked; await Saver('features', () => Features, FeatureNames[Key])(); } }), El('span')), FeatureNames[Key]))))),
 			El('div', { class: 'Columns' },
 				El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Announcement'), El('div', { class: 'PanelBody Form' }, Announcement, AnnouncementLink, El('div', { class: 'Row' }, El('span', { class: 'Grow' }), Btn('Publish', Saver('announcement', () => ({ text: Announcement.value.trim(), link: AnnouncementLink.value.trim() }), 'Announcement'), 'Primary')))),

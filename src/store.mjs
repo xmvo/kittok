@@ -3,10 +3,10 @@ import { HttpError, Id } from './http.mjs';
 import { Transaction } from './db.mjs';
 import { RemovedSql, ForYouIneligibleSql } from './moderation.mjs';
 import { PublicBadges } from './badges.mjs';
-import { Misc } from './settings.mjs';
+import { Fallbacks, Misc } from './settings.mjs';
 import { VideoVisibleSql, CommentsAllowedSql, SetFollow, AssertVideoVisible } from './privacy.mjs';
 
-export const AvatarUrl = (User, Origin) => User.avatar_name ? `${Origin}/media/${User.avatar_name}` : `${Origin}/public/avatar.svg`;
+export const AvatarUrl = (User, Origin) => User.avatar_name ? `${Origin}/media/${User.avatar_name}` : `${Origin}${Fallbacks.avatar}`;
 
 export function UserShape(User, Origin) {
 	const Avatar = AvatarUrl(User, Origin);

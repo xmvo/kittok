@@ -1,4 +1,5 @@
 import { HttpError } from './http.mjs';
+import { LocalOpen } from './ips.mjs';
 import { DefaultThresholds, PolicyCategories } from './moderation.mjs';
 
 export const Features = { shop: 'Shop', explore: 'Explore', following: 'Following feed', shortDrama: 'Short dramas', live: 'LIVE', search: 'Search', upload: 'Uploads', comments: 'Comments', messages: 'Direct messages' };
@@ -21,7 +22,8 @@ export const MiscFeatures = {
 	groupChats: ['Group chats', 'Group direct messages with up to 32 friends'],
 };
 export const Misc = Object.fromEntries(Object.keys(MiscFeatures).map(Name => [Name, true]));
-export const BrandSlots = { wordmarkDark: '/public/logo.svg', wordmarkLight: '/public/logo-light.svg', icon: '/public/icon.svg', favicon: '/public/icon.svg' };
+export const BrandSlots = { wordmarkDark: '/public/logo.svg', wordmarkLight: '/public/logo-light.svg', icon: '/public/icon.svg', favicon: '/public/icon.svg', avatar: '/public/avatar.svg' };
+export const Fallbacks = { avatar: '/public/avatar.svg' };
 
 function Validate(Key, Value) {
 	if (Key === 'registration') {
@@ -69,6 +71,12 @@ function Validate(Key, Value) {
 		return Value;
 	}
 	if (Key === 'brand') return Value;
+	if (Key === 'mail') {
+		const Port = Number(Value?.port);
+		if (!Value || typeof Value.host !== 'string' || !/^[a-zA-Z0-9.-]{1,253}$/.test(Value.host) || !Number.isInteger(Port) || Port < 1 || Port > 65535 || !['starttls', 'tls'].includes(Value.secure)
+			|| typeof Value.username !== 'string' || Value.username.length > 254 || typeof Value.password !== 'string' || typeof Value.from !== 'string' || !/@/.test(Value.from) || Value.from.length > 254 || /[\r\n]/.test(Value.from + Value.username)) throw new HttpError(400, 'InvalidMailSettings');
+		return { host: Value.host, port: Port, secure: Value.secure, username: Value.username, password: Value.password, from: Value.from.trim() };
+	}
 	throw new HttpError(404, 'UnknownSetting');
 }
 
@@ -80,7 +88,13 @@ function Apply(Config, Key, Value) {
 	if (Key === 'limits') { Config.MaxVideoBytes = Value.videoMB * 1024 * 1024; Config.MaxVideoSeconds = Value.videoSeconds; }
 	if (Key === 'announcement') Config.Announcement = Value;
 	if (Key === 'rules') Config.Rules = Value;
-	if (Key === 'brand') Config.Brand = Value;
+	if (Key === 'brand') { Config.Brand = Value; Fallbacks.avatar = Value?.avatar ? `/brand/avatar?v=${encodeURIComponent(Value.avatar)}` : BrandSlots.avatar; }
+	if (Key === 'mail') {
+		const Password = Value.password ? LocalOpen(Value.password) ?? '' : '';
+		const Login = Value.username ? `${encodeURIComponent(Value.username)}${Password ? ':' + encodeURIComponent(Password) : ''}@` : '';
+		Config.SmtpUrl = `${Value.secure === 'tls' ? 'smtps' : 'smtp'}://${Login}${Value.host}:${Value.port}`;
+		Config.MailFrom = Value.from; Config.MailSetting = Value;
+	}
 	if (Key === 'moderation') Config.Moderation = Value;
 	if (Key === 'mailcodes') Config.MailCodes = Value;
 }
@@ -94,6 +108,9 @@ export async function LoadSettings(Pool, Config) {
 	Config.Brand = {};
 	Config.Moderation = DefaultThresholds;
 	Config.MailCodes = true;
+	Config.EnvMail ??= { url: Config.SmtpUrl, from: Config.MailFrom };
+	[Config.SmtpUrl, Config.MailFrom, Config.MailSetting] = [Config.EnvMail.url, Config.EnvMail.from, null];
+	Fallbacks.avatar = BrandSlots.avatar;
 	for (const Row of (await Pool.query('SELECT key, value FROM settings')).rows) Apply(Config, Row.key, Row.value);
 }
 
@@ -105,12 +122,24 @@ export async function SaveSetting(Pool, Config, Key, Raw) {
 	return Value;
 }
 
+export function RestoreEnvMail(Config) {
+	if (Config.EnvMail) [Config.SmtpUrl, Config.MailFrom, Config.MailSetting] = [Config.EnvMail.url, Config.EnvMail.from, null];
+}
+function MailShape(Config) {
+	if (Config.MailSetting) { const { password, ...Rest } = Config.MailSetting; return { ...Rest, hasPassword: Boolean(password), source: 'admin' }; }
+	if (!Config.SmtpUrl) return { host: '', port: 587, secure: 'starttls', username: '', from: Config.MailFrom ?? '', hasPassword: false, source: 'none' };
+	try {
+		const Url = new URL(Config.SmtpUrl), Tls = Url.protocol === 'smtps:';
+		return { host: Url.hostname, port: Number(Url.port || (Tls ? 465 : 587)), secure: Tls ? 'tls' : 'starttls', username: decodeURIComponent(Url.username), from: Config.MailFrom ?? '', hasPassword: Boolean(Url.password), source: 'env' };
+	} catch { return { host: '', port: 587, secure: 'starttls', username: '', from: '', hasPassword: false, source: 'env' }; }
+}
+
 export function Settings(Config) {
 	return {
 		registration: Config.Registration, name: Config.Name, features: Config.Features, misc: { ...Misc },
 		limits: { videoMB: Math.round(Config.MaxVideoBytes / 1024 / 1024), videoSeconds: Config.MaxVideoSeconds },
 		announcement: Config.Announcement, rules: Config.Rules, moderation: Config.Moderation,
-		mailCodes: Config.MailCodes !== false, mailReady: Boolean(Config.SmtpUrl && Config.MailFrom),
+		mailCodes: Config.MailCodes !== false, mailReady: Boolean(Config.SmtpUrl && Config.MailFrom), mail: MailShape(Config),
 		brand: Object.fromEntries(Object.keys(BrandSlots).map(Slot => [Slot, { url: `/brand/${Slot}`, custom: Boolean(Config.Brand?.[Slot]) }])),
 	};
 }
