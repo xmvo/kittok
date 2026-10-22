@@ -39,7 +39,7 @@ const Csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'
 const Cleanup = setInterval(() => {
 	Pool.query('DELETE FROM sessions WHERE expires_at < now()').catch(() => console.error('SessionCleanupFailed'));
 	Pool.query("DELETE FROM video_views WHERE viewed_at < now() - interval '6 hours'").catch(() => console.error('ViewCleanupFailed'));
-	Pool.query("UPDATE user_events SET ip = NULL WHERE ip IS NOT NULL AND created_at < now() - interval '90 days'").catch(() => console.error('EventCleanupFailed'));
+	Pool.query("UPDATE user_events SET ip_hash = NULL, ip_sealed = NULL WHERE ip_hash IS NOT NULL AND created_at < now() - interval '90 days'").catch(() => console.error('EventCleanupFailed'));
 	Pool.query('DELETE FROM data_exports WHERE expires_at < now()').catch(() => console.error('ExportCleanupFailed'));
 	DeleteExpiredAccounts(Pool, Config).catch(() => console.error('AccountDeletionFailed'));
 	SweepMessageMedia(Pool, Config).catch(() => console.error('MessageMediaCleanupFailed'));

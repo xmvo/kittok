@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Escape, HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
-import { Hash, RequireCsrf, Token } from '../auth.mjs';
+import { Hash, RateLimiter, RequireCsrf, Token } from '../auth.mjs';
+import { HashIp, InstanceKey, Open, Unlock } from '../ips.mjs';
 import { RemoveMedia, SaveBrandImage, WarmDownloads } from '../media.mjs';
 import { AvatarUrl, UserStats } from '../store.mjs';
 import { ClientDir, Root } from '../client/archive.mjs';
@@ -25,6 +26,8 @@ const ReportSql = `SELECT r.*, rep.username AS reporter, own.username AS owner, 
 	LEFT JOIN videos v ON r.target_type = 'video' AND v.id = r.target_id LEFT JOIN comments c ON r.target_type = 'comment' AND c.id = r.target_id
 	LEFT JOIN messages mc ON r.target_type = 'message' AND mc.id = r.target_id`;
 
+const IpState = "CASE WHEN ip_sealed IS NOT NULL THEN 'sealed' WHEN ip_hash IS NOT NULL THEN 'hidden' END";
+const Reveals = RateLimiter();
 async function Audit(Pool, User, Action, Target, Detail = '') {
 	await Pool.query('INSERT INTO admin_actions(admin_id, action, target, detail) VALUES ($1, $2, $3, $4)', [User.id, Action, Target, Detail.slice(0, 500)]);
 }
@@ -63,7 +66,7 @@ export async function Admin(Context) {
 		RequireMethod(Request, ['GET']);
 		if (!User) { Response.writeHead(303, { location: '/login' }); Response.end(); return true; }
 		if (User.role !== 'admin') throw new HttpError(404, 'NotFound');
-		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, misc: MiscFeatures, categories: Categories, badges: BadgeCatalog };
+		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, misc: MiscFeatures, categories: Categories, badges: BadgeCatalog, ipKey: Boolean(await InstanceKey(Pool)) };
 		ClientPage ??= readFile(join(ClientDir, 'index.html'), 'utf8');
 		const Html = Shell(await ClientPage, Config.Origin, { Config, User }).replace('</head>', `<link rel="stylesheet" href="${Public('admin.css')}"><script id="kittok-admin-boot" type="application/json">${JSON.stringify(Boot).replaceAll('<', '\\u003c')}</script><script src="${Public('admin.js')}" defer></script></head>`);
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
@@ -95,8 +98,8 @@ export async function Admin(Context) {
 				(SELECT count(*)::int FROM videos v WHERE v.author_id = u.id) AS videos, (SELECT count(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
 				(SELECT count(*)::int FROM moderation_decisions x WHERE x.owner_id = u.id AND x.reversed_at IS NULL AND x.account_action IN ('strike', 'ban')) AS violations
 				FROM users u WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' ESCAPE '\\' OR u.display_name ILIKE '%' || $1 || '%' ESCAPE '\\' OR u.id::text = $1
-					OR ($3 AND EXISTS (SELECT 1 FROM user_events e WHERE e.user_id = u.id AND host(e.ip) = $4)))
-				AND ($2::bigint IS NULL OR u.id < $2) ORDER BY u.id DESC LIMIT 50`, [Like, Before(Params.get('before')), IsIp, Query])).rows;
+					OR ($3 AND EXISTS (SELECT 1 FROM user_events e WHERE e.user_id = u.id AND e.ip_hash = $4)))
+				AND ($2::bigint IS NULL OR u.id < $2) ORDER BY u.id DESC LIMIT 50`, [Like, Before(Params.get('before')), IsIp && Boolean(HashIp(Query)), HashIp(Query) ?? ''])).rows;
 			Json(Response, { users: Rows.map(Row => ({ ...Row, avatar: AvatarUrl(Row, Config.Origin), self: Row.id === User.id })), hasMore: Rows.length === 50 }); return true;
 		}
 		const UserMatch = Route.match(/^users\/(\d+)$/);
@@ -105,14 +108,14 @@ export async function Admin(Context) {
 			const Profile = (await Pool.query('SELECT id, username, display_name, bio, role, verified, pride_flag, user_badges, avatar_name, created_at, suspended_at, deactivated_at, delete_after, notices_read_at FROM users WHERE id = $1', [Target])).rows[0];
 			if (!Profile) throw new HttpError(404, 'UserNotFound');
 			const [Events, Sessions, Videos, Comments, Violations, Related, Seen, Against, Filed] = await Promise.all([
-				Pool.query('SELECT id, kind, host(ip) AS ip, country, language, user_agent, detail, created_at FROM user_events WHERE user_id = $1 ORDER BY id DESC LIMIT 100', [Target]),
-				Pool.query('SELECT token_hash, host(ip) AS ip, country, user_agent, created_at, last_seen_at, expires_at FROM sessions WHERE user_id = $1 AND expires_at > now() ORDER BY last_seen_at DESC', [Target]),
+				Pool.query(`SELECT id, kind, ${IpState} AS ip, country, language, user_agent, detail, created_at FROM user_events WHERE user_id = $1 ORDER BY id DESC LIMIT 100`, [Target]),
+				Pool.query(`SELECT token_hash, ${IpState} AS ip, country, user_agent, created_at, last_seen_at, expires_at FROM sessions WHERE user_id = $1 AND expires_at > now() ORDER BY last_seen_at DESC`, [Target]),
 				Pool.query(`SELECT v.id, v.description, v.cover_name, v.created_at, v.view_count::int AS views, (SELECT count(*)::int FROM likes l WHERE l.video_id = v.id) AS likes, (SELECT count(*)::int FROM comments c WHERE c.video_id = v.id) AS comments FROM videos v WHERE v.author_id = $1 ORDER BY v.id DESC LIMIT 60`, [Target]),
 				Pool.query(`SELECT c.id, c.body, c.created_at, c.video_id, c.parent_id, a.username AS video_author FROM comments c JOIN videos v ON v.id = c.video_id JOIN users a ON a.id = v.author_id WHERE c.author_id = $1 ORDER BY c.id DESC LIMIT 50`, [Target]),
 				Pool.query(`SELECT d.*, d.owner_id AS user_id, d.reversed_at AS revoked_at, CASE WHEN d.target_type = 'video' THEN d.target_id END AS video_id, CASE WHEN d.target_type = 'comment' THEN d.target_id END AS comment_id, u.username AS admin FROM moderation_decisions d LEFT JOIN users u ON u.id = d.moderator_id WHERE d.owner_id = $1 ORDER BY d.id DESC`, [Target]),
-				Pool.query(`SELECT u.id, u.username, u.display_name, u.avatar_name, u.suspended_at, array_agg(DISTINCT host(o.ip)) AS ips FROM user_events mine JOIN user_events o ON o.ip = mine.ip AND o.user_id <> mine.user_id JOIN users u ON u.id = o.user_id
-					WHERE mine.user_id = $1 AND mine.ip IS NOT NULL GROUP BY u.id ORDER BY u.id DESC LIMIT 20`, [Target]),
-				Pool.query(`SELECT array_remove(array_agg(DISTINCT country), NULL) AS countries, array_remove(array_agg(DISTINCT language), NULL) AS languages, count(DISTINCT ip)::int AS ips FROM user_events WHERE user_id = $1`, [Target]),
+				Pool.query(`SELECT u.id, u.username, u.display_name, u.avatar_name, u.suspended_at, count(DISTINCT o.ip_hash)::int AS shared FROM user_events mine JOIN user_events o ON o.ip_hash = mine.ip_hash AND o.user_id <> mine.user_id JOIN users u ON u.id = o.user_id
+					WHERE mine.user_id = $1 AND mine.ip_hash IS NOT NULL GROUP BY u.id ORDER BY u.id DESC LIMIT 20`, [Target]),
+				Pool.query(`SELECT array_remove(array_agg(DISTINCT country), NULL) AS countries, array_remove(array_agg(DISTINCT language), NULL) AS languages, count(DISTINCT ip_hash)::int AS ips FROM user_events WHERE user_id = $1`, [Target]),
 				Pool.query(`${ReportSql} WHERE r.owner_id = $1 ORDER BY r.id DESC LIMIT 50`, [Target]),
 				Pool.query(`${ReportSql} WHERE r.reporter_id = $1 ORDER BY r.id DESC LIMIT 50`, [Target]),
 			]);
@@ -277,6 +280,24 @@ export async function Admin(Context) {
 		const Saved = await SaveSetting(Pool, Config, SettingMatch[1], Body.value);
 		await Audit(Pool, User, `settings.${SettingMatch[1]}`, SettingMatch[1], typeof Saved === 'string' ? Saved.slice(0, 120) : JSON.stringify(Saved).slice(0, 200));
 		Json(Response, Settings(Config)); return true;
+	}
+	const Reveal = Route.match(/^users\/(\d+)\/ips$/);
+	if (Reveal) {
+		const Target = Id(Reveal[1]);
+		const Account = (await Pool.query('SELECT username FROM users WHERE id = $1', [Target])).rows[0];
+		if (!Account) throw new HttpError(404, 'UserNotFound');
+		const Record = await InstanceKey(Pool);
+		if (!Record) throw new HttpError(409, 'NoSecurityKey');
+		Reveals.Hit(User.id, 5, 10 * 60000);
+		const Private = Unlock(Record, String(Body.key ?? ''));
+		if (!Private) { await Audit(Pool, User, 'ips.denied', `@${Account.username}`); throw new HttpError(403, 'WrongSecurityKey'); }
+		const [Events, Sessions] = await Promise.all([
+			Pool.query('SELECT id, ip_sealed FROM user_events WHERE user_id = $1 AND ip_sealed IS NOT NULL ORDER BY id DESC LIMIT 100', [Target]),
+			Pool.query('SELECT left(token_hash, 16) AS id, ip_sealed FROM sessions WHERE user_id = $1 AND ip_sealed IS NOT NULL AND expires_at > now()', [Target]),
+		]);
+		await Audit(Pool, User, 'ips.reveal', `@${Account.username}`);
+		const Map = Rows => Object.fromEntries(Rows.map(Row => [Row.id, Open(Private, Row.ip_sealed)]).filter(Pair => Pair[1]));
+		Json(Response, { events: Map(Events.rows), sessions: Map(Sessions.rows) }); return true;
 	}
 	const Verification = Route.match(/^users\/(\d+)\/verification$/);
 	if (Verification) {

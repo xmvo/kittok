@@ -1,0 +1,11 @@
+ALTER TABLE users ADD COLUMN ip_consent boolean;
+ALTER TABLE user_events ADD COLUMN ip_hash text, ADD COLUMN ip_sealed bytea;
+ALTER TABLE sessions ADD COLUMN ip_hash text, ADD COLUMN ip_sealed bytea;
+UPDATE user_events SET ip_hash = encode(sha256(convert_to(current_setting('kittok.ip_hash_key') || host(ip), 'UTF8')), 'hex'), ip = NULL WHERE ip IS NOT NULL;
+UPDATE sessions SET ip_hash = encode(sha256(convert_to(current_setting('kittok.ip_hash_key') || host(ip), 'UTF8')), 'hex'), ip = NULL WHERE ip IS NOT NULL;
+DROP INDEX IF EXISTS user_events_ip;
+DROP INDEX IF EXISTS user_events_age;
+ALTER TABLE user_events DROP COLUMN ip;
+ALTER TABLE sessions DROP COLUMN ip;
+CREATE INDEX user_events_ip_hash ON user_events(ip_hash) WHERE ip_hash IS NOT NULL;
+CREATE INDEX user_events_age ON user_events(created_at) WHERE ip_hash IS NOT NULL;

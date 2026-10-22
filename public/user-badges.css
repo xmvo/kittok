@@ -18,3 +18,4 @@
 .KittokGroupEmpty{color:var(--ui-text-2,#aaa);font-size:14px}.KittokBadgeButtons .KittokGroupLeave{margin-inline-end:auto;background:transparent;color:#FE2C55}
 @media (max-width:600px){.KittokGroupDialog .KittokBadgeButtons{flex-wrap:wrap}}
 .KittokDownloadRow{display:flex;padding:0 12px;margin-bottom:.25rem}.KittokDownloadRow>*{flex:none;width:88px}
+.KittokIpDialog p{color:var(--ui-text-1,#fff)}.KittokIpDialog .KittokIpStatus{color:#FE2C55;margin:0}.KittokIpDialog .KittokIpStatus:empty{display:none}.KittokIpDialog .KittokBadgeButtons button{flex:1}

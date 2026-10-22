@@ -10,7 +10,7 @@ let Created = false;
 try {
 	await Admin.query(`CREATE DATABASE ${Name}`); Created = true;
 	const Child = spawn(process.execPath, ['--test', 'test/compatibility.test.mjs'], {
-		stdio: 'inherit', env: { ...process.env, DATABASE_URL: TestUrl.href, KITTOK_TEST_DATABASE: Name, PUBLIC_ORIGIN: 'http://127.0.0.1:13210', PORT: '13210', HOST: '127.0.0.1', REGISTRATION_MODE: 'invite' },
+		stdio: 'inherit', env: { ...process.env, DATABASE_URL: TestUrl.href, KITTOK_TEST_DATABASE: Name, IP_HASH_KEY: randomBytes(16).toString('hex'), PUBLIC_ORIGIN: 'http://127.0.0.1:13210', PORT: '13210', HOST: '127.0.0.1', REGISTRATION_MODE: 'invite' },
 	});
 	const Code = await new Promise((Resolve, Reject) => { Child.once('error', Reject); Child.once('exit', Resolve); });
 	process.exitCode = Code ?? 1;

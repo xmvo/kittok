@@ -60,7 +60,7 @@ export async function ExportFiles(Pool, Config, Export) {
 		const [Likes, Favorites, Reposts, Following, Followers, Collections, Logins] = await Promise.all([Saved('likes'), Saved('favorites'), Saved('reposts'), People('follower_id', 'following_id'), People('following_id', 'follower_id'),
 			Query(`SELECT c.name, c.public, c.created_at, coalesce((SELECT json_agg(json_build_object('video_id', v.id::text, 'username', a.username) ORDER BY i.added_at DESC)
 				FROM collection_items i JOIN videos v ON v.id = i.video_id JOIN users a ON a.id = v.author_id WHERE i.collection_id = c.id), '[]') AS videos FROM collections c WHERE c.user_id = $1 ORDER BY c.id DESC`),
-			Query("SELECT created_at, host(ip) AS ip, country, user_agent FROM user_events WHERE user_id = $1 AND kind = 'login' ORDER BY id DESC")]);
+			Query("SELECT created_at, country, user_agent FROM user_events WHERE user_id = $1 AND kind = 'login' ORDER BY id DESC")]);
 		Data.Activity = {
 			'Like List': { ItemFavoriteList: Likes.map(Dated) },
 			'Favorite Videos': { FavoriteVideoList: Favorites.map(Dated) },
@@ -68,7 +68,7 @@ export async function ExportFiles(Pool, Config, Export) {
 			'Repost List': { RepostList: Reposts.map(Dated) },
 			'Following List': { Following: Following.map(Person) },
 			'Follower List': { FansList: Followers.map(Person) },
-			'Login History': { LoginHistoryList: Logins.map(Row => ({ Date: Stamp(Row.created_at), IP: Row.ip ?? '', Country: Row.country ?? '', Device: Row.user_agent ?? '' })) },
+			'Login History': { LoginHistoryList: Logins.map(Row => ({ Date: Stamp(Row.created_at), IP: '', Country: Row.country ?? '', Device: Row.user_agent ?? '' })) },
 		};
 	}
 	if (Export.sections.includes('comment')) {

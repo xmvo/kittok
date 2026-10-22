@@ -7,6 +7,7 @@ import { DownloadCopy, ImportVideo, ReceiveVideo, ServeMedia, WarmDownloads } fr
 import { AssertAllowed, RemovedSql } from '../moderation.mjs';
 import { BadgeCatalog, BadgeSvg, PrideFlag, PublicBadges } from '../badges.mjs';
 import { AvatarDecoration, DecorationCatalog, DecorationImage, Nameplate, NameplateCatalog, NameplateFile, NameStyle, PublicDecoration, PublicNameplate, PublicNameStyle } from '../decorations.mjs';
+import { SetIpConsent } from '../ips.mjs';
 import { Misc } from '../settings.mjs';
 import { Category } from '../categories.mjs';
 import { UnsendMessage } from './im.mjs';
@@ -65,6 +66,10 @@ export async function Api(Context) {
 		const Rows = (await Pool.query(`SELECT c.conversation_key, u.username FROM conversation_members me JOIN conversations c ON c.id = me.conversation_id AND c.conversation_type = 1
 			JOIN conversation_members o ON o.conversation_id = me.conversation_id AND o.user_id <> me.user_id JOIN users u ON u.id = o.user_id WHERE me.user_id = $1 AND u.suspended_at IS NULL LIMIT 1000`, [User.id])).rows;
 		Json(Response, { partners: Object.fromEntries(Rows.map(Row => [Row.conversation_key, Row.username])) }); return true;
+	}
+	if (Path === '/api/v1/profile/ip-consent') {
+		RequireMethod(Request, ['PATCH']); RequireCsrf(Request, User);
+		Json(Response, { allow: await SetIpConsent(Pool, User.id, (await ReadBody(Request)).allow) }); return true;
 	}
 	if (Path === '/api/v1/profile/name-style' || Path === '/api/v1/profile/nameplate') {
 		RequireMethod(Request, ['PATCH']); RequireCsrf(Request, User);

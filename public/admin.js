@@ -24,6 +24,7 @@
 		copyright: ['Reuploaded content they do not own'], other: ['Violates the instance rules'],
 	};
 	const Errors = {
+		WrongSecurityKey: 'That isn’t the security key.', NoSecurityKey: 'Set up a security key on the server first.',
 		CannotModerateAdmin: 'Admins and your own account can’t be moderated here.', CannotChangeYourself: 'You can’t do that to your own account.', InvalidCsrf: 'Your session changed. Refresh and try again.',
 		InvalidReason: 'Write a reason, up to 1,000 characters.', InvalidDecision: 'That combination of actions isn’t allowed for this content.', InvalidRestriction: 'Pick each feature once with a listed duration.',
 		ReportAlreadyReviewed: 'Someone already reviewed this ticket.', AppealAlreadyReviewed: 'Someone already reviewed this appeal.', DecisionNotFound: 'That decision was already reversed.',
@@ -582,6 +583,8 @@
 		if (!Query) Field.focus();
 	}
 
+	let IpKey = '';
+	const Unlocked = new Map();
 	async function AccountPage(UserId, Params) {
 		const Data = await Api(`users/${UserId}`);
 		const U = Data.user;
@@ -589,6 +592,21 @@
 		SetTitle([['Accounts', '/admin/accounts'], `@${U.username}`]);
 		const Refresh = () => Navigate(location.pathname + location.search, true);
 		const Owner = { id: U.id, username: U.username, standing: Data.standing };
+		const Opened = Unlocked.get(U.id);
+		const Reveal = async Key => { Unlocked.set(U.id, await Api(`users/${U.id}/ips`, { key: Key })); IpKey = Key; Refresh(); };
+		const AskKey = () => {
+			const Input = El('input', { class: 'Input Mono', type: 'password', autocomplete: 'off', spellcheck: 'false', placeholder: 'Security key', 'aria-label': 'Security key' });
+			Modal({ Title: 'Show IPs', Confirm: 'Show', Body: [El('p', { class: 'Muted', style: 'margin:0 0 10px' }, 'Enter the instance security key. Only people who allowed it have an IP to show.'), Input], OnConfirm: () => Reveal(Input.value) });
+			setTimeout(() => Input.focus(), 0);
+		};
+		const IpButton = !Boot.ipKey ? Btn('Show IPs', null, 'Small', { disabled: true, title: 'Set up a security key on the server with npm run ip-key' })
+			: Opened ? null : Btn('Show IPs', () => IpKey ? Reveal(IpKey).catch(() => { IpKey = ''; AskKey(); }) : AskKey(), 'Small');
+		const IpCell = (Kind, Row) => {
+			if (!Row?.ip) return El('span', { class: 'Faint' }, 'Unknown');
+			if (Row.ip === 'hidden') return El('span', { class: 'Faint', title: 'Not shared: they chose not to, or it was recorded before they were asked' }, 'Hidden');
+			const Shown = Opened?.[Kind]?.[Row.id];
+			return El('button', { type: 'button', class: 'Mono IpBlur', disabled: !Shown, title: Shown ? 'Click to show' : 'Locked', onclick: Event => Event.currentTarget.classList.toggle('Shown') }, Shown ?? '000.000.000.000');
+		};
 		const Actions = U.self ? [] : [
 			U.role !== 'admin' && !U.deactivated_at && (U.suspended_at ? Btn('Unban', () => AskReason({ Title: `Unban @${U.username}?`, Text: 'Reverses every active ban on the account.', Confirm: 'Unban', OnConfirm: async Reason => { await Api(`users/${U.id}/unsuspend`, { reason: Reason }); Toast('Account unbanned'); Refresh(); } }))
 				: Btn('Ban', () => AskReason({ Title: `Ban @${U.username}?`, Text: 'Permanent until reversed or appealed. Signs the account out everywhere and hides its content.', Confirm: 'Ban', Danger: true, OnConfirm: async Reason => { await Api(`users/${U.id}/suspend`, { reason: Reason }); Toast('Account banned'); Refresh(); } }), 'Danger')),
@@ -616,15 +634,15 @@
 					El('td', {}, Chip(Report.status, Report.status === 'open' ? 'Brand' : '')), El('td', { class: 'Faint Num' }, Ago(Report.created_at)))))) : El('div', { class: 'PanelBody Faint' }, 'None.')))),
 			security: () => El('div', { class: 'Columns' },
 				El('div', { class: 'Stack' },
-					El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Sign-up'), El('div', { class: 'PanelBody' }, El('dl', { class: 'Kv', style: 'margin:0' },
-						El('dt', {}, 'Joined'), El('dd', {}, When(U.created_at)), El('dt', {}, 'Sign-up IP'), El('dd', { class: 'Mono' }, Data.signup?.ip ?? 'Unknown'), El('dt', {}, 'Countries'), El('dd', {}, Data.seen.countries.join(', ') || 'Unknown'),
+					El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Sign-up', El('span', { class: 'Grow' }), IpButton), El('div', { class: 'PanelBody' }, El('dl', { class: 'Kv', style: 'margin:0' },
+						El('dt', {}, 'Joined'), El('dd', {}, When(U.created_at)), El('dt', {}, 'Sign-up IP'), El('dd', {}, IpCell('events', Data.signup)), El('dt', {}, 'Countries'), El('dd', {}, Data.seen.countries.join(', ') || 'Unknown'),
 						El('dt', {}, 'Languages'), El('dd', {}, Data.seen.languages.join(', ') || 'Unknown'), El('dt', {}, 'Distinct IPs'), El('dd', { class: 'Num' }, Data.seen.ips)))),
 					El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Active sessions', El('span', { class: 'Grow' }), !U.self && Data.sessions.length ? Btn('Sign out everywhere', () => Modal({ Title: 'Sign out every session?', Body: El('p', { class: 'Muted', style: 'margin:0' }, 'Every device has to sign in again.'), Danger: true, Confirm: 'Sign out', OnConfirm: async () => { await Api(`users/${U.id}/sessions/revoke`, { session: 'all' }); Toast('Signed out everywhere'); Refresh(); } }), 'Small') : null),
-						Data.sessions.length ? El('table', { class: 'Table' }, El('tbody', {}, Data.sessions.map(Session => El('tr', { style: 'cursor:default' }, El('td', {}, El('div', { class: 'Mono' }, Session.ip ?? 'Unknown'), El('div', { class: 'Faint Clip', style: 'max-width:260px;font-size:11px' }, Session.user_agent ?? '')),
+						Data.sessions.length ? El('table', { class: 'Table' }, El('tbody', {}, Data.sessions.map(Session => El('tr', { style: 'cursor:default' }, El('td', {}, El('div', {}, IpCell('sessions', Session)), El('div', { class: 'Faint Clip', style: 'max-width:260px;font-size:11px' }, Session.user_agent ?? '')),
 							El('td', { class: 'Faint Num' }, `Seen ${Ago(Session.last_seen_at)}`), El('td', {}, !U.self && Btn('Revoke', async () => { try { await Api(`users/${U.id}/sessions/revoke`, { session: Session.id }); Toast('Session revoked'); Refresh(); } catch (Error) { Fail(Error); } }, 'Small Ghost')))))) : El('div', { class: 'PanelBody Faint' }, 'No active sessions.')),
-					El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Accounts sharing an IP', El('span', { class: 'Faint' }, Data.related.length)), Data.related.length ? El('table', { class: 'Table' }, El('tbody', {}, Data.related.map(Row => El('tr', { onclick: () => Navigate(`/admin/accounts/${Row.id}`) }, El('td', {}, El('div', { class: 'Row' }, El('img', { class: 'Avatar', src: Row.avatar, alt: '' }), `@${Row.username}`)), El('td', { class: 'Mono Faint' }, Row.ips.join(', ')), El('td', {}, Row.suspended_at ? Chip('Banned', 'Bad') : null))))) : El('div', { class: 'PanelBody Faint' }, 'None.'))),
+					El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Accounts sharing an IP', El('span', { class: 'Faint' }, Data.related.length)), Data.related.length ? El('table', { class: 'Table' }, El('tbody', {}, Data.related.map(Row => El('tr', { onclick: () => Navigate(`/admin/accounts/${Row.id}`) }, El('td', {}, El('div', { class: 'Row' }, El('img', { class: 'Avatar', src: Row.avatar, alt: '' }), `@${Row.username}`)), El('td', { class: 'Faint' }, `${Row.shared} shared IP${Row.shared === 1 ? '' : 's'}`), El('td', {}, Row.suspended_at ? Chip('Banned', 'Bad') : null))))) : El('div', { class: 'PanelBody Faint' }, 'None.'))),
 				El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Activity'), El('table', { class: 'Table' }, El('tbody', {}, Data.events.map(Event => El('tr', { style: 'cursor:default' }, El('td', {}, { signup: 'Signed up', password_reset: 'Reset password by email', login: 'Signed in', login_failed: 'Failed sign-in', username_change: 'Changed username', profile_change: 'Edited profile', deactivated: 'Deactivated account', reactivated: 'Reactivated account', data_requested: 'Requested their data', data_downloaded: 'Downloaded their data' }[Event.kind] ?? Event.kind, Event.detail && El('div', { class: 'Faint', style: 'font-size:11px' }, Event.detail)),
-					El('td', { class: 'Mono Faint' }, Event.ip ?? ''), El('td', { class: 'Faint' }, Event.country ?? ''), El('td', { class: 'Faint Num', title: When(Event.created_at) }, Ago(Event.created_at)))))))),
+					El('td', { class: 'Faint' }, Event.ip ? IpCell('events', Event) : ''), El('td', { class: 'Faint' }, Event.country ?? ''), El('td', { class: 'Faint Num', title: When(Event.created_at) }, Ago(Event.created_at)))))))),
 		};
 		Fill(Body, El('div', { class: 'Page Stack' },
 			El('div', { class: 'Panel Profile' }, El('img', { class: 'Avatar Large', src: U.avatar, alt: '' }),

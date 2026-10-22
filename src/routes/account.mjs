@@ -5,6 +5,7 @@ import { Standing, Appeal, RestrictableFeatures, ViolationFeatures, Until, Asser
 import { BadgeCatalog, PrideFlag, PublicBadges } from '../badges.mjs';
 import { Misc } from '../settings.mjs';
 import { Public } from '../client/shell.mjs';
+import { SetIpConsent } from '../ips.mjs';
 
 export function Page(Config, Title, Content) {
 	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${Escape(Title)} · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="${Public('account.css')}"><body><main><a class="brand" href="/"><img src="/brand/icon" alt="">${Escape(Config.Name)}</a>${Content}</main></body></html>`;
@@ -39,6 +40,11 @@ async function AccountStatus(Pool, Config, User) {
 	return `<h2>Account status</h2><p class="standing ${Status.state}"><strong>${Title}</strong> ${Escape(Summary)}</p>${Restrictions ? `<ul class="status">${Restrictions}</ul>` : ''}${Limits.length ? `<ul class="status">${Limits.map(([Name, Count, Max]) => `<li>${Escape(Name)}: ${Count} of ${Max} strikes</li>`).join('')}</ul>` : ''}${History ? `<details><summary>Violations (${Status.decisions.length})</summary><ul class="status">${History}</ul></details>` : ''}`;
 }
 
+function IpForm(User) {
+	const Allowed = User.ip_consent === true;
+	return `<section id="ip"><h2>IP address</h2><form action="/account/ip" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><label>Plaintext IP<select name="allow"><option value="1"${Allowed ? ' selected' : ''}>I don't mind</option><option value="0"${Allowed ? '' : ' selected'}>I mind</option></select></label><p class="field-help">Admins can still see accounts that share your IP.</p><button class="secondary">Save</button></form></section>`;
+}
+
 async function MessageForm(Pool, Config, User) {
 	if (Config.Features?.messages === false) return '';
 	const Settings = await DmSettings(Pool, User.id);
@@ -60,6 +66,15 @@ export async function Account(Context) {
 		RequireCsrf(Request, User, Body.csrf);
 		await Appeal(Pool, User, Body.decision, Body.reason);
 		Response.writeHead(303, { location: '/account' }); Response.end(); return true;
+	}
+	if (Url.pathname === '/account/ip') {
+		RequireMethod(Request, ['POST']);
+		const Body = await ReadBody(Request);
+		RequireCsrf(Request, User, Body.csrf);
+		if (!['0', '1'].includes(String(Body.allow))) throw new HttpError(400, 'InvalidIpConsent');
+		await SetIpConsent(Pool, User.id, String(Body.allow) === '1');
+		Response.setHeader('set-cookie', `kittok_ip_consent=${Body.allow}; Path=/; Max-Age=31536000; SameSite=Lax${Config.SecureCookies ? '; Secure' : ''}`);
+		Response.writeHead(303, { location: '/account#ip' }); Response.end(); return true;
 	}
 	if (Url.pathname === '/account/messages') {
 		RequireMethod(Request, ['POST']);
@@ -103,7 +118,7 @@ export async function Account(Context) {
 	let Content = Url.searchParams.get('badges') === 'saved' ? '<p role="status">Pride flag saved.</p>' : '';
 	Content += Notice ? `<p class="error" role="alert">${Escape(Notice)}</p>` : '';
 	if (User) {
-		Content += `<h1>Hey, ${Escape(User.display_name)}.</h1><p>@${Escape(User.username)} · ${Escape(User.role)}</p><a class="button" href="/">Watch videos</a>${User.role === 'admin' ? '<a class="button secondary" href="/admin">Admin panel</a>' : ''}<p>${Config.Features?.upload === false ? '' : '<a href="/upload">Upload video</a> · '}<a href="/account/posts">Manage posts</a> · <a href="/account/privacy">Privacy settings</a> · <a href="/account/requests">Follow requests</a></p>${BadgeForm(User)}${await AccountStatus(Pool, Config, User)}${await MessageForm(Pool, Config, User)}<form action="/account/logout" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><button class="secondary">Log out</button></form>`;
+		Content += `<h1>Hey, ${Escape(User.display_name)}.</h1><p>@${Escape(User.username)} · ${Escape(User.role)}</p><a class="button" href="/">Watch videos</a>${User.role === 'admin' ? '<a class="button secondary" href="/admin">Admin panel</a>' : ''}<p>${Config.Features?.upload === false ? '' : '<a href="/upload">Upload video</a> · '}<a href="/account/posts">Manage posts</a> · <a href="/account/privacy">Privacy settings</a> · <a href="/account/requests">Follow requests</a></p>${BadgeForm(User)}${await AccountStatus(Pool, Config, User)}${await MessageForm(Pool, Config, User)}${IpForm(User)}<form action="/account/logout" method="post"><input type="hidden" name="csrf" value="${Escape(User.csrf_token)}"><button class="secondary">Log out</button></form>`;
 	} else {
 		Content += `<h1>Create your account.</h1><p>Join ${Escape(Config.Name)}.</p>`;
 		if (Config.Registration !== 'closed') Content += `<form action="/account/register" method="post"><label>Username<input name="username" required pattern="[a-z0-9_]{3,24}" autocomplete="username"></label><label>Display name<input name="displayName" required maxlength="50"></label><label>Password<input name="password" type="password" required minlength="12" maxlength="256" autocomplete="new-password"></label>${PrideField()}${Config.Registration === 'invite' ? '<label>Invite code<input name="invite" required></label>' : ''}${Config.Rules ? '<p>By signing up you agree to the <a href="/rules">rules</a>.</p>' : ''}<button>Sign up</button></form>`;

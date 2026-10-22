@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Root } from './client/archive.mjs';
+import { IpHashKey } from './ips.mjs';
 
 export function Database(Url) {
 	const Pool = new pg.Pool({ connectionString: Url, max: 10, connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000 });
@@ -26,6 +27,7 @@ export async function Transaction(Pool, Work) {
 export async function Migrate(Pool) {
 	return Transaction(Pool, async Client => {
 		await Client.query('SELECT pg_advisory_xact_lock(741950192)');
+		await Client.query("SELECT set_config('kittok.ip_hash_key', $1, true)", [IpHashKey()]);
 		await Client.query('CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, checksum text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())');
 		for (const Name of (await readdir(join(Root, 'migrations'))).filter(Name => /^\d+.*\.sql$/.test(Name)).sort()) {
 			const Sql = await readFile(join(Root, 'migrations', Name), 'utf8');

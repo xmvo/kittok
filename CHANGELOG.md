@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- IP addresses are no longer stored in plaintext: they're kept as keyed hashes for matching alt accounts, and sealed to an owner-made security key only for people who say they don't mind. Admins see IPs blurred and only after entering the key, and alts without the IP. Everyone is asked once, and can change it under IP address in their account.
 - The @mention picker in comments lists the people you follow and searches by name, instead of a server error toast when a video opens. Nameplates also show on comments in the video popup.
 - Discord display name styles and nameplates: pick a font, an effect (Solid, Gradient, Neon, Toon, Pop, Gummy or Prism) and colors from presets or a hue slider in Edit profile, and a nameplate that shows behind your comments and in other people's messages list.
 - Stories: share a video to your story from the upload page and it shows in the stories tray for 24 hours, with TikTok's rings, player, and list of who watched.

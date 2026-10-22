@@ -4,6 +4,7 @@ import { isIP } from 'node:net';
 import { Transaction } from './db.mjs';
 import { HttpError } from './http.mjs';
 import { PrideFlag } from './badges.mjs';
+import { ConsentCookie, IpFields } from './ips.mjs';
 
 const Derive = promisify(Scrypt);
 const Options = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
@@ -33,11 +34,13 @@ export function ClientInfo(Request, Config) {
 		country: /^[A-Z]{2}$/.test(Country) && Country !== 'XX' ? Country : null,
 		language: /^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(Language) ? Language : null,
 		userAgent: String(Request.headers['user-agent'] ?? '').slice(0, 400) || null,
+		ipConsent: ConsentCookie(Request),
 	};
 }
 
 export async function RecordEvent(Pool, UserId, Kind, Info = {}, Detail = '') {
-	await Pool.query('INSERT INTO user_events(user_id, kind, ip, country, language, user_agent, detail) VALUES ($1, $2, $3, $4, $5, $6, $7)', [UserId, Kind, Info.ip ?? null, Info.country ?? null, Info.language ?? null, Info.userAgent ?? null, Detail.slice(0, 500)]);
+	const [IpHash, IpSealed] = await IpFields(Pool, UserId, Info);
+	await Pool.query('INSERT INTO user_events(user_id, kind, ip_hash, ip_sealed, country, language, user_agent, detail) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)', [UserId, Kind, IpHash, IpSealed, Info.country ?? null, Info.language ?? null, Info.userAgent ?? null, Detail.slice(0, 500)]);
 }
 
 export async function CreateUser(Pool, { username, displayName, password, role = 'member', invite, prideFlag = '', email = null }, Registration = 'closed', Operator = false, Info = {}) {
@@ -86,7 +89,8 @@ export async function Login(Pool, Username, Password, Info = {}) {
 	}
 	const SessionToken = Token();
 	const Csrf = Token();
-	await Pool.query("INSERT INTO sessions(token_hash, user_id, csrf_token, expires_at, ip, country, user_agent) VALUES ($1, $2, $3, now() + interval '30 days', $4, $5, $6)", [Hash(SessionToken), User.id, Csrf, Info.ip ?? null, Info.country ?? null, Info.userAgent ?? null]);
+	const [IpHash, IpSealed] = await IpFields(Pool, User.id, Info);
+	await Pool.query("INSERT INTO sessions(token_hash, user_id, csrf_token, expires_at, ip_hash, ip_sealed, country, user_agent) VALUES ($1, $2, $3, now() + interval '30 days', $4, $5, $6, $7)", [Hash(SessionToken), User.id, Csrf, IpHash, IpSealed, Info.country ?? null, Info.userAgent ?? null]);
 	await RecordEvent(Pool, User.id, 'login', Info);
 	return { Token: SessionToken, Csrf, User };
 }
@@ -94,7 +98,7 @@ export async function Login(Pool, Username, Password, Info = {}) {
 export async function Viewer(Pool, Request) {
 	const Cookie = Request.headers.cookie?.split(';').map(Value => Value.trim()).find(Value => Value.startsWith('kittok_session='))?.slice('kittok_session='.length);
 	if (!Cookie || !/^[a-f0-9]{64}$/.test(Cookie)) return null;
-	const Result = await Pool.query("SELECT u.id, u.username, u.display_name, u.bio, u.role, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, u.comment_permission, u.allow_downloads, s.csrf_token, s.token_hash, s.last_seen_at < now() - interval '5 minutes' AS stale FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now() AND u.suspended_at IS NULL", [Hash(Cookie)]);
+	const Result = await Pool.query("SELECT u.id, u.username, u.display_name, u.bio, u.role, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, u.comment_permission, u.allow_downloads, u.ip_consent, s.csrf_token, s.token_hash, s.last_seen_at < now() - interval '5 minutes' AS stale FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.expires_at > now() AND u.suspended_at IS NULL", [Hash(Cookie)]);
 	const User = Result.rows[0];
 	if (User?.stale) Pool.query('UPDATE sessions SET last_seen_at = now() WHERE token_hash = $1', [User.token_hash]).catch(() => {});
 	return User ?? null;
