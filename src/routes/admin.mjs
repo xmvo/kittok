@@ -105,7 +105,7 @@ export async function Admin(Context) {
 		const UserMatch = Route.match(/^users\/(\d+)$/);
 		if (UserMatch) {
 			const Target = Id(UserMatch[1]);
-			const Profile = (await Pool.query('SELECT id, username, display_name, bio, role, verified, pride_flag, user_badges, avatar_name, created_at, suspended_at, deactivated_at, delete_after, notices_read_at FROM users WHERE id = $1', [Target])).rows[0];
+			const Profile = (await Pool.query('SELECT id, username, display_name, bio, role, verified, pride_flag, user_badges, avatar_name, created_at, suspended_at, deactivated_at, delete_after, notices_read_at, ip_consent FROM users WHERE id = $1', [Target])).rows[0];
 			if (!Profile) throw new HttpError(404, 'UserNotFound');
 			const [Events, Sessions, Videos, Comments, Violations, Related, Seen, Against, Filed] = await Promise.all([
 				Pool.query(`SELECT id, kind, ${IpState} AS ip, country, language, user_agent, detail, created_at FROM user_events WHERE user_id = $1 ORDER BY id DESC LIMIT 100`, [Target]),
@@ -284,8 +284,9 @@ export async function Admin(Context) {
 	const Reveal = Route.match(/^users\/(\d+)\/ips$/);
 	if (Reveal) {
 		const Target = Id(Reveal[1]);
-		const Account = (await Pool.query('SELECT username FROM users WHERE id = $1', [Target])).rows[0];
+		const Account = (await Pool.query('SELECT username, ip_consent FROM users WHERE id = $1', [Target])).rows[0];
 		if (!Account) throw new HttpError(404, 'UserNotFound');
+		if (Account.ip_consent !== true) throw new HttpError(403, 'OptedOut');
 		const Record = await InstanceKey(Pool);
 		if (!Record) throw new HttpError(409, 'NoSecurityKey');
 		Reveals.Hit(User.id, 5, 10 * 60000);

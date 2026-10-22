@@ -24,7 +24,7 @@
 		copyright: ['Reuploaded content they do not own'], other: ['Violates the instance rules'],
 	};
 	const Errors = {
-		WrongSecurityKey: 'That isn’t the security key.', NoSecurityKey: 'Set up a security key on the server first.',
+		WrongSecurityKey: 'That isn’t the security key.', NoSecurityKey: 'Set up a security key on the server first.', OptedOut: 'User has opted out from their ip being visible',
 		CannotModerateAdmin: 'Admins and your own account can’t be moderated here.', CannotChangeYourself: 'You can’t do that to your own account.', InvalidCsrf: 'Your session changed. Refresh and try again.',
 		InvalidReason: 'Write a reason, up to 1,000 characters.', InvalidDecision: 'That combination of actions isn’t allowed for this content.', InvalidRestriction: 'Pick each feature once with a listed duration.',
 		ReportAlreadyReviewed: 'Someone already reviewed this ticket.', AppealAlreadyReviewed: 'Someone already reviewed this appeal.', DecisionNotFound: 'That decision was already reversed.',
@@ -599,11 +599,12 @@
 			Modal({ Title: 'Show IPs', Confirm: 'Show', Body: [El('p', { class: 'Muted', style: 'margin:0 0 10px' }, 'Enter the instance security key. Only people who allowed it have an IP to show.'), Input], OnConfirm: () => Reveal(Input.value) });
 			setTimeout(() => Input.focus(), 0);
 		};
-		const IpButton = !Boot.ipKey ? Btn('Show IPs', null, 'Small', { disabled: true, title: 'Set up a security key on the server with npm run ip-key' })
+		const OptedOut = U.ip_consent === false;
+		const IpButton = OptedOut ? null : !Boot.ipKey ? Btn('Show IPs', null, 'Small', { disabled: true, title: 'Set up a security key on the server with npm run ip-key' })
 			: Opened ? null : Btn('Show IPs', () => IpKey ? Reveal(IpKey).catch(() => { IpKey = ''; AskKey(); }) : AskKey(), 'Small');
 		const IpCell = (Kind, Row) => {
 			if (!Row?.ip) return El('span', { class: 'Faint' }, 'Unknown');
-			if (Row.ip === 'hidden') return El('span', { class: 'Faint', title: 'Not shared: they chose not to, or it was recorded before they were asked' }, 'Hidden');
+			if (Row.ip === 'hidden') return El('span', { class: 'Faint' }, OptedOut ? 'User has opted out from their ip being visible' : U.ip_consent === true ? 'Recorded before they allowed it' : U.ip_consent === null ? 'Hasn’t answered yet' : 'Hidden');
 			const Shown = Opened?.[Kind]?.[Row.id];
 			return El('button', { type: 'button', class: 'Mono IpBlur', disabled: !Shown, title: Shown ? 'Click to show' : 'Locked', onclick: Event => Event.currentTarget.classList.toggle('Shown') }, Shown ?? '000.000.000.000');
 		};

@@ -1695,12 +1695,15 @@ test('IPs are stored as hashes, sealed only for people who allow it, and shown t
 	assert.equal((await Admin(`users/${Sharing.Id}/ips`, { key: Secret.slice(1) })).status, 403);
 	const Shown = await (await Admin(`users/${Sharing.Id}/ips`, { key: Secret })).json();
 	assert.equal(Shown.events[Detail.signup.id], '127.0.0.1'); assert.equal(Object.values(Shown.sessions)[0], '127.0.0.1');
-	assert.deepEqual(await (await Admin(`users/${Private.Id}/ips`, { key: Secret })).json(), { events: {}, sessions: {} });
+	assert.equal((await Admin(`users/${Private.Id}/ips`, { key: Secret })).status, 403);
+	assert.equal((await (await Admin(`users/${Private.Id}`)).json()).user.ip_consent, false);
 	assert.ok((await Pool.query("SELECT 1 FROM admin_actions WHERE action = 'ips.reveal' AND target = '@sharing_kitten'")).rowCount);
 	const Csrf = (await (await Call('/api/v1/session', 'GET', undefined, { cookie: Sharing.Cookie })).json()).csrfToken;
 	assert.equal((await Call('/api/v1/profile/ip-consent', 'PATCH', { allow: 'yes' }, { cookie: Sharing.Cookie, 'x-csrf-token': Csrf })).status, 400);
 	assert.equal((await Call('/api/v1/profile/ip-consent', 'PATCH', { allow: false }, { cookie: Sharing.Cookie, 'x-csrf-token': Csrf })).status, 200);
 	assert.ok((await Stored(Sharing.Id)).every(Row => Row.ip_sealed === null && Row.ip_hash));
+	assert.equal((await Admin(`users/${Sharing.Id}/ips`, { key: Secret })).status, 403);
+	await Pool.query('UPDATE users SET ip_consent = true WHERE id = $1', [Sharing.Id]);
 	assert.deepEqual(await (await Admin(`users/${Sharing.Id}/ips`, { key: Secret })).json(), { events: {}, sessions: {} });
 	await Pool.query("DELETE FROM settings WHERE key = 'ipkey'");
 	assert.equal((await Admin(`users/${Sharing.Id}/ips`, { key: Secret })).status, 409);
