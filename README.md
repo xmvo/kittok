@@ -1,85 +1,78 @@
 # Kittok
 
-Kitty tok. Your domain, your community, your videos.
+Kitty tok. Your domain, your people, your videos.
 
-Kittok is a self-hosted backend for the original TikTok desktop web client, inspired by [Xitter](https://github.com/Xittered/xitter). Anyone can download the source and host an independent instance on their own website. Each installation owns its PostgreSQL database, accounts, media, settings, and client cache.
+Kittok is a self-hosted backend for TikTok's own desktop web client. The site looks and works like TikTok, but the accounts, videos and messages all live on your server. Think [Xitter](https://github.com/Xittered/xitter), but for TikTok. Every instance is its own thing, with its own database, accounts, media and settings.
 
-**Status: early development, version 0.1.0.** The hosting foundation, original TikTok username/password login page, local accounts, uploads, and persistent API are implemented. Compatibility with the original client is being added screen by screen. See [current coverage](docs/COMPATIBILITY.md).
+It's early (0.1.0) and there are rough edges, but most of what people actually use works: the feed, uploads, likes, comments, follows, DMs and group chats, stories, private accounts, reports and moderation. [COMPATIBILITY.md](docs/COMPATIBILITY.md) has the full list.
 
-## Host an instance
+## Hosting
 
-Requirements: Docker with Compose, a domain pointed at your server, and an HTTPS reverse proxy. Linux hosting is the documented path.
-
-Extract the source archive, then generate `.env`:
+You need Docker with Compose, a domain, and a reverse proxy that handles HTTPS.
 
 ```sh
 tar -xzf kittok-0.1.0.tar.gz
 cd kittok
-# With Node.js 22+ installed:
 npm run setup
-# Or use Node in Docker instead:
-# docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work node:22-bookworm-slim node scripts/setup.mjs
 ```
 
-Edit `.env`. Set `PUBLIC_ORIGIN=https://your-domain.example` and choose your `INSTANCE_NAME`. The setup command already generated a database password. Leave registration closed until your owner account is ready.
+No Node on the host? This does the same thing:
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work node:22-bookworm-slim node scripts/setup.mjs
+```
+
+Open `.env`, set `PUBLIC_ORIGIN` to your domain and pick an `INSTANCE_NAME`. The database password is already filled in. Leave registration closed until you've made your own account:
 
 ```sh
 docker compose up -d --build
 docker compose exec app node scripts/create-user.mjs yourname --admin
 ```
 
-Point your reverse proxy at `127.0.0.1:3210`; [a Caddy example](deploy/Caddyfile.example) is included. Open your domain and use **Log in** to open the original TikTok login page, backed by this instance’s accounts. Choose **Use phone / email / username**, then **Log in with email or username** and enter your local username. Uploads are available at `/account` after login.
+Point your proxy at `127.0.0.1:3210` (there's a [Caddy example](deploy/Caddyfile.example)). Log in through TikTok's normal login page: **Use phone / email / username**, then **Log in with email or username**.
 
-The first startup downloads the public signed-out feed and login clients into the instance's persistent cache and applies database migrations. The source archive and image contain Kittok's server source; each installation obtains its own client assets.
+On first start Kittok downloads TikTok's web client into its own cache and sets up the database. The client isn't part of this repo; each instance fetches its own copy.
 
-[Full hosting instructions](docs/HOSTING.md) · [API](docs/API.md) · [Architecture](docs/ARCHITECTURE.md) · [Compatibility](docs/COMPATIBILITY.md)
+A few extras you'll probably want, all covered in [HOSTING.md](docs/HOSTING.md):
 
-## Run from source
+- email, for sign-up codes and password resets (in `.env` or the admin panel)
+- an IP security key: `npm run ip-key`
+- Discord's collectibles catalog, for avatar decorations and nameplates (admin panel → Misc)
 
-Requires Node.js 22+, PostgreSQL 18, and ffmpeg/ffprobe with libx264. PostgreSQL 18 is the deployment target tested by this version. There is one npm runtime dependency, `pg`, pinned in the lockfile.
+Other docs: [API](docs/API.md), [architecture](docs/ARCHITECTURE.md), [contributing](CONTRIBUTING.md).
+
+## Running from source
+
+You need Node 22+, PostgreSQL 18 and ffmpeg with libx264. The only npm dependency is `pg`.
 
 ```sh
 npm ci
 npm run setup
-# Create a PostgreSQL database and set DATABASE_URL in .env.
+```
+
+Create a database and put its URL in `.env` as `DATABASE_URL`, then:
+
+```sh
 npm run capture
 npm run migrate
 npm run user:create -- yourname --admin
 npm start
 ```
 
-For a local instance, keep `PUBLIC_ORIGIN=http://127.0.0.1:3210`. An empty instance has no videos. Upload at `/account`, import with `npm run video:import -- yourname /path/to/video.mp4 "Caption"`, or run `npm run demo` to generate a synthetic test video and persist a fictional creator. No real TikTok accounts or videos are imported.
+For local use, keep `PUBLIC_ORIGIN=http://127.0.0.1:3210`. A new instance is empty: upload at `/account`, import a file with `npm run video:import -- yourname video.mp4 "caption"`, or run `npm run demo` for a generated test video.
 
-## Project layout
-
-```text
-src/
-  server.mjs          HTTP routing, lifecycle, and security boundaries
-  config.mjs          Instance configuration
-  db.mjs              PostgreSQL pool and migration runner
-  auth.mjs            Passwords, sessions, registration, invites, CSRF
-  store.mjs           Queries and TikTok response adapters
-  media.mjs           Bounded uploads, transcoding, media streaming
-  client/             Captured-client adaptation and browser bridge
-  routes/             Kittok API, compatibility API, account pages
-migrations/           Ordered, checksummed SQL migrations
-public/               Kittok account UI and kitty mark
-scripts/              Setup, owner tools, capture, tests, source archive
-deploy/               Container startup, health check, reverse proxy example
-docs/                 Hosting, API, architecture, compatibility
-```
-
-Runtime files (`.env`, `client/`, `media/`, `node_modules/`) stay out of the downloadable source. Videos live on disk; relational data lives in PostgreSQL. Each instance has its own origin and host-only session cookies. Cross-instance federation is outside this version's scope.
-
-## Validation and source packages
+## Tests
 
 ```sh
 npm test
-npm run source
 ```
 
-Tests create a temporary PostgreSQL database, exercise the real HTTP server and ffmpeg, then remove only that temporary database. The configured PostgreSQL user needs permission to create test databases; use `KITTOK_TEST_ADMIN_URL` for a separate development server if necessary. Tests require a captured client and ffmpeg. Browser checks are tracked separately from API checks.
+This makes a throwaway database, runs the real server against it with ffmpeg, and deletes the database afterwards. Your Postgres user needs permission to create databases; otherwise point `KITTOK_TEST_ADMIN_URL` at one that can. You need a captured client first (`npm run capture`).
 
-`npm run source` writes `dist/kittok-0.1.0.tar.gz` using an explicit source-file allowlist. It excludes instance secrets, database data, uploads, cached TikTok assets, and installed dependencies. `/source` serves that archive when available; container builds generate it automatically. Regenerate the archive when you modify a source installation.
+## Source archive
 
-Kittok's original server source is licensed under [AGPL-3.0-or-later](LICENSE). Downloaded third-party client assets have their own ownership and are excluded from this source distribution.
+`npm run source` builds `dist/kittok-0.1.0.tar.gz` from the source files only: no `.env`, database, uploads, cached TikTok files or `node_modules`. Instances serve it at `/source`, and Docker builds make it automatically. Rebuild it if you change your copy.
+
+## License
+
+Kittok is AGPL-3.0-or-later ([LICENSE](LICENSE)). TikTok's client belongs to TikTok and isn't included. The fonts in `public/fonts` are Discord's builds of open source fonts under the SIL Open Font License ([OFL.txt](public/fonts/OFL.txt)).
