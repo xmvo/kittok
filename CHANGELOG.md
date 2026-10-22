@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- The admin panel says "Server is outdated, please restart" when Kittok's code changed on disk but the server hasn't been restarted, instead of a page error.
 - Set the default profile photo for new accounts and the mail server (with a test email) from the admin panel's Instance page. The SMTP password is stored encrypted. Admins see "User has opted out from their ip being visible" for people who said they mind, and can't reveal their IPs.
 - IP addresses are no longer stored in plaintext: they're kept as keyed hashes for matching alt accounts, and sealed to an owner-made security key only for people who say they don't mind. Admins see IPs blurred and only after entering the key, and alts without the IP. Everyone is asked once, and can change it under IP address in their account.
 - The @mention picker in comments lists the people you follow and searches by name, instead of a server error toast when a video opens. Nameplates also show on comments in the video popup.

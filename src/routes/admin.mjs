@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { Escape, HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
 import { Hash, RateLimiter, RequireCsrf, Token } from '../auth.mjs';
@@ -29,6 +30,14 @@ const ReportSql = `SELECT r.*, rep.username AS reporter, own.username AS owner, 
 
 const IpState = "CASE WHEN ip_sealed IS NOT NULL THEN 'sealed' WHEN ip_hash IS NOT NULL THEN 'hidden' END";
 const Reveals = RateLimiter();
+const Fingerprint = () => ['src', 'src/routes', 'src/client', 'migrations', '.'].flatMap(Directory => readdirSync(join(Root, Directory)).filter(Name => /\.(mjs|js|sql)$|^package\.json$/.test(Name))
+	.map(Name => { const Info = statSync(join(Root, Directory, Name)); return `${Directory}/${Name}:${Info.size}:${Info.mtimeMs}`; })).sort().join('|');
+const Booted = Fingerprint();
+let CheckedAt = 0, Stale = false;
+export function Outdated() {
+	if (Date.now() - CheckedAt > 5000) { CheckedAt = Date.now(); try { Stale = Fingerprint() !== Booted; } catch { Stale = true; } }
+	return Stale;
+}
 async function Audit(Pool, User, Action, Target, Detail = '') {
 	await Pool.query('INSERT INTO admin_actions(admin_id, action, target, detail) VALUES ($1, $2, $3, $4)', [User.id, Action, Target, Detail.slice(0, 500)]);
 }
@@ -67,7 +76,7 @@ export async function Admin(Context) {
 		RequireMethod(Request, ['GET']);
 		if (!User) { Response.writeHead(303, { location: '/login' }); Response.end(); return true; }
 		if (User.role !== 'admin') throw new HttpError(404, 'NotFound');
-		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, misc: MiscFeatures, categories: Categories, badges: BadgeCatalog, ipKey: Boolean(await InstanceKey(Pool)) };
+		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, misc: MiscFeatures, categories: Categories, badges: BadgeCatalog, ipKey: Boolean(await InstanceKey(Pool)), outdated: Outdated() };
 		ClientPage ??= readFile(join(ClientDir, 'index.html'), 'utf8');
 		const Html = Shell(await ClientPage, Config.Origin, { Config, User }).replace('</head>', `<link rel="stylesheet" href="${Public('admin.css')}"><script id="kittok-admin-boot" type="application/json">${JSON.stringify(Boot).replaceAll('<', '\\u003c')}</script><script src="${Public('admin.js')}" defer></script></head>`);
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
@@ -77,6 +86,7 @@ export async function Admin(Context) {
 
 	if (!Path.startsWith('/_kittok/admin/')) return false;
 	if (User?.role !== 'admin') throw new HttpError(404, 'NotFound');
+	if (Outdated()) Response.setHeader('x-kittok-outdated', '1');
 	const Route = Path.slice('/_kittok/admin/'.length);
 	const Params = Url.searchParams;
 

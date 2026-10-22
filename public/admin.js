@@ -120,6 +120,7 @@
 		if (Body instanceof FormData) Options.body = Body;
 		else if (Body !== undefined) { Options.body = JSON.stringify(Body); Options.headers['content-type'] = 'application/json'; }
 		const Response = await fetch('/_kittok/admin/' + Path, Options);
+		if (Response.headers.get('x-kittok-outdated')) Stale.hidden = false;
 		const Data = await Response.json().catch(() => ({}));
 		if (!Response.ok) throw new Error(Errors[Data.error] ?? Data.error ?? `Request failed (${Response.status})`);
 		return Data;
@@ -316,7 +317,8 @@
 	const Title = El('h1');
 	const SearchBox = El('input', { type: 'search', placeholder: 'Search accounts, @handles, or IDs', 'aria-label': 'Search', onkeydown: Event => { if (Event.key === 'Enter') Lookup(Event.target.value.trim()); if (Event.key === 'Escape') Event.target.blur(); } });
 	const Body = El('main', { class: 'Body', tabindex: '-1' });
-	Frame.append(El('header', { class: 'Top' }, Title, El('div', { class: 'Search' }, Icon('search', 16), SearchBox, El('kbd', {}, '/'))), Body);
+	const Stale = El('div', { class: 'Outdated', role: 'alert', hidden: !Boot.outdated }, 'Server is outdated, please restart');
+	Frame.append(Stale, El('header', { class: 'Top' }, Title, El('div', { class: 'Search' }, Icon('search', 16), SearchBox, El('kbd', {}, '/'))), Body);
 	Root.append(Frame);
 
 	let NavSignature = '';
@@ -400,7 +402,7 @@
 			else if (Path === '/admin/audit') await AuditPage();
 			else { SetTitle(['Not found']); Fill(Body, El('div', { class: 'Empty' }, El('strong', {}, 'This page doesn’t exist'), Link('/admin', { class: 'Btn' }, 'Go to the queue'))); }
 		} catch (Error) {
-			Fill(Body, El('div', { class: 'Empty' }, El('strong', {}, 'Couldn’t load this page'), El('span', {}, Error.message), Btn('Try again', Route)));
+			Fill(Body, El('div', { class: 'Empty' }, El('strong', {}, Stale.hidden ? 'Couldn’t load this page' : 'Server is outdated, please restart'), Stale.hidden && El('span', {}, Error.message), Btn('Try again', Route)));
 		}
 	}
 	document.addEventListener('keydown', Event => {
