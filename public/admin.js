@@ -287,13 +287,19 @@
 		return Node;
 	}
 
-	function EnforceDrawer({ Type, Target, Owner, Title, OnDone }) {
+	function EnforceDrawer({ Type, Target, Owner, Title, OnDone, Moderate = true, Extra = [] }) {
 		let Close;
 		const Load = async () => {
-			const Standing = Owner?.standing ?? (await Api(`users/${Owner.id}`)).standing;
-			const Panel = DecisionPanel({ Type, Standing, Owner: { ...Owner, target: Target }, Compact: true, OnDone: Result => { Close(); OnDone?.(Result); } });
-			Fill(Shell, El('div', { class: 'PanelHead' }, Title, El('span', { class: 'Grow' }), Btn('Close', () => Close(), 'Ghost Small')), Panel);
-			PageKeys.__drawer = Panel.Keys;
+			const Parts = [];
+			if (Moderate) {
+				const Standing = Owner?.standing ?? (await Api(`users/${Owner.id}`)).standing;
+				const Panel = DecisionPanel({ Type, Standing, Owner: { ...Owner, target: Target }, Compact: true, OnDone: Result => { Close(); OnDone?.(Result); } });
+				Parts.push(Panel); PageKeys.__drawer = Panel.Keys;
+			}
+			const Buttons = Extra.filter(Boolean);
+			for (const Button of Buttons) Button.addEventListener('click', () => Close(), true);
+			if (Buttons.length) Parts.push(El('div', { class: 'DrawerAccount' }, El('h3', {}, 'Account'), El('div', { class: 'Row' }, Buttons)));
+			Fill(Shell, El('div', { class: 'PanelHead' }, Title, El('span', { class: 'Grow' }), Btn('Close', () => Close(), 'Ghost Small')), ...Parts);
 		};
 		const Shell = El('div', { class: 'Panel' }, Spinner());
 		const Shade = El('div', { class: 'Drawer', onclick: Event => { if (Event.target === Shade) Close(); } }, Shell);
@@ -613,7 +619,7 @@
 		};
 		const Actions = U.self ? [] : [
 			U.role !== 'admin' && !U.deactivated_at && (U.suspended_at ? Btn('Unban', () => AskReason({ Title: `Unban @${U.username}?`, Text: 'Reverses every active ban on the account.', Confirm: 'Unban', OnConfirm: async Reason => { await Api(`users/${U.id}/unsuspend`, { reason: Reason }); Toast('Account unbanned'); Refresh(); } }))
-				: Btn('Ban', () => AskReason({ Title: `Ban @${U.username}?`, Text: 'Permanent until reversed or appealed. Signs the account out everywhere and hides its content.', Confirm: 'Ban', Danger: true, OnConfirm: async Reason => { await Api(`users/${U.id}/suspend`, { reason: Reason }); Toast('Account banned'); Refresh(); } }), 'Danger')),
+				: null),
 			Btn(U.role === 'admin' ? 'Remove admin' : 'Make admin', () => Modal({ Title: U.role === 'admin' ? `Remove admin from @${U.username}?` : `Make @${U.username} an admin?`, Body: El('p', { class: 'Muted', style: 'margin:0' }, U.role === 'admin' ? 'They lose access to this console.' : 'They get full access to this console and instance settings.'), OnConfirm: async () => { await Api(`users/${U.id}/role`, { role: U.role === 'admin' ? 'member' : 'admin' }); Toast('Role updated'); Refresh(); } })),
 			Btn('Delete', () => { const Confirm = El('input', { class: 'Input', placeholder: U.username }); Modal({ Title: `Delete @${U.username}?`, Danger: true, Confirm: 'Delete forever', Body: [El('p', { class: 'Muted', style: 'margin:0' }, 'Deletes the account, its videos and files, and its avatar. This can’t be undone. Type the username to confirm.'), Confirm], OnConfirm: async () => { await Api(`users/${U.id}/delete`, { confirm: Confirm.value }); Toast('Account deleted'); Navigate('/admin/accounts'); } }); }, 'Ghost Danger'),
 		];
@@ -623,7 +629,7 @@
 			Confirm: U.verified ? 'Remove verification' : 'Verify account',
 			OnConfirm: async () => { await Api(`users/${U.id}/verification`, { verified: !U.verified }); Toast(U.verified ? 'Verification removed' : 'Account verified'); Refresh(); },
 		})));
-		Actions.unshift(El('a', { href: '/@' + U.username, target: '_blank', rel: 'noopener', class: 'Btn' }, 'View profile'));
+		const ProfileLink = El('a', { href: '/@' + U.username, target: '_blank', rel: 'noopener', class: 'Btn' }, 'View profile');
 		const Panels = {
 			enforcement: () => El('div', { class: 'Columns' },
 				El('div', { class: 'Stack' }, El('div', { class: 'Panel' }, El('div', { class: 'PanelHead' }, 'Strikes', El('span', { class: 'Faint' }, `Expire after ${Data.standing.thresholds.strikeDays} days`)), El('div', { class: 'PanelBody' }, Meters(Data.standing))),
@@ -653,7 +659,7 @@
 				El('div', { class: 'Grow' }, El('div', { class: 'Row' }, El('h2', {}, U.display_name), U.verified && VerifiedCheck(), AccountBadges(U), StandingChip(Data.standing, U.suspended_at && !U.deactivated_at), U.deactivated_at && Chip(U.delete_after ? `Deleting ${new Date(U.delete_after).toLocaleDateString()}` : 'Deactivated', 'Warn'), U.role === 'admin' && Chip('Admin', 'Info')),
 					El('div', { class: 'Muted' }, `@${U.username}`), El('div', { class: 'Facts' }, El('span', { class: 'Mono' }, U.id), El('span', {}, `Joined ${new Date(U.created_at).toLocaleDateString()}`), El('span', {}, `${U.stats.followerCount} followers`), El('span', {}, `${U.stats.videoCount} videos`), El('span', {}, `${U.stats.heartCount} likes`)),
 					U.bio && El('p', { style: 'margin:8px 0 0;overflow-wrap:anywhere' }, U.bio)),
-				El('div', { class: 'ProfileActions' }, !U.self && U.role !== 'admin' && Btn('Take action', () => EnforceDrawer({ Type: 'user', Target: U.id, Owner, Title: `Act on @${U.username}`, OnDone: Refresh }), 'Primary'), Actions)),
+				El('div', { class: 'ProfileActions' }, Btn('Take action', () => EnforceDrawer({ Type: 'user', Target: U.id, Owner, Title: `Act on @${U.username}`, OnDone: Refresh, Moderate: !U.self && U.role !== 'admin', Extra: Actions }), 'Primary'), ProfileLink)),
 			El('div', { class: 'Tabs' }, [['enforcement', 'Enforcement'], ['content', 'Content'], ['reports', 'Reports'], ['security', 'Security']].map(([Key, Label]) => Link(`/admin/accounts/${U.id}?tab=${Key}`, { class: `Tab${Tab === Key ? ' Active' : ''}` }, Label))),
 			Panels[Tab]()));
 	}
