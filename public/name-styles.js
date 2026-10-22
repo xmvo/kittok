@@ -1,3 +1,4 @@
+// TODO: check the name style and nameplate pickers at phone width and in the light theme
 (() => {
 	const Instance = JSON.parse(document.getElementById('kittok-instance')?.textContent ?? '{}');
 	const Fonts = { 11: 'Default', 12: 'Tempo', 3: 'Sakura', 4: 'Jellybean', 6: 'Modern', 7: 'Medieval', 8: '8Bit', 10: 'Vampyre', 13: 'Monkey Bars', 14: 'Mainframe', 15: 'Headbang', 16: 'Journal' };

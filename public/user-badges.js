@@ -1,3 +1,4 @@
+// TODO: name styles on sender names in group chats
 (() => {
 	const Instance = JSON.parse(document.getElementById('kittok-instance')?.textContent ?? '{}');
 	const Cache = new Map();

@@ -1,3 +1,4 @@
+// TODO: remember who people @mention so the recent list in /api/mention/recent/contact/list/v1/ isn't always empty
 import { createHmac, randomBytes } from 'node:crypto';
 import { Transaction } from '../db.mjs';
 import { HttpError, Id, Json, ReadBody, ReadRaw, RequireMethod } from '../http.mjs';
