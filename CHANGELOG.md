@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- The @mention picker in comments lists the people you follow and searches by name, instead of a server error toast when a video opens. Nameplates also show on comments in the video popup.
 - Discord display name styles and nameplates: pick a font, an effect (Solid, Gradient, Neon, Toon, Pop, Gummy or Prism) and colors from presets or a hue slider in Edit profile, and a nameplate that shows behind your comments and in other people's messages list.
 - Stories: share a video to your story from the upload page and it shows in the stories tray for 24 hours, with TikTok's rings, player, and list of who watched.
 - Download video from the right-click menu or the share panel saves a copy with a Kittok watermark: the logo and @username move from the top-left to the bottom-right halfway through, then an end card shows the logo and username, like TikTok's. A Downloads switch in Settings > Privacy lets you turn it off for your videos.

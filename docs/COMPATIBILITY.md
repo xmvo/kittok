@@ -108,6 +108,9 @@ The client's security SDK re-opens XHR requests and replays their headers, so `X
 | POST `/api/user/block/` | `sec_user_id`, `block_type` (1 block, 0 unblock), `source` | `status_code` only; on 0 the client sets `relation` to 4 or 0 itself. Kittok also returns `block_status`. Following a blocked pair either way returns 403 |
 | GET `/api/block/user_list/` | `offset` (`"0"` first), `count` (20) | `userList[{user, stats}]`, `offset` (next offset, string), `hasMore`. The Settings > Privacy blocked-accounts list; the client marks every entry `relation` 4 |
 | POST `/api/comment/publish/` | `aweme_id`, `text`, `reply_id` (`0` for top level), `reply_to_reply_id`, `text_extra` | `status_code` and `comment`, in the same shape as `/api/comment/list/` items |
+| GET `/api/at/default/list/` | `cursor`, `count` | `status_code`, `user_list` of app-shaped users you follow (friends first), empty `block_results`; empty when logged out. Fills the @mention picker before you type |
+| GET `/api/mention/recent/contact/list/v1/` | `mentionType`, `secUid` | `statusCode` and an empty `userList`: recent mentions aren't tracked |
+| GET `/api/comment/search/sug/user/` | `keyword`, `count`, `uid_filter_list` (ids already shown) | `statusCode`, `userList` of web user shapes matching username or name, prefix matches first, and `hasMore` |
 | GET `/api/comment/list/` | `aweme_id`, `cursor` (`0` first), `count` | top-level `comments` newest first, `cursor` (last `cid`), `has_more` (1/0), `total` (all comments, used as the video's comment count) |
 | GET `/api/comment/list/reply/` | `comment_id`, `cursor`, `count` (3) | replies oldest first, `cursor`, `has_more` (must be the number 1 to show "View more") |
 | POST `/api/comment/digg/` | `cid`, `digg_type` (1 like, 2 unlike) | `status_code`. Each comment carries `digg_count`, `user_digged` (1/0), and `reply_comment_total` |

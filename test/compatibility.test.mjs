@@ -1668,6 +1668,23 @@ test('display name styles and nameplates use Discord ids, show in the badge look
 	assert.deepEqual([Cleared.styles, Cleared.nameplates], [{}, {}]);
 });
 
+test('the comment box can list and search people to mention', async () => {
+	const Signed = await Login(Pool, 'pride_kitten', Password);
+	const As = { cookie: `kittok_session=${Signed.Token}` };
+	const Following = (await Pool.query("SELECT u.username FROM follows f JOIN users u ON u.id = f.following_id JOIN users me ON me.id = f.follower_id WHERE me.username = 'pride_kitten'")).rows.map(Row => Row.username);
+	const Default = await (await Call('/api/at/default/list/?cursor=0&count=25', 'GET', undefined, As)).json();
+	assert.equal(Default.status_code, 0);
+	assert.deepEqual(Default.user_list.map(Entry => Entry.unique_id).sort(), Following.sort());
+	assert.deepEqual((await (await Call('/api/at/default/list/?cursor=0&count=25')).json()).user_list, []);
+	assert.deepEqual(await (await Call('/api/mention/recent/contact/list/v1/?mentionType=3', 'GET', undefined, As)).json(), { statusCode: 0, status_code: 0, userList: [] });
+	const Found = await (await Call('/api/comment/search/sug/user/?keyword=own&count=30&mention_type=3', 'GET', undefined, As)).json();
+	assert.equal(Found.statusCode, 0); assert.ok(Found.userList.some(Entry => Entry.uniqueId === 'owner'));
+	const Owner = Found.userList.find(Entry => Entry.uniqueId === 'owner');
+	const Next = await (await Call(`/api/comment/search/sug/user/?keyword=own&count=30&uid_filter_list=${encodeURIComponent(JSON.stringify([Owner.id]))}`, 'GET', undefined, As)).json();
+	assert.ok(!Next.userList.some(Entry => Entry.uniqueId === 'owner'));
+	assert.deepEqual((await (await Call('/api/comment/search/sug/user/?keyword=%25_', 'GET', undefined, As)).json()).userList, []);
+});
+
 test('native email sign-up checks age, sends real codes, needs an invite here, and lets the person pick a username', async () => {
 	const Mix = Value => Buffer.from(Value).map(Byte => Byte ^ 5).toString('hex');
 	const Form = (Path, Fields, Headers = {}) => fetch(Origin + Path, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', ...Headers }, body: new URLSearchParams(Fields) });

@@ -335,7 +335,7 @@
 		const Found = [];
 		if (!Plated) return Found;
 		for (const Label of document.querySelectorAll('[data-e2e^="comment-username-"]')) {
-			const Href = Label.querySelector('a[href*="/@"]')?.getAttribute('href') ?? '', Username = Handle(Href);
+			const Href = (Label.closest('a[href*="/@"]') ?? Label.querySelector('a[href*="/@"]'))?.getAttribute('href') ?? '', Username = Handle(Href);
 			let Row = Label.parentElement;
 			while (Username && Row && Row !== document.body && !Row.querySelector(`a[href="${CSS.escape(Href)}"] img`)) Row = Row.parentElement;
 			if (Username && Row && Row !== document.body) Found.push([Row, Username, 'Comment']);

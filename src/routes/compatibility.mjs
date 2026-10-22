@@ -560,6 +560,29 @@ export async function Compatibility(Context) {
 		RequireMethod(Request, ['GET']);
 		Json(Response, { status_code: 0, user_list: await SearchUsers(20), cursor: 0, has_more: 0 }); return true;
 	}
+	const MentionColumns = `u.id, u.username, u.display_name, u.bio, u.avatar_name, u.verified, u.pride_flag, u.user_badges, u.private_account, ${RelationSql('$1::bigint', 'u.id')} AS relation`;
+	if (Path === '/api/at/default/list/') {
+		RequireMethod(Request, ['GET']);
+		const Count = Math.min(Math.max(Math.floor(Number(Params.get('count'))) || 25, 1), 50);
+		const Rows = User ? (await Pool.query(`SELECT ${MentionColumns} FROM follows f JOIN users u ON u.id = f.following_id WHERE f.follower_id = $1 AND u.suspended_at IS NULL
+			AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = u.id AND b.blocked_id = $1) OR (b.blocker_id = $1 AND b.blocked_id = u.id))
+			ORDER BY EXISTS (SELECT 1 FROM follows back WHERE back.follower_id = u.id AND back.following_id = $1) DESC, f.created_at DESC LIMIT $2`, [User.id, Count])).rows : [];
+		Json(Response, { status_code: 0, user_list: Rows.map(Row => ApiUser(Row, Config.Origin)), block_results: [], cursor: Rows.length, has_more: false }); return true;
+	}
+	if (Path === '/api/mention/recent/contact/list/v1/') {
+		RequireMethod(Request, ['GET']);
+		Json(Response, { statusCode: 0, status_code: 0, userList: [] }); return true;
+	}
+	if (Path === '/api/comment/search/sug/user/') {
+		RequireMethod(Request, ['GET']);
+		const Keyword = (Params.get('keyword') ?? '').trim().replace(/^@/, '').slice(0, 100), Count = Math.min(Math.max(Math.floor(Number(Params.get('count'))) || 30, 1), 50);
+		let Shown = [];
+		try { Shown = JSON.parse(Params.get('uid_filter_list') || '[]').map(String).filter(Value => /^\d{1,19}$/.test(Value)).slice(0, 500); } catch {}
+		const Rows = Keyword && Config.Features?.search !== false ? (await Pool.query(`SELECT ${MentionColumns} FROM users u WHERE (u.username ILIKE $2 ESCAPE '\\' OR u.display_name ILIKE $2 ESCAPE '\\') AND u.suspended_at IS NULL
+			AND NOT (u.id::text = ANY($4::text[])) AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = u.id AND b.blocked_id = $1::bigint) OR (b.blocker_id = $1::bigint AND b.blocked_id = u.id))
+			ORDER BY u.username ILIKE $3 ESCAPE '\\' DESC, u.username LIMIT $5`, [User?.id ?? null, `%${Keyword.replace(/[\\%_]/g, '\\$&')}%`, `${Keyword.replace(/[\\%_]/g, '\\$&')}%`, Shown, Count + 1])).rows : [];
+		Json(Response, { statusCode: 0, status_code: 0, userList: Rows.slice(0, Count).map(Row => UserShape(Row, Config.Origin)), hasMore: Rows.length > Count ? 1 : 0 }); return true;
+	}
 	if (Path === '/api/search/item/full/') {
 		RequireMethod(Request, ['GET']);
 		const Found = await SearchVideos();
