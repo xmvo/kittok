@@ -5,7 +5,7 @@ import { RequireCsrf, RequireUser } from '../auth.mjs';
 import { Transaction } from '../db.mjs';
 import { ReceiveVideo, RemoveMedia, SaveMessageImage, ServeMedia, TranscodeVideo } from '../media.mjs';
 import { Misc } from '../settings.mjs';
-import { AvatarUrl, BlockedBetween } from '../store.mjs';
+import { AvatarUrl, BlockedBetween, RecordShare } from '../store.mjs';
 import { Codec } from '../im/protobuf.mjs';
 import { Schema } from '../im/schema.mjs';
 import { Push } from '../im/frontier.mjs';
@@ -351,6 +351,8 @@ async function SendMessage(Context, Body) {
 	});
 	if (Row.Limited) return { ...Fail(SendStatus.CheckFailed), check_code: '7195', check_message: JSON.stringify({ status_code: 7195, status_msg: { msg_content: { tips: 'You can send up to 3 messages until this person accepts your message request.', template: [] } } }) };
 	if (!Row.Repeated) await Deliver(Pool, Room, Row);
+	const Shared = Type === 8 && !Row.Repeated ? (() => { try { return JSON.parse(Content).itemId; } catch { return null; } })() : null;
+	if (/^\d{1,19}$/.test(String(Shared ?? ''))) await RecordShare(Pool, Shared, `u:${User.id}`, 'message');
 	return { status: SendStatus.Succeeded, server_message_id: Row.id, client_message_id: ClientId, check_code: '0', check_message: '', conversation: ConversationShape(await Conversation(Pool, User.id, Body), User.id) };
 }
 

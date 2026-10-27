@@ -115,7 +115,7 @@
 	if (Instance.studio) for (const Name of ['pushState', 'replaceState']) {
 		const Native = history[Name].bind(history);
 		history[Name] = (State, Title, Url) => {
-			if (Url && /^\/tiktokstudio\/upload\/?$/.test(new URL(Url, location.href).pathname)) { location.assign(new URL(Url, location.href).pathname); return; }
+			if (Url) { const Next = new URL(Url, location.href); if (/^\/tiktokstudio\/upload(?:\/|$)/.test(Next.pathname) !== /^\/tiktokstudio\/upload(?:\/|$)/.test(location.pathname)) { location.assign(Next.pathname + Next.search); return; } }
 			return Native(State, Title, Url);
 		};
 	}
@@ -195,6 +195,23 @@
 		Viewed.add(Id);
 		NativeFetch('/_kittok/view', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: Id }), keepalive: true }).catch(() => {});
 	}, true);
+	const ReportShare = (Value, Channel) => {
+		let Text = String(Value ?? '');
+		try { Text = decodeURIComponent(Text); } catch {}
+		const Id = Text.match(/\/video\/(\d{6,19})/)?.[1];
+		if (Id) NativeFetch('/_kittok/share', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: Id, channel: Channel }), keepalive: true }).catch(() => {});
+	};
+	const Clipboard = window.navigator?.clipboard;
+	if (Clipboard?.writeText) {
+		const NativeWrite = Clipboard.writeText.bind(Clipboard);
+		Clipboard.writeText = Text => { ReportShare(Text, 'copy'); return NativeWrite(Text); };
+	}
+	document.addEventListener('copy', () => ReportShare(window.getSelection?.()?.toString(), 'copy'), true);
+	const NativeWindowOpen = window.open;
+	window.open = function(Url, ...Rest) {
+		try { if (Url && new URL(String(Url), location.href).origin !== location.origin) ReportShare(Url, 'platform'); } catch {}
+		return NativeWindowOpen.call(this, Url, ...Rest);
+	};
 	window.addEventListener('securitypolicyviolation', Event => {
 		NativeFetch('/_debug/blocked', {
 			method: 'POST', headers: { 'content-type': 'application/json' },

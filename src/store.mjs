@@ -162,11 +162,24 @@ export async function MarkActivityRead(Pool, UserId) {
 }
 
 export async function RecordView(Pool, VideoId, Viewer) {
-	await Pool.query(`WITH Video AS (SELECT id FROM videos WHERE id = $1),
+	await Pool.query(`WITH Video AS (SELECT id, author_id FROM videos WHERE id = $1),
 		Seen AS (INSERT INTO video_views(video_id, viewer) SELECT id, $2 FROM Video
 			ON CONFLICT (video_id, viewer) DO UPDATE SET viewed_at = now() WHERE video_views.viewed_at < now() - interval '6 hours'
-			RETURNING video_id)
-		UPDATE videos SET view_count = view_count + 1 WHERE id IN (SELECT video_id FROM Seen)`, [VideoId, Viewer]);
+			RETURNING video_id),
+		Counted AS (UPDATE videos SET view_count = view_count + 1 WHERE id IN (SELECT video_id FROM Seen) RETURNING id, author_id),
+		Reached AS (INSERT INTO audience_days(author_id, day, viewer) SELECT author_id, (now() AT TIME ZONE 'UTC')::date, $2 FROM Counted ON CONFLICT DO NOTHING)
+		INSERT INTO video_view_days(video_id, day, views) SELECT id, (now() AT TIME ZONE 'UTC')::date, 1 FROM Counted
+		ON CONFLICT (video_id, day) DO UPDATE SET views = video_view_days.views + 1`, [VideoId, Viewer]);
+}
+
+export async function RecordProfileView(Pool, UserId, Viewer) {
+	await Pool.query(`INSERT INTO profile_views(user_id, viewer) SELECT id, $2 FROM users WHERE id = $1
+		AND NOT EXISTS (SELECT 1 FROM profile_views WHERE user_id = $1 AND viewer = $2 AND viewed_at > now() - interval '6 hours')`, [UserId, Viewer]);
+}
+
+export async function RecordShare(Pool, VideoId, Sharer, Channel) {
+	await Pool.query(`INSERT INTO video_shares(video_id, sharer, channel) SELECT id, $2, $3 FROM videos WHERE id = $1
+		AND NOT EXISTS (SELECT 1 FROM video_shares WHERE video_id = $1 AND sharer = $2 AND channel = $3 AND created_at > now() - interval '10 minutes')`, [VideoId, Sharer, Channel]);
 }
 
 export async function FindUser(Pool, Value, ById = false) {
@@ -224,6 +237,7 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 		(SELECT count(*)::int FROM comments c WHERE c.video_id = v.id AND NOT ${RemovedSql('comment', 'c.id')}) AS comments,
 		(SELECT count(*)::int FROM favorites f WHERE f.video_id = v.id) AS favorites,
 		(SELECT count(*)::int FROM reposts r WHERE r.video_id = v.id) AS reposts,
+		(SELECT count(*)::int FROM video_shares s WHERE s.video_id = v.id) AS shares,
 		EXISTS (SELECT 1 FROM reposts r WHERE r.video_id = v.id AND r.user_id = $1) AS reposted,
 		EXISTS (SELECT 1 FROM likes l WHERE l.video_id = v.id AND l.user_id = $1) AS liked,
 		EXISTS (SELECT 1 FROM favorites f WHERE f.video_id = v.id AND f.user_id = $1) AS saved,
@@ -239,7 +253,7 @@ export async function Videos(Pool, Origin, { before, author, following, likedBy,
 
 export function VideoShape(Row, Origin, Mentioned, Viewer) {
 	const Author = UserShape({ ...Row, id: Row.author_id }, Origin);
-	const Stats = { diggCount: Row.likes, commentCount: Row.comments, collectCount: Row.favorites, shareCount: 0, playCount: Number(Row.view_count ?? 0), repostCount: Misc.reposts ? Row.reposts ?? 0 : 0 };
+	const Stats = { diggCount: Row.likes, commentCount: Row.comments, collectCount: Row.favorites, shareCount: Row.shares ?? 0, playCount: Number(Row.view_count ?? 0), repostCount: Misc.reposts ? Row.reposts ?? 0 : 0 };
 	const Found = Misc.hashtags ? Entities(Row.description, Mentioned) : [];
 	const TextExtra = Found.map(Entity => Entity.type === 1
 		? { awemeId: '', start: Entity.start, end: Entity.end, hashtagId: TagId(Entity.name), hashtagName: Entity.name, isCommerce: false, subType: 0, type: 1 }

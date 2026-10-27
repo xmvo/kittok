@@ -2,7 +2,8 @@
 
 ## 0.1.0
 
-- TikTok Studio at `/tiktokstudio`: the real creator dashboard with key metrics and charts from your views, likes, comments and followers, your posts list (search, sort, privacy, pin and delete), and your comments with filters and replies. Studio's Upload button opens Kittok's upload page.
+- TikTok Studio at `/tiktokstudio`: the real creator dashboard with key metrics and charts from your views, likes, comments and followers, your posts list (search, sort, privacy, pin and delete), and your comments with filters and replies. Upload and post through Studio's own upload page, and edit posts' caption, cover, privacy and comments in Studio's editor.
+- Profile views and shares are counted (once per person every few hours) and show up in Studio's key metrics, along with accurate daily views and reach.
 - Unknown pages go to TikTok's real 404 page (`/404?fromUrl=...`), and the admin panel no longer sometimes lands on it instead of loading.
 - The repo and Docker image now ship the copy of TikTok's web client Kittok is built against, instead of downloading TikTok's latest on first start, which broke new instances whenever TikTok updated.
 - Avatar decorations and nameplates are no longer shipped: import Discord's collectibles catalog from the admin panel's Misc page (upload or URL) or with `npm run collectibles`. The Discord fonts now ship with their Open Font License notices.

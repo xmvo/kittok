@@ -17,10 +17,11 @@ export const LoginManifestUrl = `https://www.tiktok.com${LoginManifestPath}`;
 export function AssetUrl(Value) {
 	const Url = new URL(Value.startsWith('//') ? `https:${Value}` : Value);
 	const LoginManifest = Url.hostname === 'www.tiktok.com' && Url.pathname === LoginManifestPath && !Url.search;
-	if (Url.protocol !== 'https:' || (!AssetHosts.has(Url.hostname) && !LoginManifest) || Url.port || Url.username || Url.password) {
+	const StaticScript = Url.hostname === 'www.tiktok.com' && /^\/web-static-js\/[\w./-]+\.m?js$/.test(Url.pathname) && !Url.pathname.includes('..') && !Url.search;
+	if (Url.protocol !== 'https:' || (!AssetHosts.has(Url.hostname) && !LoginManifest && !StaticScript) || Url.port || Url.username || Url.password) {
 		throw new Error('UnapprovedAssetOrigin');
 	}
-	if (!LoginManifest && !Url.pathname.startsWith('/obj/')) throw new Error('UnapprovedAssetPath');
+	if (!LoginManifest && !StaticScript && !Url.pathname.startsWith('/obj/')) throw new Error('UnapprovedAssetPath');
 	return Url;
 }
 
@@ -115,7 +116,7 @@ async function CapturePage(Source, Name, Label, Scripts, Refresh) {
 	try { return await Job; } finally { Captures.delete(Name); }
 }
 export const CaptureLoginPage = (Refresh = false) => CapturePage('https://www.tiktok.com/login', 'login', 'Login', ['SIGI_STATE', '__UNIVERSAL_DATA_FOR_REHYDRATION__'], Refresh);
-export const CaptureStudioPage = (Refresh = false) => CapturePage('https://www.tiktok.com/tiktokstudio', 'studio', 'Studio', ['_REGION_DATA_', '__Creator_Center_Context__'], Refresh);
+export const CaptureStudioPage = (Refresh = false, Upload = false) => CapturePage(`https://www.tiktok.com/tiktokstudio${Upload ? '/upload' : ''}`, Upload ? 'studio-upload' : 'studio', 'Studio', ['_REGION_DATA_', '__Creator_Center_Context__'], Refresh);
 export const CaptureNotFoundPage = (Refresh = false) => CapturePage('https://www.tiktok.com/404?fromUrl=/', 'notfound', 'NotFound', ['tiktok-environment'], Refresh);
 const NotFoundSources = {
 	'importmap.json': 'https://www.tiktok.com/node-webapp/api/importmap',

@@ -11,7 +11,7 @@ import { GuessCategory } from './categories.mjs';
 import { HttpError } from './http.mjs';
 import { AssetFile, Root } from './client/archive.mjs';
 
-export const Mime = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.mp4': 'video/mp4', '.json': 'application/json', '.ico': 'image/x-icon' };
+export const Mime = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.mp4': 'video/mp4', '.json': 'application/json', '.ico': 'image/x-icon', '.wasm': 'application/wasm', '.mjs': 'text/javascript' };
 const SafeName = /^[a-zA-Z0-9_-]+\.(?:mp4|jpg|png|svg)$/;
 
 function Run(Executable, Args, Failure = 'InvalidVideo', Timeout = 180000, Nice = 0) {

@@ -10,9 +10,10 @@ import { AssertVideoVisible, VideoVisibleSql, SetPrivateAccount, DecideFollowReq
 import { PublicBadges } from '../badges.mjs';
 import { Categories } from '../categories.mjs';
 import { Misc } from '../settings.mjs';
-import { FindUser, StoryStatus, UserShape, UserStats, Videos, SetRelation, TagId, TagName, TagSql, MentionedUsers, CommentExtra, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
+import { FindUser, StoryStatus, UserShape, UserStats, Videos, SetRelation, TagId, TagName, TagSql, MentionedUsers, CommentExtra, Relation, AddComment, FollowList, AvatarUrl, Activity, UnreadActivity, MarkActivityRead, RelationSql, RecordProfileView, RecordShare, RecordView, SetBlock, BlockList, BlockedBetween, DmAudiences, DmSettings, SetDmSetting } from '../store.mjs';
 
 const ViewSecret = randomBytes(32);
+const Watcher = (Request, User) => User ? `u:${User.id}` : `ip:${createHmac('sha256', ViewSecret).update(Request.socket.remoteAddress ?? '').digest('hex')}`;
 
 const FollowStatus = Value => ({ 1: 1, 2: 2, 3: 4 })[Value] ?? 0;
 const Offset = Value => Math.min(Math.max(Math.floor(Number(Value)) || 0, 0), 100000);
@@ -216,6 +217,7 @@ export async function Compatibility(Context) {
 	if (Path === '/api/user/detail/') {
 		RequireMethod(Request, ['GET']);
 		const Target = await FindUser(Pool, Params.get('uniqueId') || Params.get('secUid') || User?.id, !Params.get('uniqueId'));
+		if (Params.get('from_page') === 'user' && Target.id !== User?.id) await RecordProfileView(Pool, Target.id, Watcher(Request, User));
 		Json(Response, { statusCode: 0, userInfo: { user: UserShape({ ...Target, relation: await Relation(Pool, User?.id, Target.id), story_status: await StoryStatus(Pool, User?.id, Target.id) }, Config.Origin), stats: await UserStats(Pool, Target.id) } }); return true;
 	}
 	if (Path === '/api/user/list/') {
@@ -371,7 +373,17 @@ export async function Compatibility(Context) {
 		Limiter.Hit(`view:${Request.socket.remoteAddress}`, 120);
 		const VideoId = Id((await ReadBody(Request, 1024)).id);
 		await AssertVideoVisible(Pool, VideoId, User?.id);
-		await RecordView(Pool, VideoId, User ? `u:${User.id}` : `ip:${createHmac('sha256', ViewSecret).update(Request.socket.remoteAddress ?? '').digest('hex')}`);
+		await RecordView(Pool, VideoId, Watcher(Request, User));
+		Response.writeHead(204).end(); return true;
+	}
+	if (Path === '/_kittok/share') {
+		RequireMethod(Request, ['POST']);
+		Limiter.Hit(`share:${Request.socket.remoteAddress}`, 60);
+		const Body = await ReadBody(Request, 1024);
+		if (!['copy', 'platform'].includes(Body.channel)) throw new HttpError(400, 'InvalidShare');
+		const VideoId = Id(Body.id);
+		await AssertVideoVisible(Pool, VideoId, User?.id);
+		await RecordShare(Pool, VideoId, Watcher(Request, User), Body.channel);
 		Response.writeHead(204).end(); return true;
 	}
 	if (Path === '/api/share/settings/') {

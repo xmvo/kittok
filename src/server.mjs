@@ -17,7 +17,7 @@ import { Api } from './routes/api.mjs';
 import { Compatibility } from './routes/compatibility.mjs';
 import { Account } from './routes/account.mjs';
 import { Passport } from './routes/passport.mjs';
-import { Creator } from './routes/creator.mjs';
+import { Creator, SweepStudioUploads } from './routes/creator.mjs';
 import { Studio } from './routes/studio.mjs';
 import { Admin } from './routes/admin.mjs';
 import { Im, HandleRequest, Proto, SweepMessageMedia } from './routes/im.mjs';
@@ -42,10 +42,13 @@ const Csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'
 const Cleanup = setInterval(() => {
 	Pool.query('DELETE FROM sessions WHERE expires_at < now()').catch(() => console.error('SessionCleanupFailed'));
 	Pool.query("DELETE FROM video_views WHERE viewed_at < now() - interval '6 hours'").catch(() => console.error('ViewCleanupFailed'));
+	Pool.query("DELETE FROM audience_days WHERE day < current_date - 400").catch(() => console.error('AudienceCleanupFailed'));
+	Pool.query("DELETE FROM profile_views WHERE viewed_at < now() - interval '400 days'").catch(() => console.error('ProfileViewCleanupFailed'));
 	Pool.query("UPDATE user_events SET ip_hash = NULL, ip_sealed = NULL WHERE ip_hash IS NOT NULL AND created_at < now() - interval '90 days'").catch(() => console.error('EventCleanupFailed'));
 	Pool.query('DELETE FROM data_exports WHERE expires_at < now()').catch(() => console.error('ExportCleanupFailed'));
 	DeleteExpiredAccounts(Pool, Config).catch(() => console.error('AccountDeletionFailed'));
 	SweepMessageMedia(Pool, Config).catch(() => console.error('MessageMediaCleanupFailed'));
+	SweepStudioUploads(Pool, Config).catch(() => console.error('StudioUploadCleanupFailed'));
 	SweepStories(Pool, Config).catch(() => console.error('StoryCleanupFailed'));
 	WarmDownloads(Pool, Config).catch(() => console.error('DownloadWarmupFailed'));
 }, 3600000).unref();
@@ -71,15 +74,15 @@ const Server = createServer(async (Request, Response) => {
 		if (Path === '/foryou') { RequireMethod(Request, ['GET', 'HEAD']); Response.writeHead(303, { location: '/' + Url.search }); return Response.end(); }
 		if (Path === '/health/live') return Json(Response, { status: 'Alive' });
 		if (Path === '/health/ready') { await Pool.query('SELECT 1'); return Json(Response, { status: 'Ready' }); }
-		if (Path.startsWith('/_client/') || Path === LoginManifestPath) {
+		if (Path.startsWith('/_client/') || Path === LoginManifestPath || Path.startsWith('/web-static-js/')) {
 			RequireMethod(Request, ['GET', 'HEAD']);
-			const Upstream = new URL(Path === LoginManifestPath ? LoginManifestUrl : `https://${Path.slice('/_client/'.length)}${Url.search}`);
+			const Upstream = new URL(Path === LoginManifestPath ? LoginManifestUrl : Path.startsWith('/web-static-js/') ? `https://www.tiktok.com${Path}` : `https://${Path.slice('/_client/'.length)}${Url.search}`);
 			try { AssetUrl(Upstream.href); } catch { throw new HttpError(403, 'AssetNotAllowed'); }
 			let Body = await Asset(Upstream.href);
 			const Ext = extname(Upstream.pathname);
 			if (Ext === '.js' && Body.includes('Action:"ApplyImageUpload"')) Body = await MessageUploader(Body);
-			if (['.js', '.css', '.json'].includes(Ext)) Body = Buffer.from(RewriteAssets(Body.toString('utf8'), Config.Origin));
-			Response.writeHead(200, { 'content-type': Mime[Ext] ?? 'application/octet-stream', 'cache-control': 'no-cache' });
+			if (['.js', '.mjs', '.css', '.json'].includes(Ext)) Body = Buffer.from(RewriteAssets(Body.toString('utf8'), Config.Origin));
+			Response.writeHead(200, { 'content-type': Mime[Ext] ?? 'application/octet-stream', 'cache-control': 'no-cache', 'cross-origin-embedder-policy': 'require-corp', 'cross-origin-resource-policy': 'same-origin' });
 			return Response.end(Request.method === 'HEAD' ? undefined : Body);
 		}
 		if (Path === '/_local/bridge.js' || Path === '/_kittok/bridge.js') {
@@ -155,8 +158,9 @@ const Server = createServer(async (Request, Response) => {
 		RequireMethod(Request, ['GET', 'HEAD']);
 		if (/^\/tiktokstudio(?:\/[a-z0-9_-]+)*\/?$/.test(Path) && !Path.startsWith('/tiktokstudio/api/')) {
 			if (!User) { Response.writeHead(302, { location: `/login?redirect_url=${encodeURIComponent(Path + Url.search)}` }); return Response.end(); }
-			const Html = StudioShell(await CaptureStudioPage(), Config.Origin, { Config, User });
-			Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+			const Upload = /^\/tiktokstudio\/upload(?:\/|$)/.test(Path);
+			const Html = StudioShell(await CaptureStudioPage(false, Upload), Config.Origin, { Config, User });
+			Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...(Upload ? { 'cross-origin-opener-policy': 'same-origin', 'cross-origin-embedder-policy': 'require-corp' } : {}) });
 			return Response.end(Request.method === 'HEAD' ? undefined : Html);
 		}
 		if (/^\/404\/?$/.test(Path)) {

@@ -1,0 +1,2569 @@
+(function () {
+    'use strict';
+
+    var WorkerMessageType;
+    (function (WorkerMessageType) {
+        // Lifecycle
+        WorkerMessageType["INIT"] = "INIT";
+        WorkerMessageType["DESTROY"] = "DESTROY";
+        // Canvas
+        WorkerMessageType["SET_CANVAS"] = "SET_CANVAS";
+        WorkerMessageType["SET_CANVAS_SIZE"] = "SET_CANVAS_SIZE";
+        WorkerMessageType["GET_CANVAS_SIZE"] = "GET_CANVAS_SIZE";
+        WorkerMessageType["DESTROY_CANVAS"] = "DESTROY_CANVAS";
+        // Effect Operations
+        WorkerMessageType["ADD_EFFECT"] = "ADD_EFFECT";
+        WorkerMessageType["SET_EFFECT_PARAMS"] = "SET_EFFECT_PARAMS";
+        WorkerMessageType["GET_EFFECT_PARAMS"] = "GET_EFFECT_PARAMS";
+        WorkerMessageType["DESTROY_EFFECT"] = "DESTROY_EFFECT";
+        WorkerMessageType["DESTROY_ALL_EFFECTS"] = "DESTROY_ALL_EFFECTS";
+        // Rendering
+        WorkerMessageType["SEEK_FRAME"] = "SEEK_FRAME";
+        // Resource
+        WorkerMessageType["LOAD_ASSETS"] = "LOAD_ASSETS";
+        WorkerMessageType["SET_SYS_FONT_PATHS"] = "SET_SYS_FONT_PATHS";
+        // Events (Worker -> Main)
+        WorkerMessageType["FRAME_READY"] = "FRAME_READY";
+        WorkerMessageType["ERROR"] = "ERROR";
+        WorkerMessageType["LOG"] = "LOG";
+        // BBox
+        WorkerMessageType["GET_EFFECT_BBOX"] = "GET_EFFECT_BBOX";
+        // Diagnostics
+        WorkerMessageType["SET_LOG_LEVEL"] = "SET_LOG_LEVEL";
+        WorkerMessageType["WARNING_LOG"] = "WARNING_LOG";
+        // Legacy
+        WorkerMessageType["LEGACY_LOAD_SINGLE_ASSET"] = "LEGACY_LOAD_SINGLE_ASSET";
+        WorkerMessageType["LEGACY_LOAD_ASSETS"] = "LEGACY_LOAD_ASSETS";
+        WorkerMessageType["LEGACY_LOAD_ASSETS_FROM_TEMPLATE"] = "LEGACY_LOAD_ASSETS_FROM_TEMPLATE";
+        WorkerMessageType["LEGACY_LOAD_EFFECT_ASSETS_OLD"] = "LEGACY_LOAD_EFFECT_ASSETS_OLD";
+        WorkerMessageType["LEGACY_ADD_PRESET"] = "LEGACY_ADD_PRESET";
+        WorkerMessageType["LEGACY_ADD_PRESET_V2"] = "LEGACY_ADD_PRESET_V2";
+        WorkerMessageType["LEGACY_ADD_CAPTION_TEMPLATE"] = "LEGACY_ADD_CAPTION_TEMPLATE";
+    })(WorkerMessageType || (WorkerMessageType = {}));
+    var WorkerResponseStatus;
+    (function (WorkerResponseStatus) {
+        WorkerResponseStatus["SUCCESS"] = "SUCCESS";
+        WorkerResponseStatus["FAILURE"] = "FAILURE";
+    })(WorkerResponseStatus || (WorkerResponseStatus = {}));
+
+    /**
+     * @file This loader is responsible for fetching, initializing, and caching the Emscripten-generated Wasm module.
+     * It is specifically designed to handle modern, modularized Emscripten output (`-s MODULARIZE=1 -s EXPORT_ES6=1`),
+     * which is loaded via native dynamic `import()`.
+     */
+    // --- Start of inlined common utilities ---
+    /**
+     * Wraps a promise with a timeout. If the promise does not resolve or reject
+     * within the given time, the wrapper promise will reject.
+     * @param promise The promise to wrap.
+     * @param timeout The timeout in milliseconds.
+     * @param errCreator A function that returns an Error object to be used for rejection.
+     * @returns A new promise that races the original promise against a timeout.
+     */
+    function withTimeout(promise, timeout, errCreator = () => new Error('Promise timed out')) {
+        if (typeof errCreator !== 'function') {
+            throw new TypeError('errCreator must be a function');
+        }
+        let timeoutId;
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => {
+                reject(errCreator());
+            }, timeout);
+        });
+        const clearFn = () => {
+            clearTimeout(timeoutId);
+        };
+        return Promise.race([
+            promise.finally(clearFn),
+            timeoutPromise,
+        ]);
+    }
+    // --- End of inlined common utilities ---
+    /**
+     * A singleton cache for the initialized Wasm module.
+     * This ensures the expensive loading process only runs once.
+     */
+    let _module = null;
+    // Use the document's location as a base to construct absolute URLs for assets.
+    // This is more robust than relative paths and avoids issues with `import.meta.url`.
+    // Compatible with both Window and Worker environments.
+    const baseUrl = (typeof document !== 'undefined' ? document.location : self.location).href;
+    new URL("./assets/effect_c.wasm", baseUrl).href;
+    new URL("./assets/effect_c.js", baseUrl).href;
+    new URL("./assets/effect_c.worker.mjs", baseUrl).href;
+    /**
+     * Asynchronously loads and initializes the Emscripten Wasm module using dynamic import.
+     * This function is idempotent; subsequent calls will return the cached module instance.
+     *
+     * @param options Required configuration for resource URLs and optional timeout.
+     * @returns A promise that resolves with the initialized module instance.
+     */
+    const loadModule = async (options) => {
+        // 1. Return the cached module if it has already been loaded.
+        if (_module) {
+            return _module;
+        }
+        const { wasmUrl, wasmJsUrl, wasmWorkerUrl, timeout = 30 * 1000, } = options;
+        /**
+         * The core loading logic, wrapped in a function to be passed to `withTimeout`.
+         */
+        const coreLoader = async () => {
+            // --- Main Loading Sequence ---
+            // 1. Dynamically import the Emscripten glue script. This is the modern, clean way
+            //    to load ES modules and does not pollute the global scope.
+            //    The /* webpackIgnore: true */ comment is crucial: it tells the bundler (like Webpack)
+            //    to not try and bundle this import, but rather to leave it as a native browser import
+            //    which can handle full URLs at runtime.
+            const esModule = await import(/* webpackIgnore: true */ wasmJsUrl);
+            // 2. The factory function is the default export of the ES module.
+            const ModuleFactory = esModule.default;
+            if (typeof ModuleFactory !== 'function') {
+                throw new Error(`Failed to load Emscripten module. The script at ${wasmJsUrl} did not provide a default export function.`);
+            }
+            // 3. Call the factory to instantiate the Wasm module.
+            // The factory returns a promise that resolves with the module instance once it's ready.
+            const moduleInstance = await ModuleFactory({
+                // Provide a custom locateFile function to tell Emscripten where to find its dependencies.
+                locateFile: (path, scriptDirectory) => {
+                    if (path.endsWith('.wasm')) {
+                        return wasmUrl;
+                    }
+                    // The runtime may request the worker with a .mjs extension.
+                    if (path.endsWith('.worker.mjs')) {
+                        return wasmWorkerUrl;
+                    }
+                    // For other assets, use the default path relative to the script directory.
+                    return scriptDirectory + path;
+                },
+                mainScriptUrlOrBlob: wasmJsUrl,
+            });
+            // 4. The instance is ready. Extract the required APIs.
+            return {
+                FS: moduleInstance.FS,
+                VectorString: moduleInstance.VectorString,
+                EffectWasmBind: moduleInstance.EffectWasmBind,
+            };
+        };
+        try {
+            // 2. Wrap the entire loading process in a timeout for robustness.
+            _module = await withTimeout(coreLoader(), timeout, () => new Error(`Wasm module loading timed out after ${timeout}ms`));
+            return _module;
+        }
+        catch (e) {
+            console.error('[Effect SDK] Failed to load Wasm module:', e);
+            // In case of an error, reset the module cache to allow for subsequent retries.
+            _module = null;
+            throw e; // Re-throw the error so the caller can handle it.
+        }
+    };
+
+    /**
+     * 用于wasm初始化
+     */
+    class CreatorController {
+        // model?: any;
+        async init(options) {
+            const module = await loadModule(options);
+            this.fs = module.FS;
+            this.effectInstance = new module.EffectWasmBind();
+            this.VectorString = module.VectorString;
+            this.test = module.EffectWasmBind;
+            // this.model = Model;
+        }
+    }
+
+    const writeDataByPath = async (fs, path, data) => {
+        const usePath = decodeURI(path).replaceAll('//', '/');
+        const folder = usePath.substring(0, usePath.lastIndexOf('/'));
+        const buildMemfsDebugPayload = (phase, error) => ({
+            phase,
+            originalPath: path,
+            normalizedPath: usePath,
+            folder,
+            dataBytes: data.length,
+            errorName: error?.name,
+            errorCode: error?.code,
+            errno: error?.errno,
+            errorMessage: error?.message,
+        });
+        const attachMemfsDebugContext = (error, phase) => {
+            if (error && typeof error === 'object') {
+                Object.assign(error, {
+                    memfsPhase: phase,
+                    memfsOriginalPath: path,
+                    memfsNormalizedPath: usePath,
+                    memfsFolder: folder,
+                    memfsDataBytes: data.length,
+                });
+            }
+            console.error('[ResourceController][memfs] writeDataByPath failed', JSON.stringify(buildMemfsDebugPayload(phase, error)));
+            return error;
+        };
+        try {
+            if (folder) {
+                try {
+                    fs.stat(folder);
+                }
+                catch {
+                    try {
+                        fs.mkdirTree(folder);
+                        fs.stat(folder);
+                    }
+                    catch (error) {
+                        throw attachMemfsDebugContext(error, 'mkdir-parent');
+                    }
+                }
+            }
+            const stream = fs.open(usePath, 'w+');
+            fs.write(stream, data, 0, data.length, 0);
+            fs.close(stream);
+            return usePath;
+        }
+        catch (error) {
+            if (error?.memfsPhase) {
+                throw error;
+            }
+            throw attachMemfsDebugContext(error, 'write-file');
+        }
+    };
+    const loopDirToFs = async (fs, data) => {
+        const useData = {};
+        const pathMap = [];
+        Object.keys(data).forEach((item) => {
+            useData[item.replaceAll('//', '/')] = data[item];
+        });
+        await Promise.all(Object.keys(useData).map(async (filename) => {
+            const normalizedFilename = filename.replace(/\/+$/, '') || '/';
+            const segments = normalizedFilename.split('/').filter(Boolean);
+            const isDirectoryEntry = filename.endsWith('/');
+            if (segments.length === 0) {
+                return;
+            }
+            segments.slice(0, isDirectoryEntry ? segments.length : segments.length - 1).forEach((_, index) => {
+                const dirPath = `/${segments.slice(0, index + 1).join('/')}`;
+                pathMap.push(dirPath);
+                fs.mkdirTree(dirPath);
+            });
+            if (isDirectoryEntry) {
+                pathMap.push(normalizedFilename);
+                return;
+            }
+            pathMap.push(normalizedFilename);
+            await writeDataByPath(fs, normalizedFilename, useData[filename]);
+        }));
+        return pathMap;
+    };
+
+    // Unique ID creation requires a high quality random # generator. In the browser we therefore
+    // require the crypto API and do not support built-in fallback to lower quality random number
+    // generators (like Math.random()).
+    let getRandomValues;
+    const rnds8 = new Uint8Array(16);
+    function rng() {
+      // lazy load so that environments that need to polyfill have a chance to do so
+      if (!getRandomValues) {
+        // getRandomValues needs to be invoked in a context where "this" is a Crypto implementation.
+        getRandomValues = typeof crypto !== 'undefined' && crypto.getRandomValues && crypto.getRandomValues.bind(crypto);
+
+        if (!getRandomValues) {
+          throw new Error('crypto.getRandomValues() not supported. See https://github.com/uuidjs/uuid#getrandomvalues-not-supported');
+        }
+      }
+
+      return getRandomValues(rnds8);
+    }
+
+    /**
+     * Convert array of 16 byte values to UUID string format of the form:
+     * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+     */
+
+    const byteToHex = [];
+
+    for (let i = 0; i < 256; ++i) {
+      byteToHex.push((i + 0x100).toString(16).slice(1));
+    }
+
+    function unsafeStringify(arr, offset = 0) {
+      // Note: Be careful editing this code!  It's been tuned for performance
+      // and works in ways you may not expect. See https://github.com/uuidjs/uuid/pull/434
+      return byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + '-' + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + '-' + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + '-' + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + '-' + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]];
+    }
+
+    const randomUUID = typeof crypto !== 'undefined' && crypto.randomUUID && crypto.randomUUID.bind(crypto);
+    var native = {
+      randomUUID
+    };
+
+    function v4(options, buf, offset) {
+      if (native.randomUUID && true && !options) {
+        return native.randomUUID();
+      }
+
+      options = options || {};
+      const rnds = options.random || (options.rng || rng)(); // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+
+      rnds[6] = rnds[6] & 0x0f | 0x40;
+      rnds[8] = rnds[8] & 0x3f | 0x80; // Copy bytes to buffer, if provided
+
+      return unsafeStringify(rnds);
+    }
+
+    /* eslint-disable @typescript-eslint/ban-ts-comment */
+    /* eslint-disable @typescript-eslint/naming-convention */
+    // 对外提供的内置工具模块
+    // 可直接在web代码编辑区引入并执行
+    // import { uuid } from 'build-in-utils';
+    /**
+     * 生成唯一ID
+     * @returns string
+     */
+    function uuid() {
+        return v4();
+    }
+
+    // import { get as readFileByPath } from '@api/[dir]/readFileByPath';
+    /**
+     * 资源管理器
+     */
+    class ResourceController {
+        constructor(ctx) {
+            this._name2Uint8 = new Map();
+            this._ctx = ctx;
+        }
+        /**
+         * 初始化并前置加载需要预加载的资源
+         */
+        async init() {
+            // const dirList = [
+            //   'asdf',
+            //   'font',
+            //   'model',
+            //   'effects',
+            //   'filter',
+            //   'posteffect',
+            //   'text_template_1',
+            //   'text_template_2',
+            //   'text_template_3',
+            //   'text_template_4',
+            //   'text_template_5',
+            //   // 'koreangirl2.png',
+            //   // 'koreangirl.png', 'old_koreangirl-removebg-preview.png', 'butterfly-alpha-PreMulAlpha.png',
+            //   // 'butterfly-alpha-noPreMulAlpha.png', 'taylar.jpeg', '1.png', '2.png', '76876.png', 'test.png'
+            // ];
+            // await Promise.all(dirList.map((d) => this.loadDir(d)));
+        }
+        save(name, data) {
+            this._name2Uint8.set(name, data);
+        }
+        getByName(name) {
+            const ret = this._name2Uint8.get(name);
+            if (ret) {
+                writeDataByPath(this._ctx.sdk.fs, `res/${uuid()}`, ret.uint8);
+            }
+            return ret || null;
+        }
+        /**
+         * 加载 `res` 中 `dir` 路径下的资源到本地
+         * @param dir
+         */
+        // async loadDir(dir: string) {
+        //   // console.log(`111 loadDir processing: ${dir} at \t` + Date.now());
+        //   const fileEntry = await readFileByPath(dir);
+        //   // console.log(Object.keys(fileEntry).map(key => ({
+        //   //   name: key,
+        //   //   size: fileEntry[key].byteLength + ' bytes'
+        //   // })));
+        //   // console.log(`222 loadDir processing: ${dir} at \t` + Date.now());
+        //   const targetEntry: Record<string, Uint8Array> = {};
+        //   Object.keys(fileEntry).forEach((key) => {
+        //     const cur = fileEntry[key] as unknown as { data: number[] };
+        //     targetEntry[key] = new Uint8Array(cur.data);
+        //   });
+        //   await loopDirToFs(this._ctx.sdk.fs!, targetEntry);
+        //   this._ctx.resourceReady.next(true);
+        //   console.log(`load dir: ${dir}`);
+        // }
+        async loadAssets(assets) {
+            await loopDirToFs(this._ctx.sdk.fs, assets);
+        }
+    }
+
+    /**
+     * 遗留功能管理器
+     * 包含所有标记为过时但仍需保持兼容性的方法
+     *
+     * @deprecated 此类中的方法将在未来版本中逐步移除
+     */
+    class LegacyEffectManager {
+        constructor(manager) {
+            this.manager = manager;
+        }
+        /**
+         * @deprecated 使用新的资源加载方式替代
+         */
+        async loadSingleAsset(filePath) {
+            if (filePath !== '/res/font/SourceHanSansCN-Medium.otf') {
+                try {
+                    const res = await fetch(filePath).then(response => response.arrayBuffer());
+                    await this.manager.resource.loadAssets({
+                        [filePath]: new Uint8Array(res),
+                    });
+                    // console.log(`Successfully loaded ${filePath}`);
+                    return true;
+                }
+                catch (error) {
+                    console.error(`Failed to load ${filePath}:`, error);
+                    return false;
+                }
+            }
+            try {
+                const res = await fetch('/res/font/NotoColorEmoji-Regular.ttf').then(response => response.arrayBuffer());
+                await this.manager.resource.loadAssets({
+                    '/res/font/NotoColorEmoji-Regular.ttf': new Uint8Array(res),
+                });
+                return true;
+            }
+            catch (error) {
+                console.error(`Failed to load /res/font/NotoColorEmoji-Regular.ttf:`, error);
+                return false;
+            }
+        }
+        /**
+         * @deprecated 使用新的资源加载方式替代
+         */
+        async loadAssets(folderNameOrFilePath) {
+            console.log(`Loading assets from folder or file: ${folderNameOrFilePath}`);
+            const filesToLoad = this.manager.fileMap[folderNameOrFilePath];
+            console.log(`Files to load: ${filesToLoad}`);
+            if (filesToLoad) {
+                const results = await Promise.allSettled(filesToLoad.map(filename => {
+                    if (this.manager.assetPrefix !== '') {
+                        filename = this.manager.assetPrefix + filename;
+                    }
+                    return this.loadSingleAsset(filename);
+                }));
+                results.forEach((result, index) => {
+                    if (result.status === 'rejected') {
+                        console.warn(`Asset ${filesToLoad[index]} from folder ${folderNameOrFilePath} failed to load (see details above).`);
+                    }
+                });
+            }
+            else {
+                console.log(`Loading single asset: ${folderNameOrFilePath}`);
+                await this.loadSingleAsset(folderNameOrFilePath);
+            }
+        }
+        /**
+         * @deprecated 使用配置驱动的资源加载方式替代
+         */
+        async loadAssetsFromTemplateName(name) {
+            switch (name) {
+                case "preset_1":
+                    await this.loadAssets("preset_1");
+                    await this.loadAssets("/res/font/font1.ttf");
+                    await this.loadAssets("/res/asdf/新青年体-文跃新青年体.ttf");
+                    break;
+                case "template_1":
+                    await this.loadAssets("preset_1");
+                    await this.loadAssets("animation_1");
+                    await this.loadAssets("/res/font/font1.ttf");
+                    break;
+                case "template_2":
+                    await this.loadAssets("preset_2");
+                    await this.loadAssets("animation_2");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_3":
+                    await this.loadAssets("preset_1");
+                    await this.loadAssets("animation_3");
+                    await this.loadAssets("/res/font/font3.ttf");
+                    break;
+                case "template_4":
+                    await this.loadAssets("preset_4");
+                    await this.loadAssets("animation_3");
+                    await this.loadAssets("/res/font/font4.ttf");
+                    break;
+                case "template_5":
+                    await this.loadAssets("preset_4");
+                    await this.loadAssets("animation_5");
+                    await this.loadAssets("/res/font/font5.ttf");
+                    break;
+                case "template_6":
+                    await this.loadAssets("animation_6");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_7":
+                    await this.loadAssets("preset_7");
+                    await this.loadAssets("animation_7");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_8":
+                    await this.loadAssets("preset_8");
+                    await this.loadAssets("animation_8");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_9":
+                    await this.loadAssets("preset_4");
+                    await this.loadAssets("animation_7");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_10":
+                    await this.loadAssets("preset_2");
+                    await this.loadAssets("animation_10");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_11":
+                    await this.loadAssets("preset_11");
+                    await this.loadAssets("animation_11");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_12":
+                    await this.loadAssets("preset_12");
+                    await this.loadAssets("animation_12");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_13":
+                    await this.loadAssets("preset_12");
+                    await this.loadAssets("animation_13");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_14":
+                    await this.loadAssets("preset_14");
+                    await this.loadAssets("animation_7");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_15":
+                    await this.loadAssets("preset_15");
+                    await this.loadAssets("animation_7");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_16":
+                    await this.loadAssets("preset_16");
+                    await this.loadAssets("animation_16");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_17":
+                    await this.loadAssets("preset_4");
+                    await this.loadAssets("animation_17");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_18":
+                    await this.loadAssets("preset_16");
+                    await this.loadAssets("animation_18");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_19":
+                    await this.loadAssets("preset_19");
+                    await this.loadAssets("animation_19");
+                    await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_20":
+                    // await this.loadAssets("preset_2");
+                    // await this.loadAssets("animation_2");
+                    // await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "template_21":
+                    // await this.loadAssets("preset_2");
+                    // await this.loadAssets("animation_2");
+                    // await this.loadAssets("/res/font/font2.ttf");
+                    break;
+                case "cover_templates/text_template_2":
+                    await this.loadAssets("cover_templates/text_template_2");
+                    break;
+                case "cover_templates/text_template_3":
+                    await this.loadAssets("cover_templates/text_template_3");
+                    break;
+                case "cover_templates/text_template_4":
+                    await this.loadAssets("cover_templates/text_template_4");
+                    break;
+                case "cover_templates/text_template_5":
+                    await this.loadAssets("cover_templates/text_template_5");
+                    break;
+                case "cover_templates/text_template_6":
+                    await this.loadAssets("cover_templates/text_template_6");
+                    break;
+                case "cover_templates/text_template_7":
+                    await this.loadAssets("cover_templates/text_template_7");
+                    break;
+                case "cover_templates/text_template_8":
+                    await this.loadAssets("cover_templates/text_template_8");
+                    break;
+                case "cover_templates/text_template_9":
+                    await this.loadAssets("cover_templates/text_template_9");
+                    break;
+                case "cover_templates/text_template_10":
+                    await this.loadAssets("cover_templates/text_template_10");
+                    break;
+                case "cover_templates/text_template_11":
+                    await this.loadAssets("cover_templates/text_template_11");
+                    break;
+            }
+        }
+        /**
+         * @deprecated 使用新的资源加载 API 替代
+         */
+        async loadEffectAssets_old(effectIdentifier) {
+            const { type, id } = effectIdentifier;
+            const effectName = `${type}_${id}`;
+            // console.log(`Loading effect assets for ${effectName}`);
+            await this.loadAssetsFromTemplateName(effectName);
+        }
+        /**
+         * @deprecated 使用新的预设添加方式替代
+         */
+        async addPreset(params) {
+            await this.manager.sdk.effectInstance?.addPreset(params);
+        }
+        /**
+         * @deprecated 使用新的预设添加方式替代
+         */
+        async addPresetV2(params) {
+            await this.manager.sdk.effectInstance?.addPresetV2(params);
+        }
+        /**
+         * @deprecated 使用新的字幕模板添加方式替代
+         */
+        async addCaptionTemplate(effectIdentifier, style) {
+            await this.loadEffectAssets_old(effectIdentifier);
+            if (!style.element_id) {
+                console.log("style does not have element_id!!!");
+                return;
+            }
+            const mergedStyle = this.deepMerge(defaultCaptionTemplateStyle, style);
+            const jsonParamStr = JSON.stringify(mergedStyle.json_param);
+            const cmdParamStr = JSON.stringify(mergedStyle.cmd_param);
+            const final_param = {
+                element_id: mergedStyle.element_id,
+                json_param: jsonParamStr,
+                cmd_param: cmdParamStr,
+                isNewPreset: mergedStyle.isNewPreset,
+                newAPI: mergedStyle.newAPI,
+                path: mergedStyle.path,
+                caption_info: mergedStyle.caption_info,
+            };
+            // console.log("final_param = ", final_param);
+            await this.manager.sdk.effectInstance?.addCaptionTemplate(final_param);
+        }
+        /**
+         * @deprecated 测试函数，仅用于开发调试
+         */
+        // async test(){
+        //   const filePath = "https://lf16-tiktok-web.ttwstatic.com/obj/tiktok-web/clip-forge/font/GoNotoKurrent-Regular.ttf";
+        //   const fontPath = "/font/GoNotoKurrent-Regular.ttf";
+        //   try {
+        //     const res = await fetch(filePath).then(response => response.arrayBuffer());
+        //     await this.manager.resource.loadAssets({
+        //       [fontPath]: new Uint8Array(res),
+        //     });
+        //     console.log(`Successfully loaded ${fontPath}`);
+        //   } catch (error) {
+        //     console.error(`Failed to load ${fontPath}:`, error);
+        //     return false;
+        //   }
+        //   const element_id = '60ffd092-0920-4359-b803-7012c525c155';
+        //   const params: addPresetV2Params = {
+        //     element_id,
+        //     json_param: JSON.stringify({
+        //       "rotation": [0, 0, -0.0],
+        //       "scale": [1, 1, 1],
+        //       "position": [0.0, 0, 0],
+        //       "start_time": 0.0,
+        //       "type": 'text',
+        //       "visible": true,
+        //       "text_params": JSON.stringify({
+        //         "autoAdaptCanvasEnabled": false,
+        //         "autoAdaptDpiEnabled": false,
+        //         "boldValue": 0.0,
+        //         "canvas": false,
+        //         "cutOffPostfix": "...",
+        //         "decorationOffset": 0.15,
+        //         "decorationWidth": 0.04,
+        //         "directionLevel": 254,
+        //         "effectPath": "/res/preset_1",
+        //         "fallbackFontPathList": [
+        //           "/font/GoNotoKurrent-Regular.ttf",
+        //         ],
+        //         "fontSize": 3,
+        //         "fixFontSize": true,
+        //         "globalAlpha": 1.0,
+        //         "innerPadding": 0.0,
+        //         "italicDegree": 0,
+        //         "ktvColor": [0.0, 0.0, 1.0, 1.0],
+        //         "ktvOutlineColor": [0.0, 0.0, 1.0, 1.0],
+        //         "ktvShadowColor": [0.0, 0.0, 1.0, 1.0],
+        //         "letterSpacing": 0.0,
+        //         "lineMaxWidth": -1.0,
+        //         "lineSpacing": 0.27705628,
+        //         "oneLineCutOff": false,
+        //         "selectedColor": [0.5, 0.7, 1.0, 0.8],
+        //         "shapeFlipX": false,
+        //         "shapeFlipY": false,
+        //         "shapePath": "",
+        //         "text": "success is composed of innumerable small targets",
+        //         "textLocale": 1,
+        //         "typeSettingAlign": 1,
+        //         "typeSettingKind": 0,
+        //         "version": 2,
+        //       })
+        //     }),
+        //     cmd_param: JSON.stringify({
+        //       "id": "/res/preset_1",
+        //       "path": "/res/preset_1",
+        //     })
+        //   };
+        //   await this.manager.sdk.effectInstance?.addPresetV2(params);
+        //   await this.manager.sdk.effectInstance?.seekFrame(JSON.stringify([element_id]), 0);
+        // }
+        /**
+         * 深度合并对象的工具函数
+         * @deprecated 仅用于遗留功能
+         */
+        deepMerge(base, patch) {
+            const out = { ...base };
+            for (const k in patch) {
+                if (patch[k] &&
+                    typeof patch[k] === 'object' &&
+                    !Array.isArray(patch[k])) {
+                    // 递归
+                    out[k] = this.deepMerge(base[k], patch[k]);
+                }
+                else if (patch[k] !== undefined) {
+                    out[k] = patch[k];
+                }
+            }
+            return out;
+        }
+    }
+    /* 默认 text_params */
+    const defaultCaptionTextParams = {
+        autoAdaptCanvasEnabled: false,
+        autoAdaptDpiEnabled: false,
+        boldValue: 0.0,
+        canvas: false,
+        canvasColor: [0.972549, 1, 0.19607843, 0.9411765],
+        canvasCustomized: true,
+        canvasOffsetCustomized: [0, 0],
+        canvasRoundCorner: true,
+        canvasRoundRadius: 8.75,
+        canvasWHCustomized: [0.54545456, 0.27272728],
+        canvasWHFixed: [-1, -1],
+        canvasWrapped: true,
+        cutOffPostfix: '...',
+        decorationOffset: 0.15,
+        decorationWidth: 0.04,
+        directionLevel: 254,
+        effectPath: '/res/preset_1',
+        fallbackFontPathList: ['/res/font/font1.ttf'],
+        fontSize: 3,
+        fixFontSize: true,
+        globalAlpha: 1,
+        innerPadding: 0,
+        italicDegree: 0,
+        ktvColor: [0, 0, 1, 1],
+        ktvOutlineColor: [0, 0, 1, 1],
+        ktvShadowColor: [0, 0, 1, 1],
+        letterSpacing: 0,
+        lineMaxWidth: -1,
+        lineSpacing: 0.27705628,
+        oneLineCutOff: false,
+        richText: "<effectStyle id=\"7437255538343154177\" path=\"/res/font/font1.ttf\"><size=9.28><color=(1.0, 1.0, 1.0, 1.0)>[ Success is composed of innumerable small targets, etc. and the accumulation of every small target is the great ideal]</color></size></effectStyle>",
+        selectedColor: [0.5, 0.7, 1, 0.8],
+        shapeFlipX: false,
+        shapeFlipY: false,
+        shapePath: '',
+        text: 'success is composed of innumerable small targets',
+        textLocale: 1,
+        typeSettingAlign: 1,
+        typeSettingKind: 0,
+        version: 2,
+    };
+    /* 默认 json_param */
+    const defaultCaptionJSONParam = {
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        position: [0, 0, 0],
+        start_time: 0,
+        visible: true,
+        text_params: defaultCaptionTextParams,
+    };
+    /* 默认 cmd_param */
+    const defaultCaptionCMDParam = {
+        "id": "/res/preset_1",
+        "path": "/res/preset_1",
+    };
+    let captionInfo = {
+        "text": " Success is composed of innumerable small targets, etc. and the accumulation of every small target is the great ideal",
+        "words": [
+            { "end_time": 50, "start_time": 50, "text": " " },
+            { "end_time": 300, "start_time": 50, "text": "Success", "is_key": true },
+            { "end_time": 300, "start_time": 300, "text": " " },
+            { "end_time": 500, "start_time": 300, "text": "is" },
+            { "end_time": 500, "start_time": 500, "text": " " },
+            { "end_time": 700, "start_time": 500, "text": "composed", "is_key": true },
+            { "end_time": 700, "start_time": 700, "text": " " },
+            { "end_time": 900, "start_time": 700, "text": "of" },
+            { "end_time": 900, "start_time": 900, "text": " " },
+            { "end_time": 1100, "start_time": 900, "text": "innumerable", "is_key": true },
+            { "end_time": 1100, "start_time": 1100, "text": " " },
+            { "end_time": 1300, "start_time": 1100, "text": "small", "is_key": true },
+            { "end_time": 1300, "start_time": 1300, "text": " " },
+            { "end_time": 1500, "start_time": 1300, "text": "targets," },
+            { "end_time": 1500, "start_time": 1500, "text": " " },
+            { "end_time": 1700, "start_time": 1500, "text": "etc.", "is_key": true },
+            { "end_time": 1700, "start_time": 1700, "text": " " },
+            { "end_time": 1900, "start_time": 1700, "text": "and" },
+            { "end_time": 1900, "start_time": 1900, "text": " " },
+            { "end_time": 2100, "start_time": 1900, "text": "the", "is_key": true },
+            { "end_time": 2100, "start_time": 2100, "text": " " },
+            { "end_time": 2300, "start_time": 2100, "text": "accumulation" },
+            { "end_time": 2300, "start_time": 2300, "text": " " },
+            { "end_time": 2500, "start_time": 2300, "text": "of" },
+            { "end_time": 2500, "start_time": 2500, "text": " " },
+            { "end_time": 2700, "start_time": 2500, "text": "every" },
+            { "end_time": 2700, "start_time": 2700, "text": " " },
+            { "end_time": 2900, "start_time": 2700, "text": "small", "is_key": true },
+            { "end_time": 2900, "start_time": 2900, "text": " " },
+            { "end_time": 3100, "start_time": 2900, "text": "target" },
+            { "end_time": 3100, "start_time": 3100, "text": " " },
+            { "end_time": 3300, "start_time": 3100, "text": "is", "is_key": true },
+            { "end_time": 3300, "start_time": 3300, "text": " " },
+            { "end_time": 3400, "start_time": 3300, "text": "the" },
+            { "end_time": 3400, "start_time": 3400, "text": " " },
+            { "end_time": 3500, "start_time": 3400, "text": "great" },
+            { "end_time": 3500, "start_time": 3500, "text": " " },
+            { "end_time": 3600, "start_time": 3500, "text": "ideal" }
+        ]
+    };
+    /* 默认整体 */
+    const defaultCaptionTemplateStyle = {
+        element_id: '',
+        json_param: defaultCaptionJSONParam,
+        cmd_param: defaultCaptionCMDParam,
+        isNewPreset: true,
+        newAPI: true,
+        path: "/res/animation_1",
+        caption_info: JSON.stringify(captionInfo)
+    };
+
+    const fileMapSource = {
+        "preset_1": [
+            "/res/preset_1/effectStyle.json",
+            "/res/preset_1/shape_example_liyou/style_vector.png",
+            "/res/preset_1/shape_example_liyou/config.json",
+            "/res/preset_1/shape_example_liyou/content.json",
+            "/res/preset_1/shape_example_liyou/infoSticker.lua",
+        ],
+        "preset_2": [
+            "/res/preset_2/effectStyle.json"
+        ],
+        "preset_4": [
+            "/res/preset_4/LuaRTTI.MarkGen.lua",
+            "/res/preset_4/algorithmConfig.json",
+            "/res/preset_4/config.json",
+            "/res/preset_4/content.json",
+            "/res/preset_4/effect.prefab",
+            "/res/preset_4/image/20221013-211953.png",
+            "/res/preset_4/image/20221013-211953.png.meta",
+            "/res/preset_4/image/20221013-213515.png",
+            "/res/preset_4/image/20221013-213515.png.meta",
+            "/res/preset_4/image/xie.png",
+            "/res/preset_4/image/xie.png.meta",
+            "/res/preset_4/js-meta.json",
+            "/res/preset_4/lua-meta.json",
+            "/res/preset_4/main.scene",
+            "/res/preset_4/material/effect.material",
+            "/res/preset_4/material/shadow.material",
+            "/res/preset_4/rt/outputTex.rt",
+            "/res/preset_4/sticker.config",
+            "/res/preset_4/texture/lieheng.png",
+            "/res/preset_4/texture/lieheng.png.meta",
+            "/res/preset_4/xshader/depth.frag",
+            "/res/preset_4/xshader/effect.frag",
+            "/res/preset_4/xshader/effect.vert",
+            "/res/preset_4/xshader/effect.xshader",
+            "/res/preset_4/xshader/shadow.xshader"
+        ],
+        "preset_7": [
+            "/res/preset_7/effectStyle.json"
+        ],
+        "preset_8": [
+            "/res/preset_8/config.json",
+            "/res/preset_8/content.json",
+            "/res/preset_8/effect.prefab",
+            "/res/preset_8/image/20230516-144312.png",
+            "/res/preset_8/image/20230516-144312.png.meta",
+            "/res/preset_8/image/k.png",
+            "/res/preset_8/image/k.png.meta",
+            "/res/preset_8/main.scene",
+            "/res/preset_8/material/effect.material",
+            "/res/preset_8/material/shadow.material",
+            "/res/preset_8/rt/outputTex.rt",
+            "/res/preset_8/sticker.config",
+            "/res/preset_8/texture/lieheng.png",
+            "/res/preset_8/texture/lieheng.png.meta",
+            "/res/preset_8/xshader/depth.frag",
+            "/res/preset_8/xshader/effect.frag",
+            "/res/preset_8/xshader/effect.vert",
+            "/res/preset_8/xshader/effect.xshader",
+            "/res/preset_8/xshader/shadow.xshader"
+        ],
+        "preset_9": [
+            "/res/preset_9/effectStyle.json"
+        ],
+        "preset_11": [
+            "/res/preset_11/effectStyle.json"
+        ],
+        "preset_12": [
+            "/res/preset_12/config.json",
+            "/res/preset_12/content.json",
+            "/res/preset_12/effect.prefab",
+            "/res/preset_12/image/20221013-211953.png",
+            "/res/preset_12/image/20221013-211953.png.meta",
+            "/res/preset_12/image/20221013-213515.png",
+            "/res/preset_12/image/20221013-213515.png.meta",
+            "/res/preset_12/image/xie.png",
+            "/res/preset_12/image/xie.png.meta",
+            "/res/preset_12/main.scene",
+            "/res/preset_12/material/effect.material",
+            "/res/preset_12/material/shadow.material",
+            "/res/preset_12/rt/outputTex.rt",
+            "/res/preset_12/sticker.config",
+            "/res/preset_12/texture/lieheng.png",
+            "/res/preset_12/texture/lieheng.png.meta",
+            "/res/preset_12/xshader/depth.frag",
+            "/res/preset_12/xshader/effect.frag",
+            "/res/preset_12/xshader/effect.vert",
+            "/res/preset_12/xshader/effect.xshader",
+            "/res/preset_12/xshader/shadow.xshader"
+        ],
+        "preset_14": [
+            "/res/preset_14/effectStyle.json"
+        ],
+        "preset_15": [
+            "/res/preset_15/effectStyle.json"
+        ],
+        "preset_16": [
+            "/res/preset_16/effectStyle.json"
+        ],
+        "preset_19": [
+            "/res/preset_19/effectStyle.json"
+        ],
+        "animation_1": [
+            "/res/animation_1/ImageBusinessSlider.json",
+            "/res/animation_1/LuaRTTI.MarkGen.lua",
+            "/res/animation_1/TextAnim.lua",
+            "/res/animation_1/algorithmConfig.json",
+            "/res/animation_1/anim.prefab",
+            "/res/animation_1/config.json",
+            "/res/animation_1/content.json",
+            "/res/animation_1/data_val.json",
+            "/res/animation_1/effect_platform_children.tag",
+            "/res/animation_1/effects/quad/quad.frag",
+            "/res/animation_1/effects/quad/quad.material",
+            "/res/animation_1/effects/quad/quad.vert",
+            "/res/animation_1/effects/quad/quad.xshader",
+            "/res/animation_1/extra.json",
+            "/res/animation_1/js-meta.json",
+            "/res/animation_1/lua-meta.json",
+            "/res/animation_1/lua/ImageBusinessSlider.lua",
+            "/res/animation_1/main.scene",
+            "/res/animation_1/mesh/quad.mesh",
+            "/res/animation_1/modules/AEData.lua",
+            "/res/animation_1/modules/AETools.lua",
+            "/res/animation_1/modules/CaptionModule.lua",
+            "/res/animation_1/modules/CaptionModuleTest.lua",
+            "/res/animation_1/modules/CommonLetterModule.lua",
+            "/res/animation_1/modules/LetterStyleMergeModule.lua",
+            "/res/animation_1/modules/Sprite2DModule.lua",
+            "/res/animation_1/modules/TextCloneModule.lua",
+            "/res/animation_1/modules/TextCommonAnimModule.lua",
+            "/res/animation_1/modules/TextSticker.lua",
+            "/res/animation_1/raw_summary.json",
+            "/res/animation_1/rt/b1.rt",
+            "/res/animation_1/rt/b2.rt",
+            "/res/animation_1/rt/back_page.rt",
+            "/res/animation_1/rt/outputTex.rt",
+            "/res/animation_1/rt/rt1.rt",
+            "/res/animation_1/rt/rt2.rt",
+            "/res/animation_1/rt/rt3.rt",
+            "/res/animation_1/sticker.config",
+            "/res/animation_1/test/caption_fake_data.json",
+            "/res/animation_1/test/caption_fake_data0.json",
+            "/res/animation_1/test/caption_fake_data1.json",
+            "/res/animation_1/test/caption_fake_data2.json",
+            "/res/animation_1/test/caption_fake_data3.json",
+            "/res/animation_1/test/caption_fake_data4.json",
+            "/res/animation_1/test/fake_kw_style1.json",
+            "/res/animation_1/xshader/clear.frag",
+            "/res/animation_1/xshader/glowMask2.frag",
+            "/res/animation_1/xshader/screen.vert",
+            "/res/animation_1/xshader/textRenderer.vert",
+            "/res/animation_1/xshader/textRenderer2.frag"
+        ],
+        "animation_2": [
+            "/res/animation_2/ImageBusinessSlider.json",
+            "/res/animation_2/LuaRTTI.MarkGen.lua",
+            "/res/animation_2/TextAnim.lua",
+            "/res/animation_2/TextSticker.lua",
+            "/res/animation_2/algorithmConfig.json",
+            "/res/animation_2/anim.prefab",
+            "/res/animation_2/config.json",
+            "/res/animation_2/content.json",
+            "/res/animation_2/data_val.json",
+            "/res/animation_2/effect_platform_children.tag",
+            "/res/animation_2/effects/blur/blend.frag",
+            "/res/animation_2/effects/blur/blur.vert",
+            "/res/animation_2/effects/blur/blur1.frag",
+            "/res/animation_2/effects/blur/blur2.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/Blend.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurX1.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurX2.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurX3.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurX4.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurX5.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurX6.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurX7.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurY1.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurY2.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurY3.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurY4.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurY5.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurY6.frag",
+            "/res/animation_2/effects/deep_glow/MatAndShader/GlowGaussianBlurY7.frag",
+            "/res/animation_2/effects/deep_glow/rt/midRT1.rt",
+            "/res/animation_2/effects/deep_glow/rt/midRT10.rt",
+            "/res/animation_2/effects/deep_glow/rt/midRT2.rt",
+            "/res/animation_2/effects/deep_glow/rt/midRT3.rt",
+            "/res/animation_2/effects/deep_glow/rt/midRT4.rt",
+            "/res/animation_2/effects/deep_glow/rt/midRT5.rt",
+            "/res/animation_2/effects/deep_glow/rt/midRT6.rt",
+            "/res/animation_2/effects/deep_glow/rt/midRT7.rt",
+            "/res/animation_2/effects/deep_glow/rt/midRT8.rt",
+            "/res/animation_2/effects/deep_glow/rt/midRT9.rt",
+            "/res/animation_2/effects/local_in_fullscreen/back_page.frag",
+            "/res/animation_2/effects/local_in_fullscreen/blend.frag",
+            "/res/animation_2/effects/local_in_fullscreen/color_difference.frag",
+            "/res/animation_2/effects/local_in_fullscreen/fullscreen.vert",
+            "/res/animation_2/effects/local_in_fullscreen/local.vert",
+            "/res/animation_2/effects/local_in_fullscreen/local_in_fullscreen.frag",
+            "/res/animation_2/effects/local_in_fullscreen/local_in_fullscreen.vert",
+            "/res/animation_2/effects/quad/quad.frag",
+            "/res/animation_2/effects/quad/quad.material",
+            "/res/animation_2/effects/quad/quad.vert",
+            "/res/animation_2/effects/quad/quad.xshader",
+            "/res/animation_2/effects/text/text.material",
+            "/res/animation_2/effects/text/text.xshader",
+            "/res/animation_2/emojiAnimData.lua",
+            "/res/animation_2/emojiMaps/emoji_en_v6.json",
+            "/res/animation_2/extra.json",
+            "/res/animation_2/js-meta.json",
+            "/res/animation_2/lua-meta.json",
+            "/res/animation_2/lua/ImageBusinessSlider.lua",
+            "/res/animation_2/main.scene",
+            "/res/animation_2/mesh/quad.mesh",
+            "/res/animation_2/modules/AEData.lua",
+            "/res/animation_2/modules/AETools.lua",
+            "/res/animation_2/modules/CaptionModule.lua",
+            "/res/animation_2/modules/ComToolsModule.lua",
+            "/res/animation_2/modules/CommonLetterModule.lua",
+            "/res/animation_2/modules/EmojiModule.lua",
+            "/res/animation_2/modules/KeyWordsStyle.lua",
+            "/res/animation_2/modules/LetterStyleMergeModule.lua",
+            "/res/animation_2/modules/RenderModule.lua",
+            "/res/animation_2/modules/SceneMgrModule.lua",
+            "/res/animation_2/modules/Sprite2DModule.lua",
+            "/res/animation_2/modules/TextCloneModule.lua",
+            "/res/animation_2/modules/TextCommonAnimModule.lua",
+            "/res/animation_2/modules/TextSticker1.lua",
+            "/res/animation_2/raw_summary.json",
+            "/res/animation_2/rt/b1.rt",
+            "/res/animation_2/rt/b2.rt",
+            "/res/animation_2/rt/back_page.rt",
+            "/res/animation_2/rt/outputTex.rt",
+            "/res/animation_2/rt/rt1.rt",
+            "/res/animation_2/rt/rt2.rt",
+            "/res/animation_2/rt/rt3.rt",
+            "/res/animation_2/sticker.config",
+            "/res/animation_2/test/caption_fake_data.json",
+            "/res/animation_2/test/caption_fake_data0.json",
+            "/res/animation_2/test/caption_fake_data1.json",
+            "/res/animation_2/test/caption_fake_data2.json",
+            "/res/animation_2/test/caption_fake_data4.json",
+            "/res/animation_2/test/fake_kw_style1.json",
+            "/res/animation_2/xshader/clear.frag",
+            "/res/animation_2/xshader/glowMask2.frag",
+            "/res/animation_2/xshader/screen.vert",
+            "/res/animation_2/xshader/textRenderer.vert",
+            "/res/animation_2/xshader/textRenderer2.frag"
+        ],
+        "animation_3": [
+            "/res/animation_3/ImageBusinessSlider.json",
+            "/res/animation_3/LuaRTTI.MarkGen.lua",
+            "/res/animation_3/TextAnim.lua",
+            "/res/animation_3/algorithmConfig.json",
+            "/res/animation_3/anim.prefab",
+            "/res/animation_3/config.json",
+            "/res/animation_3/content.json",
+            "/res/animation_3/data_val.json",
+            "/res/animation_3/effect_platform_children.tag",
+            "/res/animation_3/effects/blur/blend.frag",
+            "/res/animation_3/effects/blur/blur.vert",
+            "/res/animation_3/effects/blur/blur1.frag",
+            "/res/animation_3/effects/blur/blur2.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/Blend.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurX1.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurX2.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurX3.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurX4.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurX5.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurX6.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurX7.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurY1.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurY2.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurY3.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurY4.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurY5.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurY6.frag",
+            "/res/animation_3/effects/deep_glow/MatAndShader/GlowGaussianBlurY7.frag",
+            "/res/animation_3/effects/deep_glow/rt/midRT1.rt",
+            "/res/animation_3/effects/deep_glow/rt/midRT10.rt",
+            "/res/animation_3/effects/deep_glow/rt/midRT2.rt",
+            "/res/animation_3/effects/deep_glow/rt/midRT3.rt",
+            "/res/animation_3/effects/deep_glow/rt/midRT4.rt",
+            "/res/animation_3/effects/deep_glow/rt/midRT5.rt",
+            "/res/animation_3/effects/deep_glow/rt/midRT6.rt",
+            "/res/animation_3/effects/deep_glow/rt/midRT7.rt",
+            "/res/animation_3/effects/deep_glow/rt/midRT8.rt",
+            "/res/animation_3/effects/deep_glow/rt/midRT9.rt",
+            "/res/animation_3/effects/local_in_fullscreen/back_page.frag",
+            "/res/animation_3/effects/local_in_fullscreen/blend.frag",
+            "/res/animation_3/effects/local_in_fullscreen/color_difference.frag",
+            "/res/animation_3/effects/local_in_fullscreen/fullscreen.vert",
+            "/res/animation_3/effects/local_in_fullscreen/local.vert",
+            "/res/animation_3/effects/local_in_fullscreen/local_in_fullscreen.frag",
+            "/res/animation_3/effects/local_in_fullscreen/local_in_fullscreen.vert",
+            "/res/animation_3/effects/quad/quad.frag",
+            "/res/animation_3/effects/quad/quad.material",
+            "/res/animation_3/effects/quad/quad.vert",
+            "/res/animation_3/effects/quad/quad.xshader",
+            "/res/animation_3/effects/text/text.material",
+            "/res/animation_3/effects/text/text.xshader",
+            "/res/animation_3/extra.json",
+            "/res/animation_3/js-meta.json",
+            "/res/animation_3/lua-meta.json",
+            "/res/animation_3/lua/ImageBusinessSlider.lua",
+            "/res/animation_3/main.scene",
+            "/res/animation_3/mesh/quad.mesh",
+            "/res/animation_3/modules/AEData.lua",
+            "/res/animation_3/modules/AETools.lua",
+            "/res/animation_3/modules/CaptionModule.lua",
+            "/res/animation_3/modules/CommonLetterModule.lua",
+            "/res/animation_3/modules/LetterStyleMergeModule.lua",
+            "/res/animation_3/modules/Sprite2DModule.lua",
+            "/res/animation_3/modules/TextCloneModule.lua",
+            "/res/animation_3/modules/TextCommonAnimModule.lua",
+            "/res/animation_3/modules/TextSticker.lua",
+            "/res/animation_3/raw_summary.json",
+            "/res/animation_3/rt/b1.rt",
+            "/res/animation_3/rt/b2.rt",
+            "/res/animation_3/rt/back_page.rt",
+            "/res/animation_3/rt/outputTex.rt",
+            "/res/animation_3/rt/rt1.rt",
+            "/res/animation_3/rt/rt2.rt",
+            "/res/animation_3/rt/rt3.rt",
+            "/res/animation_3/sticker.config",
+            "/res/animation_3/test/caption_fake_data.json",
+            "/res/animation_3/test/caption_fake_data0.json",
+            "/res/animation_3/test/caption_fake_data1.json",
+            "/res/animation_3/test/caption_fake_data2.json",
+            "/res/animation_3/test/caption_fake_data4.json",
+            "/res/animation_3/test/fake_kw_style1.json",
+            "/res/animation_3/xshader/clear.frag",
+            "/res/animation_3/xshader/glowMask2.frag",
+            "/res/animation_3/xshader/screen.vert",
+            "/res/animation_3/xshader/textRenderer.vert",
+            "/res/animation_3/xshader/textRenderer2.frag"
+        ],
+        "animation_5": [
+            "/res/animation_5/ImageBusinessSlider.json",
+            "/res/animation_5/LuaRTTI.MarkGen.lua",
+            "/res/animation_5/TextAnim.lua",
+            "/res/animation_5/algorithmConfig.json",
+            "/res/animation_5/anim.prefab",
+            "/res/animation_5/config.json",
+            "/res/animation_5/content.json",
+            "/res/animation_5/data_val.json",
+            "/res/animation_5/effect_platform_children.tag",
+            "/res/animation_5/effects/blur/blend.frag",
+            "/res/animation_5/effects/blur/blur.vert",
+            "/res/animation_5/effects/blur/blur1.frag",
+            "/res/animation_5/effects/blur/blur2.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/Blend.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurX1.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurX2.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurX3.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurX4.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurX5.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurX6.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurX7.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurY1.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurY2.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurY3.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurY4.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurY5.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurY6.frag",
+            "/res/animation_5/effects/deep_glow/MatAndShader/GlowGaussianBlurY7.frag",
+            "/res/animation_5/effects/deep_glow/rt/midRT1.rt",
+            "/res/animation_5/effects/deep_glow/rt/midRT10.rt",
+            "/res/animation_5/effects/deep_glow/rt/midRT2.rt",
+            "/res/animation_5/effects/deep_glow/rt/midRT3.rt",
+            "/res/animation_5/effects/deep_glow/rt/midRT4.rt",
+            "/res/animation_5/effects/deep_glow/rt/midRT5.rt",
+            "/res/animation_5/effects/deep_glow/rt/midRT6.rt",
+            "/res/animation_5/effects/deep_glow/rt/midRT7.rt",
+            "/res/animation_5/effects/deep_glow/rt/midRT8.rt",
+            "/res/animation_5/effects/deep_glow/rt/midRT9.rt",
+            "/res/animation_5/effects/local_in_fullscreen/back_page.frag",
+            "/res/animation_5/effects/local_in_fullscreen/blend.frag",
+            "/res/animation_5/effects/local_in_fullscreen/color_difference.frag",
+            "/res/animation_5/effects/local_in_fullscreen/fullscreen.vert",
+            "/res/animation_5/effects/local_in_fullscreen/local.vert",
+            "/res/animation_5/effects/local_in_fullscreen/local_in_fullscreen.frag",
+            "/res/animation_5/effects/local_in_fullscreen/local_in_fullscreen.vert",
+            "/res/animation_5/effects/quad/quad.frag",
+            "/res/animation_5/effects/quad/quad.material",
+            "/res/animation_5/effects/quad/quad.vert",
+            "/res/animation_5/effects/quad/quad.xshader",
+            "/res/animation_5/effects/text/text.material",
+            "/res/animation_5/effects/text/text.xshader",
+            "/res/animation_5/extra.json",
+            "/res/animation_5/js-meta.json",
+            "/res/animation_5/lua-meta.json",
+            "/res/animation_5/lua/ImageBusinessSlider.lua",
+            "/res/animation_5/main.scene",
+            "/res/animation_5/mesh/quad.mesh",
+            "/res/animation_5/modules/AEData.lua",
+            "/res/animation_5/modules/AETools.lua",
+            "/res/animation_5/modules/CaptionModule.lua",
+            "/res/animation_5/modules/CommonLetterModule.lua",
+            "/res/animation_5/modules/KeyWordsStyle.lua",
+            "/res/animation_5/modules/LetterStyleMergeModule.lua",
+            "/res/animation_5/modules/Sprite2DModule.lua",
+            "/res/animation_5/modules/TextCloneModule.lua",
+            "/res/animation_5/modules/TextCommonAnimModule.lua",
+            "/res/animation_5/modules/TextSticker.lua",
+            "/res/animation_5/raw_summary.json",
+            "/res/animation_5/rt/b1.rt",
+            "/res/animation_5/rt/b2.rt",
+            "/res/animation_5/rt/back_page.rt",
+            "/res/animation_5/rt/outputTex.rt",
+            "/res/animation_5/rt/rt1.rt",
+            "/res/animation_5/rt/rt2.rt",
+            "/res/animation_5/rt/rt3.rt",
+            "/res/animation_5/sticker.config",
+            "/res/animation_5/test/caption_fake_data.json",
+            "/res/animation_5/test/caption_fake_data0.json",
+            "/res/animation_5/test/caption_fake_data1.json",
+            "/res/animation_5/test/caption_fake_data2.json",
+            "/res/animation_5/test/caption_fake_data4.json",
+            "/res/animation_5/test/fake_kw_style1.json",
+            "/res/animation_5/xshader/clear.frag",
+            "/res/animation_5/xshader/glowMask2.frag",
+            "/res/animation_5/xshader/screen.vert",
+            "/res/animation_5/xshader/textRenderer.vert",
+            "/res/animation_5/xshader/textRenderer2.frag"
+        ],
+        "old_preset_blue": [
+            "/res/old_preset_blue/config.json",
+            "/res/old_preset_blue/content.json",
+            "/res/old_preset_blue/effect.prefab",
+            "/res/old_preset_blue/material/effect.material",
+            "/res/old_preset_blue/xshader/depth.fs",
+            "/res/old_preset_blue/xshader/effect.frag",
+            "/res/old_preset_blue/xshader/effect.vert",
+            "/res/old_preset_blue/xshader/effect.xshader"
+        ],
+        "old_preset_red": [
+            "/res/old_preset_red/config.json",
+            "/res/old_preset_red/content.json",
+            "/res/old_preset_red/effect.prefab",
+            "/res/old_preset_red/material/effect.material",
+            "/res/old_preset_red/xshader/depth.fs",
+            "/res/old_preset_red/xshader/effect.frag",
+            "/res/old_preset_red/xshader/effect.vert",
+            "/res/old_preset_red/xshader/effect.xshader"
+        ],
+        "animation_19": [
+            "/res/animation_19/ImageBusinessSlider.json",
+            "/res/animation_19/LuaRTTI.MarkGen.lua",
+            "/res/animation_19/TextAnim.lua",
+            "/res/animation_19/algorithmConfig.json",
+            "/res/animation_19/anim.prefab",
+            "/res/animation_19/config.json",
+            "/res/animation_19/content.json",
+            "/res/animation_19/data_val.json",
+            "/res/animation_19/effect_platform_children.tag",
+            "/res/animation_19/effects/Deep_Glow/Lua/GlowBlurLayerScript.lua",
+            "/res/animation_19/effects/Deep_Glow/Lua/TextScript.lua",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/Blend/Blend.frag",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/Blend/Blend.material",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/Blend/Blend.vert",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/Blend/Blend.xshader",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/Blend/Blend1.frag",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowBlurH.xshader",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowBlurH_1.material",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowBlurH_2.material",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowBlurV.xshader",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowBlurV_1.material",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowBlurV_2.material",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowGaussianBlur.vert",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowGaussianBlurX1.frag",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowGaussianBlurX2.frag",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowGaussianBlurY1.frag",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur/GlowGaussianBlurY2.frag",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur_Color/GlowBlurH.xshader",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur_Color/GlowBlurH_1.material",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur_Color/GlowBlurV.xshader",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur_Color/GlowBlurV_1.material",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur_Color/GlowGaussianBlur.vert",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur_Color/GlowGaussianBlurX1.frag",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/GlowGaussianBlur_Color/GlowGaussianBlurY1.frag",
+            "/res/animation_19/effects/Deep_Glow/MatAndShader/Mesh/Quad.mesh",
+            "/res/animation_19/effects/Deep_Glow/Rt/BlurRT_1.rt",
+            "/res/animation_19/effects/Deep_Glow/Rt/BlurRT_2.rt",
+            "/res/animation_19/effects/Deep_Glow/Rt/BlurRT_3.rt",
+            "/res/animation_19/effects/Deep_Glow/Rt/textRT.rt",
+            "/res/animation_19/js-meta.json",
+            "/res/animation_19/lua-meta.json",
+            "/res/animation_19/main.scene",
+            "/res/animation_19/material/noface.material",
+            "/res/animation_19/mesh/Quad.mesh",
+            "/res/animation_19/prefabs/Deep_Glow_Root.prefab",
+            "/res/animation_19/rt/BlurRT_4.rt",
+            "/res/animation_19/rt/midRT1.rt",
+            "/res/animation_19/rt/outputTex.rt",
+            "/res/animation_19/sticker.config",
+            "/res/animation_19/xshader/clear.frag",
+            "/res/animation_19/xshader/noface.xshader",
+            "/res/animation_19/xshader/quad.frag",
+            "/res/animation_19/xshader/quad.vert"
+        ],
+        "cover_templates/text_template_1": [
+            "/res/cover_templates/text_template_1/config.json",
+            "/res/cover_templates/text_template_1/effectStyle.json",
+            "/res/cover_templates/text_template_1/text_shape/config.json",
+        ],
+        "cover_templates/text_template_3": [
+            "/res/cover_templates/text_template_3/config.json",
+            "/res/cover_templates/text_template_3/effectStyle.json",
+            "/res/cover_templates/text_template_3/text_shape/config.json",
+            "/res/cover_templates/text_template_3/text_shape/content.json",
+            "/res/cover_templates/text_template_3/text_shape/infoSticker.lua",
+            "/res/cover_templates/text_template_3/text_shape/style_glitch.png",
+        ],
+        "cover_templates/text_template_2": [
+            "/res/cover_templates/text_template_2/config.json",
+            "/res/cover_templates/text_template_2/effectStyle.json",
+            "/res/cover_templates/text_template_2/text_shape/config.json",
+            "/res/cover_templates/text_template_2/text_shape/content.json",
+            "/res/cover_templates/text_template_2/text_shape/infoSticker.lua",
+            "/res/cover_templates/text_template_2/text_shape/style_vector.png",
+        ],
+        "cover_templates/text_template_4": [
+            "/res/cover_templates/text_template_4/config.json",
+            "/res/cover_templates/text_template_4/effectStyle.json",
+            "/res/cover_templates/text_template_4/text_shape/config.json",
+            "/res/cover_templates/text_template_4/text_shape/content.json",
+            "/res/cover_templates/text_template_4/text_shape/infoSticker.lua",
+            "/res/cover_templates/text_template_4/text_shape/style_tint.png",
+        ],
+        "cover_templates/text_template_5": [
+            "/res/cover_templates/text_template_5/config.json",
+            "/res/cover_templates/text_template_5/effectStyle.json",
+            "/res/cover_templates/text_template_5/text_shape/config.json",
+            "/res/cover_templates/text_template_5/text_shape/content.json",
+            "/res/cover_templates/text_template_5/text_shape/infoSticker.lua",
+            "/res/cover_templates/text_template_5/text_shape/style_emblem.png",
+            "/res/cover_templates/text_template_5/text_shape/style_emblem_logo.png",
+        ],
+        "cover_templates/text_template_6": [
+            "/res/cover_templates/text_template_6/config.json",
+            "/res/cover_templates/text_template_6/effectStyle.json",
+            "/res/cover_templates/text_template_6/text_shape/config.json",
+        ],
+        "cover_templates/text_template_7": [
+            "/res/cover_templates/text_template_7/config.json",
+            "/res/cover_templates/text_template_7/effectStyle.json",
+            "/res/cover_templates/text_template_7/text_shape/config.json",
+        ],
+        "cover_templates/text_template_8": [
+            "/res/cover_templates/text_template_8/config.json",
+            "/res/cover_templates/text_template_8/effectStyle.json",
+            "/res/cover_templates/text_template_8/text_shape/config.json",
+            "/res/cover_templates/text_template_8/text_shape/content.json",
+            "/res/cover_templates/text_template_8/text_shape/infoSticker.lua",
+            "/res/cover_templates/text_template_8/text_shape/style_skew.png",
+            "/res/cover_templates/text_template_8/text_shape/style_skew_logo.png",
+        ],
+        "cover_templates/text_template_9": [
+            "/res/cover_templates/text_template_9/config.json",
+            "/res/cover_templates/text_template_9/effectStyle.json",
+            "/res/cover_templates/text_template_9/text_shape/config.json",
+            "/res/cover_templates/text_template_9/text_shape/content.json",
+            "/res/cover_templates/text_template_9/text_shape/infoSticker.lua",
+            "/res/cover_templates/text_template_9/text_shape/style_pill.png",
+        ],
+        "cover_templates/text_template_10": [
+            "/res/cover_templates/text_template_10/config.json",
+            "/res/cover_templates/text_template_10/effectStyle.json",
+            "/res/cover_templates/text_template_10/text_shape/config.json",
+            "/res/cover_templates/text_template_10/text_shape/content.json",
+            "/res/cover_templates/text_template_10/text_shape/infoSticker.lua",
+            "/res/cover_templates/text_template_10/text_shape/style_pop.png",
+        ],
+        "cover_templates/text_template_11": [
+            "/res/cover_templates/text_template_11/config.json",
+            "/res/cover_templates/text_template_11/effectStyle.json",
+            "/res/cover_templates/text_template_11/text_shape/config.json",
+            "/res/cover_templates/text_template_11/text_shape/content.json",
+            "/res/cover_templates/text_template_11/text_shape/infoSticker.lua",
+            "/res/cover_templates/text_template_11/text_shape/style_bubble.png",
+        ],
+    };
+
+    /**
+     * 日志等级枚举，与底层WASM日志保持一致
+     */
+    var LogLevel;
+    (function (LogLevel) {
+        LogLevel[LogLevel["USEAB"] = -1] = "USEAB";
+        LogLevel[LogLevel["NONE"] = 0] = "NONE";
+        LogLevel[LogLevel["DEFAULT"] = 1] = "DEFAULT";
+        LogLevel[LogLevel["VERBOSE"] = 2] = "VERBOSE";
+        LogLevel[LogLevel["DEBUG"] = 3] = "DEBUG";
+        LogLevel[LogLevel["INFO"] = 4] = "INFO";
+        LogLevel[LogLevel["WARN"] = 5] = "WARN";
+        LogLevel[LogLevel["ERROR"] = 6] = "ERROR";
+        LogLevel[LogLevel["FATAL"] = 7] = "FATAL";
+        LogLevel[LogLevel["SILENT"] = 8] = "SILENT";
+    })(LogLevel || (LogLevel = {}));
+    /**
+     * 统一日志管理器
+     */
+    class Logger {
+        constructor() {
+            this.currentLogLevel = LogLevel.INFO;
+            this.context = {};
+            this.prefix = "[EffectWebSDK]";
+        }
+        static getInstance() {
+            if (!Logger.instance) {
+                Logger.instance = new Logger();
+            }
+            return Logger.instance;
+        }
+        /**
+         * 获取当前日志等级
+         */
+        getCurrentLogLevel() {
+            return this.currentLogLevel;
+        }
+        /**
+         * 设置日志等级
+         */
+        setLogLevel(level) {
+            this.currentLogLevel = level;
+        }
+        /**
+         * 设置日志前缀
+         */
+        setPrefix(prefix) {
+            this.prefix = prefix;
+        }
+        /**
+         * 设置日志上下文
+         */
+        setContext(context) {
+            this.context = { ...this.context, ...context };
+        }
+        /**
+         * 清除上下文
+         */
+        clearContext() {
+            this.context = {};
+        }
+        /**
+         * 检查是否应该输出日志
+         */
+        shouldLog(level) {
+            if (this.currentLogLevel === LogLevel.SILENT) {
+                return false;
+            }
+            return level >= this.currentLogLevel;
+        }
+        /**
+         * 格式化日志消息
+         */
+        formatMessage(level, message, ...args) {
+            const timestamp = new Date().toISOString();
+            const levelName = LogLevel[level] || 'UNKNOWN';
+            const contextStr = Object.keys(this.context).length > 0
+                ? ` [${Object.entries(this.context).map(([k, v]) => `${k}:${v}`).join(', ')}]`
+                : '';
+            return `${timestamp} ${this.prefix} [${levelName}]${contextStr} ${message}`;
+        }
+        /**
+         * 输出日志
+         */
+        log(level, message, ...args) {
+            if (!this.shouldLog(level)) {
+                return;
+            }
+            const formattedMessage = this.formatMessage(level, message, ...args);
+            switch (level) {
+                case LogLevel.VERBOSE:
+                case LogLevel.DEBUG:
+                    console.debug(formattedMessage, ...args);
+                    break;
+                case LogLevel.INFO:
+                    console.info(formattedMessage, ...args);
+                    break;
+                case LogLevel.WARN:
+                    console.warn(formattedMessage, ...args);
+                    break;
+                case LogLevel.ERROR:
+                case LogLevel.FATAL:
+                    console.error(formattedMessage, ...args);
+                    break;
+                default:
+                    console.log(formattedMessage, ...args);
+            }
+        }
+        /**
+         * 详细日志
+         */
+        verbose(message, ...args) {
+            this.log(LogLevel.VERBOSE, message, ...args);
+        }
+        /**
+         * 调试日志
+         */
+        debug(message, ...args) {
+            this.log(LogLevel.DEBUG, message, ...args);
+        }
+        /**
+         * 信息日志
+         */
+        info(message, ...args) {
+            this.log(LogLevel.INFO, message, ...args);
+        }
+        /**
+         * 警告日志
+         */
+        warn(message, ...args) {
+            this.log(LogLevel.WARN, message, ...args);
+        }
+        /**
+         * 错误日志
+         */
+        error(message, ...args) {
+            this.log(LogLevel.ERROR, message, ...args);
+        }
+        /**
+         * 致命错误日志
+         */
+        fatal(message, ...args) {
+            this.log(LogLevel.FATAL, message, ...args);
+        }
+        /**
+         * 带effectId上下文的日志
+         */
+        withEffect(effectId) {
+            return {
+                verbose: (message, ...args) => {
+                    const oldContext = this.context;
+                    this.setContext({ effectId });
+                    this.verbose(message, ...args);
+                    this.context = oldContext;
+                },
+                debug: (message, ...args) => {
+                    const oldContext = this.context;
+                    this.setContext({ effectId });
+                    this.debug(message, ...args);
+                    this.context = oldContext;
+                },
+                info: (message, ...args) => {
+                    const oldContext = this.context;
+                    this.setContext({ effectId });
+                    this.info(message, ...args);
+                    this.context = oldContext;
+                },
+                warn: (message, ...args) => {
+                    const oldContext = this.context;
+                    this.setContext({ effectId });
+                    this.warn(message, ...args);
+                    this.context = oldContext;
+                },
+                error: (message, ...args) => {
+                    const oldContext = this.context;
+                    this.setContext({ effectId });
+                    this.error(message, ...args);
+                    this.context = oldContext;
+                }
+            };
+        }
+    }
+    // 导出日志管理器实例供外部使用
+    Logger.getInstance();
+
+    const _workerSelf = self;
+    function _forwardToMainThread(level, formattedMsg, args) {
+        try {
+            const safeArgs = args.map(a => {
+                try {
+                    return typeof a === 'object' ? JSON.stringify(a) : String(a);
+                }
+                catch {
+                    return '[unserializable]';
+                }
+            });
+            _workerSelf.postMessage({
+                id: `wlog_${Date.now()}`,
+                type: WorkerMessageType.LOG,
+                status: WorkerResponseStatus.SUCCESS,
+                data: [formattedMsg, ...safeArgs]
+            });
+        }
+        catch (_) { /* best-effort, never throw */ }
+    }
+    // Worker-side log level, aligned with the LogLevel semantics used by
+    // MainThreadRuntime (higher threshold = quieter; SILENT = fully muted,
+    // NONE = everything passes). Set on INIT and via SET_LOG_LEVEL RPC.
+    let _workerLogLevel = LogLevel.INFO;
+    function setWorkerLogLevel(level) {
+        _workerLogLevel = level;
+    }
+    function _shouldWorkerLog(level) {
+        if (_workerLogLevel === LogLevel.SILENT)
+            return false;
+        return level >= _workerLogLevel;
+    }
+    const _noopLog = (..._args) => { };
+    const WorkerLog = {
+        get debug() {
+            if (!_shouldWorkerLog(LogLevel.DEBUG))
+                return _noopLog;
+            return console.log.bind(console, '[Worker ⚡️]', '[debug]');
+        },
+        get verbose() {
+            if (!_shouldWorkerLog(LogLevel.VERBOSE))
+                return _noopLog;
+            return console.log.bind(console, '[Worker ⚡️]', '[verbose]');
+        },
+        get info() {
+            if (!_shouldWorkerLog(LogLevel.INFO))
+                return _noopLog;
+            return console.info.bind(console, '[Worker ⚡️]', '[info]');
+        },
+        get warn() {
+            if (!_shouldWorkerLog(LogLevel.WARN))
+                return _noopLog;
+            return function (step, ...args) {
+                const msg = `[Worker ⚠️] [${step}]`;
+                console.warn(msg, ...args);
+                _forwardToMainThread('warn', msg, args);
+            };
+        },
+        get error() {
+            if (!_shouldWorkerLog(LogLevel.ERROR))
+                return _noopLog;
+            return function (step, ...args) {
+                const msg = `[Worker ❌] [${step}]`;
+                console.error(msg, ...args);
+                _forwardToMainThread('error', msg, args);
+            };
+        }
+    };
+    // Mocking EffectManager interface for ResourceController compatibility
+    // In the future, we should refactor ResourceController to not depend on the full EffectManager
+    class EffectManagerImpl {
+        constructor(workerCtx) {
+            this.sdk = new CreatorController();
+            this.fileMap = fileMapSource;
+            this.assetPrefix = '';
+            // Internal state
+            this._isInitialized = false;
+            this._offscreenCanvas = null;
+            this._opSerial = 0; // For seekFrame anti-disorder
+            this._latestOwnerId = 0; // For seekFrame deduplication
+            // Rendering State
+            this._activeIdSet = new Set();
+            this._activeElementIds = [];
+            // Effect parameter caches for batch synchronization
+            this._stickerLevelCache = new Map();
+            this._textLevelCache = new Map();
+            // Temporary cache and edit mode management
+            this._tempModificationStates = new Map();
+            this._tempStickerCache = new Map();
+            this._tempTextCache = new Map();
+            // Temporary canvas for internal frame validation
+            this._diagnosticsCanvas = null;
+            this._diagnosticsCtx = null;
+            this.workerCtx = workerCtx;
+            // ResourceController expects an EffectManager-like object with an 'sdk' property
+            this.resource = new ResourceController(this);
+            this.legacy = new LegacyEffectManager(this);
+        }
+        async initialize(options, logConfig) {
+            // Align worker-side log level with MainThreadRuntime: an explicit logLevel
+            // wins, otherwise VERBOSE when history tracking is enabled, else SILENT.
+            const resolvedLogLevel = logConfig?.logLevel !== undefined
+                ? logConfig.logLevel
+                : logConfig?.enableEffectHistoryTracking
+                    ? LogLevel.VERBOSE
+                    : LogLevel.SILENT;
+            setWorkerLogLevel(resolvedLogLevel);
+            try {
+                console.log('[Worker] EffectManagerImpl initializing with options:', options);
+                const opts = options;
+                if (opts.assetPrefix) {
+                    this.assetPrefix = opts.assetPrefix;
+                }
+                // 1. Initialize WASM SDK
+                await this.sdk.init(options);
+                // 2. Initialize Resource Controller
+                await this.resource.init();
+                // 3. Log level already synced from the main thread on INIT
+                //    (see setWorkerLogLevel at the top of initialize).
+                this._isInitialized = true;
+                console.log('[Worker] Initialization success');
+            }
+            catch (error) {
+                console.error('[Worker] Initialization failed:', error);
+                throw error;
+            }
+        }
+        async destroy() {
+            console.log('[Worker] Destroying EffectManagerImpl...');
+            // 1. Destroy all effects first
+            try {
+                if (this.sdk.effectInstance) {
+                    this.sdk.effectInstance.destroyAllEffects();
+                    // Ensure canvas resources are released
+                    this.sdk.effectInstance.destroyCanvas();
+                }
+            }
+            catch (e) {
+                console.warn('[Worker] Failed to destroy effects/canvas during shutdown:', e);
+            }
+            // 2. Clean up WASM instance
+            if (this.sdk.effectInstance) {
+                // Check if delete method exists (Emscripten standard)
+                if ('delete' in this.sdk.effectInstance && typeof this.sdk.effectInstance.delete === 'function') {
+                    this.sdk.effectInstance.delete();
+                }
+                this.sdk.effectInstance = undefined;
+            }
+            // 3. Release Canvas
+            this._offscreenCanvas = null;
+            // 4. Reset state
+            this._isInitialized = false;
+            console.log('[Worker] Destroyed successfully');
+        }
+        // --- RPC Handlers ---
+        async setCanvas(payload) {
+            if (!this._isInitialized || !this.sdk.effectInstance) {
+                throw new Error("SDK not initialized");
+            }
+            const { width, height, pixelRatio } = payload;
+            let canvas = payload.canvas;
+            console.log(`[Worker] setCanvas received: ${width}x${height} pixelRatio: ${pixelRatio}, external canvas provided: ${!!canvas}`);
+            // If no canvas provided externally, create one internally (Self-Managed Mode)
+            if (!canvas) {
+                if (this._offscreenCanvas) {
+                    // Reuse existing if size matches? Or just resize?
+                    // For simplicity and safety, let's resize the existing one if possible, or use setCanvasSize logic.
+                    // But here we are in setCanvas, implying a reset.
+                    // Let's create a new one or use existing.
+                    canvas = this._offscreenCanvas;
+                    canvas.width = width;
+                    canvas.height = height;
+                }
+                else {
+                    // Check environment support
+                    if (typeof OffscreenCanvas === 'undefined') {
+                        throw new Error("OffscreenCanvas not supported in Worker environment");
+                    }
+                    canvas = new OffscreenCanvas(width, height);
+                }
+            }
+            // Call WASM binding to set offscreen canvas
+            // Note: The binding expects an OffscreenCanvas object
+            const result = this.sdk.effectInstance.setOffscreenCanvas({
+                offscreenCanvas: canvas,
+                width,
+                height
+            });
+            this._offscreenCanvas = canvas;
+            return result;
+        }
+        async setCanvasSize(width, height) {
+            if (this._offscreenCanvas) {
+                this._offscreenCanvas.width = width;
+                this._offscreenCanvas.height = height;
+            }
+            if (!this.sdk.effectInstance)
+                return;
+            return this.sdk.effectInstance.setCanvasSize(width, height);
+        }
+        async seekFrame(elementIds, timestamp, ownerId) {
+            WorkerLog.debug('seekFrame:Start', `timestamp: ${timestamp}, ownerId: ${ownerId}, elements:`, elementIds);
+            if (!this.sdk.effectInstance)
+                return;
+            // 0. Deduplication / Backpressure Check
+            // If we receive a frame with an older ownerId than what we've already seen/processed, discard it.
+            if (ownerId < this._latestOwnerId) {
+                WorkerLog.warn('seekFrame:Intercept', `Skipped outdated frame. ownerId: ${ownerId} < latest: ${this._latestOwnerId}`);
+                return;
+            }
+            this._latestOwnerId = ownerId;
+            // 1. Logic ported from MainThreadRuntime.seekFrame
+            const elementIdsArray = elementIds; // Already array from RPC
+            const effect = this.sdk.effectInstance;
+            const callId_internal = ++this._opSerial;
+            // 1.1 Handle empty array case
+            if (elementIdsArray.length === 0) {
+                WorkerLog.debug('seekFrame:Empty', `Received empty array. Current active count: ${this._activeElementIds.length}`);
+                if (this._activeElementIds.length > 0) {
+                    try {
+                        effect.disableElements(JSON.stringify(this._activeElementIds));
+                        // Anti-disorder check
+                        if (callId_internal !== this._opSerial) {
+                            WorkerLog.warn('seekFrame:Disorder', `seekFrame (empty) disordered: ${callId_internal} vs ${this._opSerial}`);
+                            return;
+                        }
+                        // Double check ownerId just in case
+                        if (this._latestOwnerId > ownerId) {
+                            WorkerLog.debug('seekFrame:Abort', `Aborted due to newer ownerId: ${this._latestOwnerId} > ${ownerId}`);
+                            return;
+                        }
+                        this._activeElementIds = [];
+                        this._activeIdSet.clear();
+                        WorkerLog.debug('seekFrame:EmptySuccess', `All elements disabled.`);
+                    }
+                    catch (e) {
+                        console.error("[Worker] Failed to disable all elements.", e);
+                        return;
+                    }
+                }
+                return;
+            }
+            // 1.2 Check for changes
+            const newSet = new Set(elementIdsArray);
+            let changed = false;
+            if (this._activeIdSet.size !== newSet.size) {
+                changed = true;
+            }
+            else {
+                const [smaller, larger] = this._activeIdSet.size <= newSet.size
+                    ? [this._activeIdSet, newSet]
+                    : [newSet, this._activeIdSet];
+                for (const id of smaller) {
+                    if (!larger.has(id)) {
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+            WorkerLog.debug('seekFrame:Diff', `changed: ${changed}`);
+            let renderResultStr = null;
+            // 1.3 If no changes, just seek
+            if (!changed) {
+                if (callId_internal !== this._opSerial) {
+                    WorkerLog.warn('seekFrame:Disorder', `seekFrame (no-change) disordered: ${callId_internal} vs ${this._opSerial}`);
+                    return;
+                }
+                if (this._latestOwnerId > ownerId)
+                    return;
+                WorkerLog.debug('seekFrame:WasmCall', `No element diff. Invoking effect.seekFrame(${timestamp})`);
+                renderResultStr = await effect.seekFrame(timestamp);
+                WorkerLog.verbose('seekFrame:WasmDone', `effect.seekFrame done.`);
+            }
+            else {
+                // 1.4 Calculate diff
+                const toDisable = [];
+                for (const id of this._activeIdSet)
+                    if (!newSet.has(id))
+                        toDisable.push(id);
+                const toEnable = [];
+                for (const id of newSet)
+                    if (!this._activeIdSet.has(id))
+                        toEnable.push(id);
+                WorkerLog.debug('seekFrame:DiffDetail', `toDisable: [${toDisable.join(',')}], toEnable: [${toEnable.join(',')}]`);
+                // 1.5 Sync with Wasm
+                WorkerLog.verbose('seekFrame:Sync', `Preparing to sync elements with Wasm...`);
+                try {
+                    if (toDisable.length > 0) {
+                        effect.disableElements(JSON.stringify(toDisable));
+                    }
+                    if (toEnable.length > 0) {
+                        effect.enableElements(JSON.stringify(toEnable));
+                    }
+                }
+                catch (e) {
+                    console.error("[Worker] state sync failed", e);
+                    return;
+                }
+                // Anti-disorder check before render
+                if (callId_internal !== this._opSerial) {
+                    WorkerLog.warn('seekFrame:Disorder', `seekFrame (changed) disordered: ${callId_internal} vs ${this._opSerial}`);
+                    return;
+                }
+                if (this._latestOwnerId > ownerId)
+                    return;
+                // 1.6 Render
+                WorkerLog.debug('seekFrame:WasmCall', `Invoking effect.seekFrame(${timestamp}) after state sync`);
+                renderResultStr = await effect.seekFrame(timestamp);
+                WorkerLog.verbose('seekFrame:WasmDone', `effect.seekFrame done.`);
+                // 1.7 Update Cache
+                this._activeElementIds = elementIdsArray.slice();
+                this._activeIdSet = newSet;
+            }
+            // 2. Capture Frame
+            WorkerLog.debug('seekFrame:Capture', `Starting to extract ImageBitmap from OffscreenCanvas...`);
+            if (this._offscreenCanvas) {
+                // Transfer to ImageBitmap
+                const bitmap = this._offscreenCanvas.transferToImageBitmap();
+                // Diagnostics: Check if the frame is completely transparent/black using C++ WebGL readPixels result
+                // This is a zero-overhead pixel probe performed directly inside the Wasm engine's FBO before swap.
+                try {
+                    // 1. Verify that the Wasm layer returned a valid JSON string (it might return empty or null in older versions)
+                    if (typeof renderResultStr === 'string' && renderResultStr.trim() !== '') {
+                        WorkerLog.verbose('seekFrame:Diagnostics', `Received diagnostic payload from Wasm: ${renderResultStr}`);
+                        // 2. Parse the diagnostic JSON payload from the C++ layer (e.g. {"isBlank": true})
+                        const diagnostics = JSON.parse(renderResultStr);
+                        // 3. If the C++ probe determined all sampled pixels were Alpha=0 or RGB=0
+                        if (diagnostics.isBlank) {
+                            const warnMsg = `[Worker Diagnostics] ⚠️ Warning: The rendered frame (ownerId: ${ownerId}) appears to be 100% transparent or black according to WebGL probe.`;
+                            // 4. Log the warning locally in the Worker console
+                            console.warn(warnMsg);
+                            WorkerLog.warn('seekFrame:Diagnostics', warnMsg);
+                            // 5. Send a dedicated WARNING_LOG message to the Main Thread 
+                            // so that external monitoring systems (like Sentry/Slardar) can capture this anomaly
+                            this.workerCtx.postMessage({
+                                id: 'warn_' + Date.now(),
+                                type: WorkerMessageType.WARNING_LOG,
+                                status: WorkerResponseStatus.SUCCESS,
+                                data: { message: warnMsg }
+                            });
+                        }
+                        else {
+                            WorkerLog.verbose('seekFrame:Diagnostics', `Frame (ownerId: ${ownerId}) passed WebGL probe (isBlank: false)`);
+                        }
+                    }
+                    else {
+                        WorkerLog.verbose('seekFrame:Diagnostics', `No diagnostic payload received from Wasm (renderResultStr is empty or invalid)`);
+                    }
+                }
+                catch (e) {
+                    // 6. Failsafe: if the C++ payload is malformed, we just log the parse error and proceed (non-blocking)
+                    WorkerLog.error('seekFrame:Diagnostics', "Failed to parse WebGL probe result:", e);
+                    console.error("[Worker Diagnostics] Failed to parse WebGL probe result:", e);
+                }
+                // 3. Send back to Main
+                const response = {
+                    id: 'frame_event_' + timestamp,
+                    type: WorkerMessageType.FRAME_READY,
+                    status: WorkerResponseStatus.SUCCESS,
+                    data: {
+                        bitmap,
+                        timestamp,
+                        ownerId
+                    }
+                };
+                // We use postMessage with transfer list
+                WorkerLog.info('seekFrame:Transfer', `Frame rendered successfully. Transferring ImageBitmap (ownerId: ${ownerId}) to MainThread.`);
+                this.workerCtx.postMessage(response, [bitmap]);
+            }
+            return renderResultStr;
+        }
+        async addEffect(params) {
+            if (!this.sdk.effectInstance)
+                throw new Error("SDK not initialized");
+            // Initialize cache (Ported from MainThreadRuntime)
+            if (params.id) {
+                const stickerEntry = {
+                    params: {
+                        id: params.id,
+                        type: params.type,
+                        visible: params.visible,
+                        positionX: params.positionX,
+                        positionY: params.positionY,
+                        scaleX: params.scaleX,
+                        scaleY: params.scaleY,
+                        rotation: params.rotation,
+                        preset_path: params.preset_path,
+                        in_anim_path: params.in_anim_path,
+                        in_anim_duration: params.in_anim_duration,
+                        out_anim_path: params.out_anim_path,
+                        out_anim_duration: params.out_anim_duration,
+                        loop_anim_path: params.loop_anim_path,
+                        loop_anim_duration: params.loop_anim_duration,
+                        caption_info: params.caption_info,
+                        start_time: params.start_time,
+                        end_time: params.end_time,
+                        order: params.order
+                    },
+                    isDirty: false,
+                    isPositionDirty: false,
+                    lastUpdated: Date.now()
+                };
+                this._stickerLevelCache.set(params.id, stickerEntry);
+                if (params.text_params) {
+                    try {
+                        const parsedTextParams = JSON.parse(params.text_params);
+                        const textEntry = {
+                            params: parsedTextParams,
+                            isDirty: false,
+                            lastUpdated: Date.now()
+                        };
+                        this._textLevelCache.set(params.id, textEntry);
+                    }
+                    catch (e) {
+                        console.error(`[Worker] Failed to parse text_params for ${params.id}:`, e);
+                    }
+                }
+            }
+            await this.sdk.effectInstance.addEffect(params);
+            // Apply initial text params (MainThread logic)
+            if (params.text_params && params.id) {
+                try {
+                    this.sdk.effectInstance.setEffectParams(params.id, {
+                        iOpCode: 68, iParam1: 0, iParam2: 0, iParam3: 0, iParam4: 0,
+                        pParam5: params.text_params,
+                    });
+                }
+                catch (e) {
+                    console.error(`[Worker] Failed to set initial text_params for ${params.id}:`, e);
+                }
+            }
+        }
+        async setEffectParams(id, params) {
+            if (!this.sdk.effectInstance)
+                throw new Error("SDK not initialized");
+            // Ported logic for Edit Mode and Caching
+            switch (params.iOpCode) {
+                case -1:
+                    // CT_SET_INFOSTICKER_PROPERTIES
+                    // If in edit mode, filter animation properties
+                    if (this._tempModificationStates.get(id)) {
+                        if (params.pParam5) {
+                            try {
+                                const parsedParam5 = JSON.parse(params.pParam5);
+                                const filteredParams = this.createDisabledAnimationParams(parsedParam5);
+                                params.pParam5 = JSON.stringify(filteredParams);
+                            }
+                            catch (e) {
+                                console.error(`[Worker] Failed to filter animation properties for ${id}:`, e);
+                            }
+                        }
+                    }
+                    this.updateStickerLevelCache(id, params);
+                    break;
+                case 68:
+                    // CT_EDIT_TEXT_PARAM
+                    this.updateTextLevelCache(id, params);
+                    break;
+                case 0:
+                    // CT_ENTER_EDIT_STATE
+                    this.handleEnterEditMode(id, params);
+                    break;
+                case 1:
+                    // CT_EXIT_EDIT_STATE
+                    this.handleExitEditMode(id, params);
+                    break;
+            }
+            return this.sdk.effectInstance.setEffectParams(id, params);
+        }
+        async getEffectParams(id, params) {
+            if (!this.sdk.effectInstance)
+                throw new Error("SDK not initialized");
+            const result = this.sdk.effectInstance.getEffectParams(id, params);
+            let parsedResult = undefined;
+            if (result) {
+                try {
+                    parsedResult = JSON.parse(result);
+                    if (parsedResult.iOpCode === 265) {
+                        const abs = parsedResult.iParam1 ? Math.abs(parsedResult.iParam1) : 0;
+                        // console.log("[Worker] getEffectParams abs = ", abs);
+                    }
+                }
+                catch (e) {
+                    console.error("[Worker] getEffectParams result parse failed", e);
+                    parsedResult = undefined;
+                }
+            }
+            return parsedResult;
+        }
+        async destroyEffect(id) {
+            if (!this.sdk.effectInstance)
+                throw new Error("SDK not initialized");
+            // Cleanup cache
+            this._stickerLevelCache.delete(id);
+            this._textLevelCache.delete(id);
+            this._tempModificationStates.delete(id);
+            this._tempStickerCache.delete(id);
+            this._tempTextCache.delete(id);
+            return this.sdk.effectInstance.destroyEffect(id);
+        }
+        async destroyAllEffects() {
+            if (!this.sdk.effectInstance)
+                throw new Error("SDK not initialized");
+            // Cleanup all cache
+            this._stickerLevelCache.clear();
+            this._textLevelCache.clear();
+            this._tempModificationStates.clear();
+            this._tempStickerCache.clear();
+            this._tempTextCache.clear();
+            return this.sdk.effectInstance.destroyAllEffects();
+        }
+        async loadEffectAssets(arr) {
+            // Logic from Manager/index.ts: loadEffectAssets
+            const assets = Object.fromEntries(arr.map(item => [item.path, new Uint8Array(item.file)]));
+            await this.resource.loadAssets(assets);
+        }
+        async getEffectBBox(id) {
+            if (!this.sdk.effectInstance)
+                throw new Error("SDK not initialized");
+            return this.sdk.effectInstance.getEffectBBox(id);
+        }
+        // --- Missing Implementation Methods ---
+        getCanvasSize() {
+            if (!this.sdk.effectInstance)
+                throw new Error("SDK not initialized");
+            const size = this.sdk.effectInstance.getCanvasSize();
+            if (size) {
+                try {
+                    const parsedSize = JSON.parse(size);
+                    if (parsedSize.width && parsedSize.height) {
+                        return { width: parsedSize.width, height: parsedSize.height };
+                    }
+                }
+                catch (e) {
+                    console.error('[Worker] getCanvasSize parse failed:', e);
+                }
+            }
+            return undefined;
+        }
+        destroyCanvas() {
+            if (!this.sdk.effectInstance)
+                throw new Error("SDK not initialized");
+            return this.sdk.effectInstance.destroyCanvas();
+        }
+        setSysFontPaths(fontPaths) {
+            if (!this.sdk.effectInstance || !this.sdk.VectorString)
+                throw new Error("SDK not initialized");
+            const fontPathArray = Array.isArray(fontPaths) ? fontPaths : [fontPaths];
+            const vectorString = new this.sdk.VectorString();
+            fontPathArray.forEach(path => {
+                if (typeof path === 'string' && path.trim() !== '') {
+                    vectorString.push_back(path);
+                }
+            });
+            return this.sdk.effectInstance.setSysFontPaths(vectorString);
+        }
+        setLogLevel(level) {
+            // Update worker-side TS logging first so it stays in sync even if the
+            // WASM layer is not ready yet.
+            setWorkerLogLevel(level);
+            if (!this.sdk.effectInstance)
+                throw new Error("SDK not initialized");
+            return this.sdk.effectInstance.setLogLevel(level);
+        }
+        // --- Legacy Methods Handlers ---
+        async legacyLoadSingleAsset(filePath) { return this.legacy.loadSingleAsset(filePath); }
+        async legacyLoadAssets(path) { return this.legacy.loadAssets(path); }
+        async legacyLoadAssetsFromTemplateName(name) { return this.legacy.loadAssetsFromTemplateName(name); }
+        async legacyLoadEffectAssetsOld(effectIdentifier) { return this.legacy.loadEffectAssets_old(effectIdentifier); }
+        async legacyAddPreset(params) { return this.legacy.addPreset(params); }
+        async legacyAddPresetV2(params) { return this.legacy.addPresetV2(params); }
+        async legacyAddCaptionTemplate(effectIdentifier, style) { return this.legacy.addCaptionTemplate(effectIdentifier, style); }
+        // --- Cache Management & Edit Mode Logic (Ported from MainThreadRuntime) ---
+        updateStickerLevelCache(effectId, params) {
+            if (!params.pParam5)
+                return;
+            try {
+                const parsedParam5 = JSON.parse(params.pParam5);
+                const now = Date.now();
+                // Check if in edit mode (temp modification state)
+                if (this._tempModificationStates.get(effectId)) {
+                    // Update temp cache
+                    const tempEntry = this._tempStickerCache.get(effectId);
+                    const entry = {
+                        params: { ...tempEntry?.params, ...parsedParam5 },
+                        isDirty: true,
+                        isPositionDirty: !!(parsedParam5.positionX !== undefined || parsedParam5.positionY !== undefined),
+                        lastUpdated: now
+                    };
+                    this._tempStickerCache.set(effectId, entry);
+                }
+                else {
+                    // Normal state: Update formal cache
+                    const existingEntry = this._stickerLevelCache.get(effectId);
+                    const entry = {
+                        params: { ...existingEntry?.params, ...parsedParam5 },
+                        isDirty: true,
+                        isPositionDirty: !!(parsedParam5.positionX !== undefined || parsedParam5.positionY !== undefined),
+                        lastUpdated: now
+                    };
+                    this._stickerLevelCache.set(effectId, entry);
+                }
+            }
+            catch (e) {
+                console.error(`[Worker] Failed to parse pParam5 for sticker level cache (id=${effectId}):`, e);
+            }
+        }
+        updateTextLevelCache(effectId, params) {
+            if (!params.pParam5)
+                return;
+            try {
+                const parsedParam5 = JSON.parse(params.pParam5);
+                const now = Date.now();
+                if (this._tempModificationStates.get(effectId)) {
+                    // Update temp cache
+                    const tempEntry = this._tempTextCache.get(effectId);
+                    const entry = {
+                        params: { ...tempEntry?.params, ...parsedParam5 },
+                        isDirty: true,
+                        lastUpdated: now
+                    };
+                    this._tempTextCache.set(effectId, entry);
+                }
+                else {
+                    // Normal state: Update formal cache
+                    const existingEntry = this._textLevelCache.get(effectId);
+                    const entry = {
+                        params: { ...existingEntry?.params, ...parsedParam5 },
+                        isDirty: true,
+                        lastUpdated: now
+                    };
+                    this._textLevelCache.set(effectId, entry);
+                }
+            }
+            catch (e) {
+                console.error(`[Worker] Failed to parse pParam5 for text level cache (id=${effectId}):`, e);
+            }
+        }
+        createDisabledAnimationParams(stickerParams) {
+            return {
+                ...stickerParams,
+                in_anim_path: "",
+                in_anim_duration: 0,
+                out_anim_path: "",
+                out_anim_duration: 0,
+                loop_anim_path: "",
+                loop_anim_duration: 0
+            };
+        }
+        handleEnterEditMode(effectId, params) {
+            console.log(`[Worker] Handling enter edit mode for ${effectId}`);
+            const stickerCache = this._stickerLevelCache.get(effectId);
+            const textCache = this._textLevelCache.get(effectId);
+            if (!stickerCache && !textCache) {
+                console.error(`[Worker] No cache found for effect ${effectId} when entering edit mode`);
+                // Fallback or throw? MainThread throws.
+                // throw new Error(`No cache found for effect ${effectId}`);
+                return;
+            }
+            // 1. Set temp state
+            this._tempModificationStates.set(effectId, true);
+            // 2. Copy to temp cache
+            if (stickerCache) {
+                this._tempStickerCache.set(effectId, { ...stickerCache });
+                // Save original animations if not present
+                if (!stickerCache.originalAnimations) {
+                    stickerCache.originalAnimations = {
+                        in_anim_path: stickerCache.params.in_anim_path || "",
+                        in_anim_duration: stickerCache.params.in_anim_duration || 0,
+                        out_anim_path: stickerCache.params.out_anim_path || "",
+                        out_anim_duration: stickerCache.params.out_anim_duration || 0,
+                        loop_anim_path: stickerCache.params.loop_anim_path || "",
+                        loop_anim_duration: stickerCache.params.loop_anim_duration || 0
+                    };
+                }
+            }
+            if (textCache) {
+                this._tempTextCache.set(effectId, { ...textCache });
+            }
+            // Disable animations (iOpCode = -1)
+            if (stickerCache) {
+                const disabledStickerParams = this.createDisabledAnimationParams(stickerCache.params);
+                const stickerCallParams = {
+                    iOpCode: -1,
+                    iParam1: params.iParam1,
+                    iParam2: params.iParam2,
+                    iParam3: params.iParam3,
+                    iParam4: params.iParam4,
+                    pParam5: JSON.stringify(disabledStickerParams)
+                };
+                this.sdk.effectInstance?.setEffectParams(effectId, stickerCallParams);
+            }
+            // Set text properties (iOpCode = 68)
+            if (textCache) {
+                const textCallParams = {
+                    iOpCode: 68,
+                    iParam1: params.iParam1,
+                    iParam2: params.iParam2,
+                    iParam3: params.iParam3,
+                    iParam4: params.iParam4,
+                    pParam5: JSON.stringify(textCache.params)
+                };
+                this.sdk.effectInstance?.setEffectParams(effectId, textCallParams);
+            }
+        }
+        handleExitEditMode(effectId, params) {
+            console.log(`[Worker] Handling exit edit mode for ${effectId}`);
+            const tempStickerCache = this._tempStickerCache.get(effectId);
+            const tempTextCache = this._tempTextCache.get(effectId);
+            if (!tempStickerCache && !tempTextCache) {
+                console.error(`[Worker] No temp cache found for effect ${effectId} when exiting edit mode`);
+                return;
+            }
+            // 1. Restore sticker properties with animations
+            if (tempStickerCache) {
+                const originalStickerCache = this._stickerLevelCache.get(effectId);
+                let finalStickerParams;
+                if (originalStickerCache?.originalAnimations) {
+                    finalStickerParams = {
+                        ...tempStickerCache.params,
+                        in_anim_path: originalStickerCache.originalAnimations.in_anim_path,
+                        in_anim_duration: originalStickerCache.originalAnimations.in_anim_duration,
+                        out_anim_path: originalStickerCache.originalAnimations.out_anim_path,
+                        out_anim_duration: originalStickerCache.originalAnimations.out_anim_duration,
+                        loop_anim_path: originalStickerCache.originalAnimations.loop_anim_path,
+                        loop_anim_duration: originalStickerCache.originalAnimations.loop_anim_duration
+                    };
+                }
+                else {
+                    finalStickerParams = originalStickerCache ?
+                        {
+                            ...tempStickerCache.params,
+                            in_anim_path: originalStickerCache.params.in_anim_path || "",
+                            in_anim_duration: originalStickerCache.params.in_anim_duration || 0,
+                            out_anim_path: originalStickerCache.params.out_anim_path || "",
+                            out_anim_duration: originalStickerCache.params.out_anim_duration || 0,
+                            loop_anim_path: originalStickerCache.params.loop_anim_path || "",
+                            loop_anim_duration: originalStickerCache.params.loop_anim_duration || 0
+                        } :
+                        tempStickerCache.params;
+                }
+                const stickerCallParams = {
+                    iOpCode: -1,
+                    iParam1: params.iParam1,
+                    iParam2: params.iParam2,
+                    iParam3: params.iParam3,
+                    iParam4: params.iParam4,
+                    pParam5: JSON.stringify(finalStickerParams)
+                };
+                this.sdk.effectInstance?.setEffectParams(effectId, stickerCallParams);
+                // Update formal cache
+                const updatedCache = {
+                    ...tempStickerCache,
+                    originalAnimations: originalStickerCache?.originalAnimations
+                };
+                this._stickerLevelCache.set(effectId, updatedCache);
+            }
+            // 2. Restore text properties
+            if (tempTextCache) {
+                const textCallParams = {
+                    iOpCode: 68,
+                    iParam1: params.iParam1,
+                    iParam2: params.iParam2,
+                    iParam3: params.iParam3,
+                    iParam4: params.iParam4,
+                    pParam5: JSON.stringify(tempTextCache.params)
+                };
+                this.sdk.effectInstance?.setEffectParams(effectId, textCallParams);
+                // Update formal cache
+                this._textLevelCache.set(effectId, tempTextCache);
+            }
+            // 3. Cleanup
+            this._tempModificationStates.set(effectId, false);
+            this._tempStickerCache.delete(effectId);
+            this._tempTextCache.delete(effectId);
+        }
+    }
+
+    // Global state
+    const ctx = self;
+    const manager = new EffectManagerImpl(ctx);
+    // Coalesce SEEK_FRAME requests to avoid concurrent wasm calls.
+    // Strategy: keep only the latest task while one is running.
+    let latestSeekFrameTask = null;
+    let seekFrameLoopRunning = false;
+    async function runSeekFrameLoop() {
+        if (seekFrameLoopRunning)
+            return;
+        seekFrameLoopRunning = true;
+        try {
+            while (latestSeekFrameTask) {
+                const task = latestSeekFrameTask;
+                latestSeekFrameTask = null;
+                try {
+                    await manager.seekFrame(task.elementIds, task.timestamp, task.ownerId);
+                }
+                catch (err) {
+                    console.error('[Worker] seekFrame failed:', err);
+                    const response = {
+                        id: `seek_frame_error_${task.ownerId}_${Date.now()}`,
+                        type: WorkerMessageType.ERROR,
+                        status: WorkerResponseStatus.FAILURE,
+                        error: serializeError(err)
+                    };
+                    ctx.postMessage(response);
+                }
+            }
+        }
+        finally {
+            seekFrameLoopRunning = false;
+        }
+    }
+    function serializeError(error) {
+        if (error instanceof Error) {
+            return {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+                // cause: error.cause // Optional: handled if needed, but might not be cloneable
+            };
+        }
+        return {
+            name: 'UnknownError',
+            message: String(error)
+        };
+    }
+    // Message Handler
+    ctx.onmessage = async (event) => {
+        const message = event.data;
+        const { id, type } = message;
+        try {
+            let result;
+            switch (message.type) {
+                case WorkerMessageType.INIT:
+                    console.log('[Worker] Initializing...');
+                    await manager.initialize(message.payload.options, {
+                        logLevel: message.payload.logLevel,
+                        enableEffectHistoryTracking: message.payload.enableEffectHistoryTracking,
+                    });
+                    result = { status: 'initialized' };
+                    break;
+                case WorkerMessageType.SET_CANVAS:
+                    console.log('[Worker] Setting canvas...');
+                    await manager.setCanvas(message.payload);
+                    result = { status: 'canvas_set' };
+                    break;
+                case WorkerMessageType.SET_CANVAS_SIZE:
+                    await manager.setCanvasSize(message.payload.width, message.payload.height);
+                    break;
+                case WorkerMessageType.GET_CANVAS_SIZE:
+                    result = manager.getCanvasSize();
+                    break;
+                case WorkerMessageType.DESTROY_CANVAS:
+                    result = manager.destroyCanvas();
+                    break;
+                case WorkerMessageType.SET_SYS_FONT_PATHS:
+                    result = manager.setSysFontPaths(message.payload.fontPaths);
+                    break;
+                case WorkerMessageType.SET_LOG_LEVEL:
+                    result = manager.setLogLevel(message.payload.level);
+                    break;
+                // Legacy
+                case WorkerMessageType.LEGACY_LOAD_SINGLE_ASSET:
+                    result = await manager.legacyLoadSingleAsset(message.payload.filePath);
+                    break;
+                case WorkerMessageType.LEGACY_LOAD_ASSETS:
+                    await manager.legacyLoadAssets(message.payload.folderNameOrFilePath);
+                    break;
+                case WorkerMessageType.LEGACY_LOAD_ASSETS_FROM_TEMPLATE:
+                    await manager.legacyLoadAssetsFromTemplateName(message.payload.name);
+                    break;
+                case WorkerMessageType.LEGACY_LOAD_EFFECT_ASSETS_OLD:
+                    await manager.legacyLoadEffectAssetsOld(message.payload.effectIdentifier);
+                    break;
+                case WorkerMessageType.LEGACY_ADD_PRESET:
+                    await manager.legacyAddPreset(message.payload.params);
+                    break;
+                case WorkerMessageType.LEGACY_ADD_PRESET_V2:
+                    await manager.legacyAddPresetV2(message.payload.params);
+                    break;
+                case WorkerMessageType.LEGACY_ADD_CAPTION_TEMPLATE:
+                    await manager.legacyAddCaptionTemplate(message.payload.effectIdentifier, message.payload.style);
+                    break;
+                case WorkerMessageType.SEEK_FRAME:
+                    // Do NOT await here: keep message handling responsive.
+                    // Instead, coalesce seekFrame into a single-flight loop to avoid concurrent wasm operations.
+                    latestSeekFrameTask = {
+                        elementIds: message.payload.elementIds,
+                        timestamp: message.payload.timestamp,
+                        ownerId: message.payload.ownerId
+                    };
+                    runSeekFrameLoop();
+                    result = { status: 'seeking' }; // Ack, but frame comes via event
+                    break;
+                case WorkerMessageType.ADD_EFFECT:
+                    await manager.addEffect(message.payload);
+                    result = { status: 'added' };
+                    break;
+                case WorkerMessageType.SET_EFFECT_PARAMS:
+                    result = await manager.setEffectParams(message.payload.id, message.payload.params);
+                    break;
+                case WorkerMessageType.GET_EFFECT_PARAMS:
+                    result = await manager.getEffectParams(message.payload.id, message.payload.params);
+                    break;
+                case WorkerMessageType.DESTROY_EFFECT:
+                    result = await manager.destroyEffect(message.payload.id);
+                    break;
+                case WorkerMessageType.DESTROY_ALL_EFFECTS:
+                    result = await manager.destroyAllEffects();
+                    break;
+                case WorkerMessageType.LOAD_ASSETS:
+                    await manager.loadEffectAssets(message.payload.assets);
+                    result = { status: 'loaded' };
+                    break;
+                case WorkerMessageType.GET_EFFECT_BBOX:
+                    result = await manager.getEffectBBox(message.payload.id);
+                    break;
+                case WorkerMessageType.DESTROY:
+                    await manager.destroy();
+                    result = { status: 'destroyed' };
+                    // We will close self after sending response
+                    setTimeout(() => self.close(), 0);
+                    break;
+                default:
+                    console.warn(`[Worker] Unknown message type: ${message.type}`);
+            }
+            // Send response
+            const response = {
+                id,
+                type,
+                status: WorkerResponseStatus.SUCCESS,
+                data: result
+            };
+            ctx.postMessage(response);
+        }
+        catch (error) {
+            console.error(`[Worker] Error handling ${type}:`, error);
+            const serializedError = serializeError(error);
+            const response = {
+                id,
+                type,
+                status: WorkerResponseStatus.FAILURE,
+                error: serializedError
+            };
+            ctx.postMessage(response);
+        }
+    };
+
+})();
+//# sourceMappingURL=index.js.map

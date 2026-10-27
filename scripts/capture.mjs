@@ -43,4 +43,5 @@ await CaptureLoginPage(true);
 await CaptureNotFoundPage(true);
 await CaptureNotFoundData();
 await CaptureStudioPage(true);
+await CaptureStudioPage(true, true);
 console.log('Pinned original login, Studio, and entry assets.');

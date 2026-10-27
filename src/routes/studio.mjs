@@ -15,10 +15,10 @@ const Redirect = (Response, To) => { Response.writeHead(303, { location: To }); 
 
 export async function Studio({ Request, Response, Url, Pool, Config, User }) {
 	const Path = Url.pathname, Post = /^\/account\/posts\/(\d+)$/.exec(Path);
-	if (!['/upload', '/tiktokstudio/upload', '/account/posts', '/account/requests', '/account/privacy'].includes(Path) && !Post) return false;
+	if (!['/upload', '/account/posts', '/account/requests', '/account/privacy'].includes(Path) && !Post) return false;
 	if (!User) return Redirect(Response, '/login');
 	let Title, Content;
-	if (['/upload', '/tiktokstudio/upload'].includes(Path)) {
+	if (Path === '/upload') {
 		RequireMethod(Request, ['GET']);
 		if (Config.Features?.upload === false) throw new HttpError(403, 'UploadsDisabled');
 		Title = 'Upload video';
