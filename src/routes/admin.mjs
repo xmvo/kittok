@@ -8,16 +8,14 @@ import { SendMail } from '../mail.mjs';
 import { CollectibleCounts, SaveCollectibles } from '../decorations.mjs';
 import { RemoveMedia, SaveBrandImage, WarmDownloads } from '../media.mjs';
 import { AvatarUrl, UserStats } from '../store.mjs';
-import { ClientDir, Root } from '../client/archive.mjs';
+import { Root } from '../client/archive.mjs';
 import { BrandSlots, Features, MiscFeatures, RestoreEnvMail, SaveSetting, Settings } from '../settings.mjs';
 import { Page } from './account.mjs';
 import { Enforce, DecideReport, ReverseDecision, LiftRestriction, MessageText, ReviewAppeal, Standing } from '../moderation.mjs';
 import { Transaction } from '../db.mjs';
 import { BadgeCatalog, PrideFlag, UserBadges, PublicBadges } from '../badges.mjs';
-import { Public, Shell } from '../client/shell.mjs';
+import { Public } from '../client/shell.mjs';
 import { DeleteAccount } from '../accounts.mjs';
-
-let ClientPage;
 
 const Categories = ['spam', 'harassment', 'hate', 'nudity', 'violence', 'self_harm', 'misinformation', 'impersonation', 'copyright', 'other'];
 const Before = Value => Value ? Id(Value) : null;
@@ -78,8 +76,7 @@ export async function Admin(Context) {
 		if (!User) { Response.writeHead(303, { location: '/login' }); Response.end(); return true; }
 		if (User.role !== 'admin') throw new HttpError(404, 'NotFound');
 		const Boot = { name: Config.Name, csrf: User.csrf_token, me: { id: User.id, username: User.username, avatar: AvatarUrl(User, Config.Origin) }, features: Features, misc: MiscFeatures, categories: Categories, badges: BadgeCatalog, ipKey: Boolean(await InstanceKey(Pool)), outdated: Outdated() };
-		ClientPage ??= readFile(join(ClientDir, 'index.html'), 'utf8');
-		const Html = Shell(await ClientPage, Config.Origin, { Config, User }).replace('</head>', `<link rel="stylesheet" href="${Public('admin.css')}"><script id="kittok-admin-boot" type="application/json">${JSON.stringify(Boot).replaceAll('<', '\\u003c')}</script><script src="${Public('admin.js')}" defer></script></head>`);
+		const Html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin · ${Escape(Config.Name)}</title><link rel="icon" href="/brand/favicon"><link rel="stylesheet" href="${Public('admin.css')}"><script id="kittok-admin-boot" type="application/json">${JSON.stringify(Boot).replaceAll('<', '\\u003c')}</script><script src="${Public('admin.js')}" defer></script><body></body></html>`;
 		Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
 		Response.end(Html);
 		return true;

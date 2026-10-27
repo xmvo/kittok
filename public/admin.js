@@ -2,7 +2,6 @@
 	const Boot = JSON.parse(document.getElementById('kittok-admin-boot').textContent);
 	const Root = document.createElement('div'); Root.id = 'kittok-admin';
 	const Layer = document.createElement('div'); Layer.id = 'kittok-admin-layer';
-	const IsAdminPath = () => /^\/admin(?:\/|$)/.test(location.pathname);
 
 	const Policies = [
 		['spam', 'Spam', 'spam'], ['harassment', 'Harassment', 'harassment and bullying'], ['hate', 'Hate', 'hateful behavior'], ['nudity', 'Nudity', 'nudity and sexual content'],
@@ -44,7 +43,7 @@
 		policies: 'M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3zM9 12l2 2 4-4', instance: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4', invites: 'M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4V7zM14 7v10',
 		audit: 'M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4M12 8v4l3 2', misc: 'M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4L12 3zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9L18 15zM5 15l.6 1.4L7 17l-1.4.6L5 19l-.6-1.4L3 17l1.4-.6L5 15z', search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4', back: 'M19 12H5M11 6l-6 6 6 6',
 		theme: 'M12 3a9 9 0 1 0 0 18V3z', collapse: 'M4 4h16v16H4zM9 4v16', done: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0zM8 12l3 3 5-6', video: 'M5 4h14v16H5zM10 9l5 3-5 3V9z',
-		comment: 'M4 5h16v11H9l-5 4V5z', message: 'M21 3L10 14M21 3l-7 18-4-7-7-4 18-7z', user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0', open: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6', keys: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10',
+		comment: 'M4 5h16v11H9l-5 4V5z', message: 'M21 3L10 14M21 3l-7 18-4-7-7-4 18-7z', user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0', open: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6', back: 'M15 18l-6-6 6-6', keys: 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10',
 	};
 
 	let Counts = { tickets: 0, appeals: 0 };
@@ -62,37 +61,6 @@
 			else Node.setAttribute(Key, Value === true ? '' : Value);
 		}
 		for (const Child of Children.flat(4)) if (Child !== null && Child !== undefined && Child !== false) Node.append(Child instanceof window.Node ? Child : String(Child));
-		return Native(Node);
-	}
-	let TuxNames;
-	function Tux(...Names) {
-		if (!TuxNames) {
-			TuxNames = new Map();
-			for (const Sheet of document.styleSheets) {
-				let Rules; try { Rules = Sheet.cssRules; } catch { continue; }
-				const Walk = List => { for (const Rule of List) { if (Rule.cssRules) Walk(Rule.cssRules); for (const Match of (Rule.selectorText ?? '').matchAll(/\.(tux-[A-Za-z0-9_-]+?)__([A-Za-z0-9_-]{6})_(v\d+_\d+_\d+)(?![A-Za-z0-9_-])/g)) if (!TuxNames.has(Match[1])) TuxNames.set(Match[1], Match[0].slice(1)); } };
-				Walk(Rules);
-			}
-		}
-		return Names.filter(Boolean).map(Name => TuxNames.get(Name) ?? '').filter(Boolean).join(' ');
-	}
-	function Native(Node) {
-		const Has = Name => Node.classList.contains(Name);
-		if (Has('Btn')) Node.className += ' tux-web-canary ' + Tux('tux-interaction-container', 'tux-button', Has('Small') ? 'tux-button--small' : 'tux-button--medium');
-		else if (Has('Chip')) Node.className += ' tux-web-canary P3-Semibold ' + Tux('tux-tag', Has('Brand') ? 'tux-tag--primary' : 'tux-tag--subtle');
-		else if (Has('Tabs')) Node.className += ' ' + Tux('tux-segmented-control', 'tux-segmented-control--capsule', 'tux-segmented-control--small');
-		else if (Has('Switch')) {
-			const Input = Node.querySelector('input'), Track = Node.querySelector('span');
-			if (Input && Track) {
-				Node.className += ' tux-web-canary ' + Tux('tux-interaction-container', 'tux-switch', 'tux-switch--small');
-				Input.className = Tux('tux-switch__input');
-				const Holder = Object.assign(document.createElement('div'), { className: Tux('tux-switch__indicator__container') });
-				Holder.append(Object.assign(document.createElement('div'), { className: Tux('tux-switch__indicator', 'tux-switch__indicator--small') }));
-				Track.replaceWith(Holder);
-				const Checked = Tux('tux-switch--checked'), Sync = () => { for (const Name of Checked.split(' ').filter(Boolean)) Node.classList.toggle(Name, Input.checked); };
-				Input.addEventListener('change', Sync); queueMicrotask(Sync);
-			}
-		}
 		return Node;
 	}
 	const Fill = (Node, ...Children) => Node.replaceChildren(...Children.flat(4).filter(Child => Child !== null && Child !== undefined && Child !== false));
@@ -206,7 +174,7 @@
 		return El('div', { class: 'Timeline' }, Decisions.map(Row => {
 			const Action = { warning: ['Warning', 'Info'], strike: ['Strike', 'Warn'], ban: ['Ban', 'Bad'], none: null }[Row.account_action];
 			const Content = { remove: 'Removed', fyf_ineligible: 'Not for For You', none: null }[Row.content_action];
-			const Color = Row.reversed_at ? 'var(--text-3)' : Row.account_action === 'ban' ? 'var(--bad)' : Row.account_action === 'strike' ? 'var(--warn)' : 'var(--cyan)';
+			const Color = Row.reversed_at ? 'var(--text-3)' : Row.account_action === 'ban' ? 'var(--bad)' : Row.account_action === 'strike' ? 'var(--warn)' : 'var(--blue)';
 			return El('div', { class: `Event${Row.reversed_at ? ' Reversed' : ''}` }, El('span', { class: 'Dot', style: `color:${Color}` }),
 				El('div', {}, El('div', { class: 'Head' }, Action && Chip(Action[0], Action[1]), Content && Chip(Content), Chip(PolicyLabel(Row.category)), Row.severe && Chip('Severe', 'Bad'), Row.reversed_at && Chip('Reversed'), Row.appeal_status && Chip(`Appeal ${Row.appeal_status}`, Row.appeal_status === 'restored' ? 'Good' : ''),
 					),
@@ -325,42 +293,49 @@
 	const SearchBox = El('input', { type: 'search', placeholder: 'Search accounts, @handles, or IDs', 'aria-label': 'Search', onkeydown: Event => { if (Event.key === 'Enter') Lookup(Event.target.value.trim()); if (Event.key === 'Escape') Event.target.blur(); } });
 	const Body = El('main', { class: 'Body', tabindex: '-1' });
 	const Stale = El('div', { class: 'Outdated', role: 'alert', hidden: !Boot.outdated }, 'Server is outdated, please restart');
-	Frame.append(Stale, El('header', { class: 'Top' }, Title, El('div', { class: 'Search' }, Icon('search', 16), SearchBox, El('kbd', {}, '/'))), Body);
+	const Sections = El('nav', { class: 'Nav', 'aria-label': 'Admin' });
+	const Glow = El('span', { class: 'Glow', 'aria-hidden': 'true', hidden: true });
+	const Items = [];
+	Sections.append(Glow, ...Nav.map(([Href, Label, Name, Count]) => {
+		if (!Label) return El('div', { class: 'Section' }, Href);
+		const Node = Link(Href, { class: 'NavItem', title: Label }, Icon(Name, 18), El('span', { class: 'Label' }, Label), El('span', { class: 'Count', hidden: true }));
+		Items.push({ Href, Count, Node });
+		return Node;
+	}));
+	Frame.append(
+		El('aside', { class: 'Side' },
+			Link('/admin', { class: 'Logo', 'aria-label': `${Boot.name} admin` }, El('img', { class: 'Wordmark', src: '/brand/wordmarkDark', alt: '' }), El('img', { class: 'Mark', src: '/brand/icon', alt: '' }), El('span', {}, 'Admin')),
+			Btn([Icon('queue', 18), El('span', { class: 'Label' }, 'Start reviewing')], StartReview, 'Primary Start', { title: 'Start reviewing' }),
+			Sections,
+			El('div', { class: 'SideFoot' }, El('a', { class: 'NavItem', href: '/', title: `Back to ${Boot.name}` }, Icon('back', 18), El('span', { class: 'Label' }, `Back to ${Boot.name}`)), El('a', { class: 'Source', href: '/about' }, 'Kittok · Source'))),
+		El('div', { class: 'Main' }, Stale, El('header', { class: 'Top' }, Title, El('div', { class: 'Search' }, Icon('search', 16), SearchBox, El('kbd', {}, '/')), El('a', { class: 'Me', href: `/@${Boot.me.username}`, title: `@${Boot.me.username}` }, El('img', { src: Boot.me.avatar, alt: '' }))), Body));
 	Root.append(Frame);
 
-	let NavSignature = '';
-	function NavContainer() { return document.querySelector('[class*="DivMainNavContainer"]'); }
-	function NavTemplate(Container) { return [...Container.children].find(Child => !Child.hasAttribute('data-kittok-admin-nav') && Child.querySelector(':scope > a[data-e2e="nav-foryou"]')); }
-	function DrawSections() {
-		const Container = NavContainer(), Template = Container && NavTemplate(Container);
-		if (!Template || !Root.isConnected) return;
-		const Current = location.pathname.replace(/\/$/, '') || '/admin';
-		const Active = Href => Href === '/admin' ? Current === '/admin' || Current.startsWith('/admin/review') : Current.startsWith(Href);
-		NavSignature = Template.outerHTML.length + ':' + Template.className + ':' + Template.querySelector('button')?.className;
-		const Items = [...Nav.filter(Entry => Entry[1] !== undefined), ['/', `Back to ${Boot.name}`]].map(([Href, Label, Name, Count]) => {
-			const Item = Template.cloneNode(true); Item.setAttribute('data-kittok-admin-nav', '');
-			const Anchor = Item.querySelector('a'), Button = Item.querySelector('button'), Text = Item.querySelector('.TUXButton-label');
-			Anchor.href = Href; Anchor.setAttribute('data-e2e', `nav-kittok-admin-${Name ?? 'back'}`);
-			Button.setAttribute('aria-label', Label); Anchor.title = Label;
-			if (Text) Text.textContent = Label;
-			if (Name) {
-				Item.querySelector('svg')?.replaceWith(Object.assign(Icon(Name, '1em'), { classList: 'KittokAdminNavIcon' }));
-				Anchor.addEventListener('click', Event => { if (Event.metaKey || Event.ctrlKey || Event.button) return; Event.preventDefault(); Navigate(Href); });
-				if (Active(Href)) { Item.setAttribute('data-active', ''); Button.setAttribute('aria-current', 'page'); }
-				const Total = Count && Counts[Count];
-				if (Total) Item.querySelector('[class*="DivIconWithRedDot"]')?.append(El('span', { class: 'KittokAdminNavCount' }, Total > 99 ? '99+' : String(Total)));
-			}
-			return Item;
-		});
-		for (const Old of Container.querySelectorAll(':scope > [data-kittok-admin-nav]')) Old.remove();
-		Container.append(...Items);
+	function PlaceGlow() {
+		const Lit = Items.find(Item => Item.Node.classList.contains('Active'))?.Node;
+		Glow.hidden = !Lit;
+		if (Lit) Object.assign(Glow.style, { top: `${Lit.offsetTop}px`, left: `${Lit.offsetLeft}px`, width: `${Lit.offsetWidth}px`, height: `${Lit.offsetHeight}px` });
 	}
-	new MutationObserver(() => {
-		const Container = NavContainer(), Template = Container && NavTemplate(Container);
-		if (!Template || !Root.isConnected) return;
-		const Signature = Template.outerHTML.length + ':' + Template.className + ':' + Template.querySelector('button')?.className;
-		if (Signature !== NavSignature || !Container.querySelector(':scope > [data-kittok-admin-nav]')) DrawSections();
-	}).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+	function DrawSections() {
+		const Current = location.pathname.replace(/\/$/, '') || '/admin';
+		for (const { Href, Count, Node } of Items) {
+			const On = Href === '/admin' ? Current === '/admin' || Current.startsWith('/admin/review') : Current.startsWith(Href);
+			Node.classList.toggle('Active', On);
+			if (On) Node.setAttribute('aria-current', 'page'); else Node.removeAttribute('aria-current');
+			const Total = Count && Counts[Count], Badge = Node.querySelector('.Count');
+			Badge.hidden = !Total; Badge.textContent = Total > 99 ? '99+' : String(Total || '');
+		}
+		PlaceGlow();
+		if (!Sections.classList.contains('Ready')) requestAnimationFrame(() => requestAnimationFrame(() => Sections.classList.add('Ready')));
+	}
+	new ResizeObserver(PlaceGlow).observe(Sections);
+	async function StartReview() {
+		if (PageKeys.review) return PageKeys.review();
+		try {
+			const First = (await Api('tickets')).tickets[0];
+			if (First) Navigate(`/admin/review/${First.type}/${First.id}`); else Toast('Queue is clear');
+		} catch (Error) { Fail(Error); }
+	}
 	async function RefreshCounts() {
 		try { const Data = await Api('console'); Counts = { tickets: Data.counts.tickets, appeals: Data.counts.appeals }; DrawSections(); return Data; } catch { return null; }
 	}
@@ -383,9 +358,7 @@
 		if (Replace) history.replaceState(null, '', Href); else history.pushState(null, '', Href);
 		Route();
 	}
-	let Routed = '';
 	async function Route() {
-		Routed = location.pathname + location.search;
 		for (const Clean of Teardown) Clean();
 		Teardown = []; PageKeys = {};
 		document.querySelectorAll('.Drawer,.Modal').forEach(Node => Node.remove());
@@ -428,7 +401,7 @@
 		const Path = Key => Daily.map((Day, Index) => `${Index ? 'L' : 'M'}${(Index / (Daily.length - 1)) * 100} ${44 - (Day[Key] / Max) * 40}`).join(' ');
 		const Node = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
 		Node.setAttribute('viewBox', '0 0 100 46'); Node.setAttribute('preserveAspectRatio', 'none');
-		Node.innerHTML = `<path d="${Path('reports')}" fill="none" stroke="var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke"/><path d="${Path('decisions')}" fill="none" stroke="var(--cyan)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`;
+		Node.innerHTML = `<path d="${Path('reports')}" fill="none" stroke="var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke"/><path d="${Path('decisions')}" fill="none" stroke="var(--blue)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>`;
 		return Node;
 	}
 
@@ -448,16 +421,15 @@
 			El('td', {}, Ticket.owner && El('div', { class: 'Row', style: 'gap:8px' }, El('img', { class: 'Avatar', src: Ticket.owner.avatar, alt: '' }), El('div', { class: 'Grow' }, El('div', { class: 'Clip' }, `@${Ticket.owner.username}`), El('div', { class: 'Faint', style: 'font-size:11px' }, Ticket.owner.banned ? 'Banned' : `${Ticket.owner.strikes} active strike${Ticket.owner.strikes === 1 ? '' : 's'}`)))),
 			El('td', { class: 'Num Faint', title: When(Ticket.first_at) }, Ago(Ticket.first_at))));
 		const Select = Index => { if (!Rows.length) return; Rows[Selected].classList.remove('Selected'); Selected = (Index + Rows.length) % Rows.length; Rows[Selected].classList.add('Selected'); Rows[Selected].scrollIntoView({ block: 'nearest' }); };
-		PageKeys = { j: () => Select(Selected + 1), k: () => Select(Selected - 1), enter: () => Rows[Selected]?.click() };
+		PageKeys = { j: () => Select(Selected + 1), k: () => Select(Selected - 1), enter: () => Rows[Selected]?.click(), review: Rows.length ? () => Rows[Selected].click() : null };
 		Fill(Body, El('div', { class: 'Page' },
 			El('div', { class: 'Metrics' },
 				El('div', { class: 'Panel Metric' }, El('div', { class: 'Value' }, C.tickets ?? 0), El('div', { class: 'Name' }, 'Open tickets'), El('div', { class: 'Sub' }, C.oldest_ticket ? `Oldest waiting ${Ago(C.oldest_ticket)}` : 'Queue is clear')),
 				El('div', { class: 'Panel Metric' }, El('div', { class: 'Value' }, C.appeals ?? 0), El('div', { class: 'Name' }, 'Pending appeals'), El('div', { class: 'Sub' }, Overturn === null ? 'None reviewed in 30 days' : `${Overturn}% overturned in 30 days`)),
 				El('div', { class: 'Panel Metric' }, El('div', { class: 'Value' }, C.decisions_today ?? 0), El('div', { class: 'Name' }, 'Decisions today'), El('div', { class: 'Sub' }, `${C.restrictions ?? 0} active restrictions`)),
 				El('div', { class: 'Panel Metric' }, El('div', { class: 'Value' }, C.banned ?? 0), El('div', { class: 'Name' }, 'Banned accounts'), El('div', { class: 'Sub' }, `${C.users ?? 0} accounts · ${C.new_users ?? 0} new this week`)),
-				El('div', { class: 'Panel Spark' }, El('div', { class: 'Row' }, El('span', { class: 'Name Muted', style: 'font-size:12px' }, 'Last 14 days'), El('span', { class: 'Grow' }), El('div', { class: 'Legend' }, El('span', {}, El('span', { class: 'Dot', style: 'color:var(--accent)' }), 'Reports'), El('span', {}, El('span', { class: 'Dot', style: 'color:var(--cyan)' }), 'Decisions'))), Console ? Sparkline(Console.daily) : null)),
-			El('div', { class: 'Toolbar' }, El('div', { class: 'Tabs', role: 'tablist' }, [['', 'All'], ['video', 'Videos'], ['comment', 'Comments'], ['message', 'Messages'], ['user', 'Accounts']].map(([Key, Label]) => Link(`/admin${Key ? '?type=' + Key : ''}`, { class: `Tab${Type === Key ? ' Active' : ''}`, role: 'tab', 'aria-selected': Type === Key ? 'true' : 'false' }, Label))),
-				El('span', { class: 'Grow' }), Data.tickets.length ? Btn(['Start reviewing', El('kbd', { style: 'color:inherit;background:transparent;border-color:rgba(255,255,255,.4)' }, '↵')], () => Rows[Selected].click(), 'Primary') : null),
+				El('div', { class: 'Panel Spark' }, El('div', { class: 'Row' }, El('span', { class: 'Name Muted', style: 'font-size:12px' }, 'Last 14 days'), El('span', { class: 'Grow' }), El('div', { class: 'Legend' }, El('span', {}, El('span', { class: 'Dot', style: 'color:var(--accent)' }), 'Reports'), El('span', {}, El('span', { class: 'Dot', style: 'color:var(--blue)' }), 'Decisions'))), Console ? Sparkline(Console.daily) : null)),
+			El('div', { class: 'Toolbar' }, El('div', { class: 'Tabs', role: 'tablist' }, [['', 'All'], ['video', 'Videos'], ['comment', 'Comments'], ['message', 'Messages'], ['user', 'Accounts']].map(([Key, Label]) => Link(`/admin${Key ? '?type=' + Key : ''}`, { class: `Tab${Type === Key ? ' Active' : ''}`, role: 'tab', 'aria-selected': Type === Key ? 'true' : 'false' }, Label)))),
 			El('div', { class: 'Panel', style: 'overflow-x:auto' }, Data.tickets.length ? El('table', { class: 'Table' }, El('thead', {}, El('tr', {}, ['', 'Content', 'Reported for', 'Reports', 'Owner', 'Waiting'].map(Head => El('th', {}, Head)))), El('tbody', {}, Rows))
 				: El('div', { class: 'Empty' }, Icon('done', 34), El('strong', {}, 'Queue is clear'), El('span', {}, 'New reports land here, ordered by how harmful the reported policy is.')))));
 	}
@@ -811,50 +783,9 @@
 		await Load(null);
 	}
 
-	setInterval(() => { if (document.visibilityState === 'visible' && Root.isConnected) RefreshCounts(); }, 60000);
+	setInterval(() => { if (document.visibilityState === 'visible') RefreshCounts(); }, 60000);
 
-	function Column() { return document.querySelector('[id^="main-content"]'); }
-	function Mount() {
-		const Main = Column();
-		if (!Main) return false;
-		if (Root.parentElement !== Main) Main.append(Root);
-		if (!Layer.isConnected) document.body.append(Layer);
-		document.documentElement.dataset.kittokAdmin = '';
-		return true;
-	}
-	function Unmount() {
-		for (const Clean of Teardown) Clean();
-		Teardown = []; PageKeys = {};
-		Root.remove(); Layer.replaceChildren(); delete document.documentElement.dataset.kittokAdmin;
-		for (const Item of document.querySelectorAll('[data-kittok-admin-nav]')) Item.remove();
-	}
-	for (const Method of ['pushState', 'replaceState']) {
-		const Native = history[Method].bind(history);
-		history[Method] = (...Arguments) => { Native(...Arguments); if (!IsAdminPath() && Root.isConnected) Unmount(); };
-	}
-	addEventListener('kittok-admin-route', () => { if (Root.isConnected) Route(); else location.reload(); });
-	setInterval(() => {
-		if (Root.isConnected && IsAdminPath() && location.pathname + location.search !== Routed) Route();
-		else if (Routed && Root.isConnected !== IsAdminPath()) location.reload();
-	}, 150);
-	let Restored = false;
-	const Began = Date.now();
-	const Ready = () => Boolean(document.querySelector('[data-e2e="challenge-title"]')) || Date.now() - Began > 6000;
-	const Restore = () => {
-		if (Restored) return;
-		Restored = true; history.replaceState(null, '', window.__KittokAdminPath ?? '/admin');
-	};
-	const Start = () => {
-		if (!Ready()) return false;
-		Restore();
-		if (!Mount()) return false;
-		Route();
-		return true;
-	};
-	if (!Start()) {
-		const Waiting = new MutationObserver(() => { if (Start()) { Waiting.disconnect(); clearTimeout(Fallback); } });
-		Waiting.observe(document.documentElement, { childList: true, subtree: true });
-		const Fallback = setTimeout(() => { if (Start()) Waiting.disconnect(); }, 6100);
-	}
-	new MutationObserver(() => { if (IsAdminPath() && !Root.isConnected && Column()) Mount(); }).observe(document.documentElement, { childList: true, subtree: true });
+	document.body.append(Root, Layer);
+	addEventListener('popstate', Route);
+	Route();
 })();

@@ -5,6 +5,7 @@
 - TikTok Studio at `/tiktokstudio`: the real creator dashboard with key metrics and charts from your views, likes, comments and followers, your posts list (search, sort, privacy, pin and delete), and your comments with filters and replies. Upload and post through Studio's own upload page, and edit posts' caption, cover, privacy and comments in Studio's editor.
 - Profile views and shares are counted (once per person every few hours) and show up in Studio's key metrics, along with accurate daily views and reach.
 - Unknown pages go to TikTok's real 404 page (`/404?fromUrl=...`), and the admin panel no longer sometimes lands on it instead of loading.
+- The admin panel looks like TikTok Studio in dark mode, with its own sidebar and smoother transitions, and loads on its own instead of inside the client.
 - The repo and Docker image now ship the copy of TikTok's web client Kittok is built against, instead of downloading TikTok's latest on first start, which broke new instances whenever TikTok updated.
 - Avatar decorations and nameplates are no longer shipped: import Discord's collectibles catalog from the admin panel's Misc page (upload or URL) or with `npm run collectibles`. The Discord fonts now ship with their Open Font License notices.
 - The admin panel says "Server is outdated, please restart" when Kittok's code changed on disk but the server hasn't been restarted, instead of a page error.

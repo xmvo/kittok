@@ -547,7 +547,7 @@ test('admin panel is admin-only and its actions suspend, change roles, manage in
 	assert.equal((await Admin('overview', undefined, AsFriend())).status, 404);
 	assert.equal((await Admin('overview', undefined, {})).status, 404);
 	const AdminPage = await (await Call('/admin/users/1', 'GET', undefined, { cookie: Cookie })).text();
-	assert.ok(AdminPage.includes('/public/admin.js') && AdminPage.includes(`"csrf":"${Session.csrfToken}"`) && AdminPage.includes('__UNIVERSAL_DATA_FOR_REHYDRATION__') && AdminPage.includes('/_kittok/bridge.js'));
+	assert.ok(AdminPage.includes('/public/admin.js') && AdminPage.includes(`"csrf":"${Session.csrfToken}"`) && !AdminPage.includes('__UNIVERSAL_DATA_FOR_REHYDRATION__'));
 	assert.ok((await (await Call('/', 'GET', undefined, { cookie: Cookie })).text()).includes('"role":"admin"'));
 	const Overview = await (await Admin('overview')).json();
 	assert.equal(Overview.stats.users, (await Pool.query('SELECT count(*)::int AS count FROM users')).rows[0].count); assert.equal(Overview.registration, 'invite');

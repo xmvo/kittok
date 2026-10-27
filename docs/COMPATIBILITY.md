@@ -38,7 +38,7 @@ Kittok runs TikTok's own web client, so most of the job is answering its API cal
 
 **Running an instance**
 
-- The admin panel at `/admin`, inside the client: report queue, appeals, enforcement log, accounts, content, policies, instance settings, invites and an audit log. Reviewing is keyboard driven (`?` lists the keys).
+- The admin panel at `/admin`, styled after TikTok Studio: report queue, appeals, enforcement log, accounts, content, policies, instance settings, invites and an audit log. Reviewing is keyboard driven (`?` lists the keys).
 - Moderation modeled on TikTok's: warnings, strikes, feature restrictions and bans, shown with the client's own toasts and ban dialog, plus appeals.
 - Reports for videos, comments, accounts and DMs.
 
@@ -132,7 +132,7 @@ The client reports no usable play event of its own, and it fetches media with `f
 
 The client's security SDK re-opens XHR requests and replays their headers, so `X-CSRF-Token` can arrive as `token, token`. Kittok accepts that only when every copy matches the session token.
 
-The admin panel runs inside the client at `/admin`. The client's router has no admin route, so the bridge boots it on an empty page and `public/admin.js` draws the console with the client's own components and stylesheets. Each admin page has its own URL. Reviewing is keyboard driven: `j`/`k` and Enter in the queue, `V`/`N`, `1` to `0` for a policy, `R`, `B`, `S`, and Cmd/Ctrl+Enter in review, `/` to search, and `?` for the list. Admins get an extra Admin item in the client's sidebar, feature switches hide sidebar entries with CSS, and the bridge removes the client's in-app TikTok Shop promotion, which links to the real shop.
+The admin panel at `/admin` is its own page, not part of the client: `public/admin.js` draws a dark, TikTok Studio style console (sidebar, header, cards and tables) with TikTok's fonts. Each admin page has its own URL. Reviewing is keyboard driven: `j`/`k` and Enter in the queue, `V`/`N`, `1` to `0` for a policy, `R`, `B`, `S`, and Cmd/Ctrl+Enter in review, `/` to search, and `?` for the list. Admins get an extra Admin item in the client's sidebar, feature switches hide sidebar entries with CSS, and the bridge removes the client's in-app TikTok Shop promotion, which links to the real shop.
 
 ## Direct message protocol
 
