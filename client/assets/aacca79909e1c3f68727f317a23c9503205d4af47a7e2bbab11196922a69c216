@@ -1,0 +1,1 @@
+!function(){"use strict";!function(t,c){if(t.LogAnalyticsObject="collectEvent",t.TeaAnalyticsObject="collectEvent",!t.collectEvent){var e=function t(){t.q.push(arguments)};e.q=e.q||[],t.collectEvent=e}t.collectEvent.l=+new Date}(window)}();

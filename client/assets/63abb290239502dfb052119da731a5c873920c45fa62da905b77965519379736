@@ -1,0 +1,1 @@
+"use strict";(self["@pgc-web/web-creation:2.0.0.2577"]=self["@pgc-web/web-creation:2.0.0.2577"]||[]).push([[906],{58525:function(s,t,e){e.r(t),e.d(t,{LTSH:function(){return i}});var n=e(48147);class i extends n.v{constructor(s,t){const{p:e}=super(s,t);this.version=e.uint16,this.numGlyphs=e.uint16,this.yPels=e.readBytes(this.numGlyphs)}}}}]);

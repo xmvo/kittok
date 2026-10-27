@@ -112,6 +112,13 @@
 		Next.before(Title, Box);
 	}
 	new MutationObserver(Brand).observe(document.documentElement, { childList: true, subtree: true });
+	if (Instance.studio) for (const Name of ['pushState', 'replaceState']) {
+		const Native = history[Name].bind(history);
+		history[Name] = (State, Title, Url) => {
+			if (Url && /^\/tiktokstudio\/upload\/?$/.test(new URL(Url, location.href).pathname)) { location.assign(new URL(Url, location.href).pathname); return; }
+			return Native(State, Title, Url);
+		};
+	}
 	const NativeFetch = window.fetch.bind(window);
 	const NativeOpen = XMLHttpRequest.prototype.open;
 	function LocalUrl(Value) {

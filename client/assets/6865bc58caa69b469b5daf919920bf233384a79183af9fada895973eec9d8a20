@@ -1,0 +1,1 @@
+"use strict";(self["@pgc-web/web-creation:2.0.0.2577"]=self["@pgc-web/web-creation:2.0.0.2577"]||[]).push([[8495],{88495:function(e,t,r){r.r(t),r.d(t,{cvt:function(){return n}});var s=r(48147),c=r(7499);class n extends s.v{constructor(e,t){const{p:r}=super(e,t),s=e.length/2;(0,c.A)(this,"items",(()=>[...new Array(s)].map((e=>r.fword))))}}}}]);

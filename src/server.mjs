@@ -6,8 +6,8 @@ import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { Asset, AssetUrl, CaptureLoginPage, CaptureNotFoundPage, NotFoundData, LoginManifestPath, LoginManifestUrl, ClientDir, MessageUploader, Root, RewriteAssets } from './client/archive.mjs';
-import { Shell } from './client/shell.mjs';
+import { Asset, AssetUrl, CaptureLoginPage, CaptureNotFoundPage, CaptureStudioPage, NotFoundData, LoginManifestPath, LoginManifestUrl, ClientDir, MessageUploader, Root, RewriteAssets } from './client/archive.mjs';
+import { AppUser, Shell, StudioShell } from './client/shell.mjs';
 import { LoadConfig } from './config.mjs';
 import { Database, Migrate } from './db.mjs';
 import { Viewer, RateLimiter } from './auth.mjs';
@@ -17,6 +17,7 @@ import { Api } from './routes/api.mjs';
 import { Compatibility } from './routes/compatibility.mjs';
 import { Account } from './routes/account.mjs';
 import { Passport } from './routes/passport.mjs';
+import { Creator } from './routes/creator.mjs';
 import { Studio } from './routes/studio.mjs';
 import { Admin } from './routes/admin.mjs';
 import { Im, HandleRequest, Proto, SweepMessageMedia } from './routes/im.mjs';
@@ -137,17 +138,27 @@ const Server = createServer(async (Request, Response) => {
 			let Text = await NotFoundData(NotFoundApi).catch(() => null);
 			if (!Text) throw new HttpError(404, 'NotFound');
 			if (NotFoundApi === 'importmap.json') Text = RewriteAssets(Text, Config.Origin);
-			if (NotFoundApi === 'common-app-context.json') Text = JSON.stringify({ ...JSON.parse(Text), host: new URL(Config.Origin).host, csrfToken: User?.csrf_token ?? '' });
+			if (NotFoundApi === 'common-app-context.json') {
+				const Context = { ...JSON.parse(Text), host: new URL(Config.Origin).host, csrfToken: User?.csrf_token ?? '' };
+				if (User) Context.user = AppUser(User, Config.Origin, Config, Context.region);
+				Text = JSON.stringify(Context);
+			}
 			Response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': NotFoundApi === 'common-app-context.json' ? 'no-store' : 'public, max-age=3600' });
 			return Response.end(Text);
 		}
-		if (await Admin(Context) || await Studio(Context) || await Account(Context) || await Api(Context) || await Pns(Context) || await Passport(Context) || await Im(Context) || await Stories(Context) || await Compatibility(Context)) return;
+		if (await Admin(Context) || await Studio(Context) || await Creator(Context) || await Account(Context) || await Api(Context) || await Pns(Context) || await Passport(Context) || await Im(Context) || await Stories(Context) || await Compatibility(Context)) return;
 		if (/^\/(?:api|passport|node-webapp|tiktok|tns-api|aweme|node|v[1-3])\//.test(Path)) {
 			const Key = `${Request.method} ${Path}`;
 			if (Unknown.size < 500) Unknown.set(Key, (Unknown.get(Key) ?? 0) + 1);
 			return Json(Response, { statusCode: 501, status_code: 501, error: 'NotImplemented', path: Path }, 501);
 		}
 		RequireMethod(Request, ['GET', 'HEAD']);
+		if (/^\/tiktokstudio(?:\/[a-z0-9_-]+)*\/?$/.test(Path) && !Path.startsWith('/tiktokstudio/api/')) {
+			if (!User) { Response.writeHead(302, { location: `/login?redirect_url=${encodeURIComponent(Path + Url.search)}` }); return Response.end(); }
+			const Html = StudioShell(await CaptureStudioPage(), Config.Origin, { Config, User });
+			Response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+			return Response.end(Request.method === 'HEAD' ? undefined : Html);
+		}
 		if (/^\/404\/?$/.test(Path)) {
 			const Html = RewriteAssets(await CaptureNotFoundPage(), Config.Origin).replaceAll('https://starling.tiktokv.us', Config.Origin).replace('<head>', '<head><link rel="icon" href="/brand/favicon">').replace(/<title>[\s\S]*?<\/title>/, `<title>${Escape(Config.Name)}</title>`);
 			Response.writeHead(404, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });

@@ -1,0 +1,21 @@
+{
+	"source": "https://www.tiktok.com/tiktokstudio",
+	"capturedAt": "2026-10-27T15:32:08.866Z",
+	"sha256": "dea139140d62e9b86f54374326e4468eec6f8364593b2684f11dad66f65e4147",
+	"entries": [
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok_privacy_protection_framework/loader/2.0.0.314/index.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/js/builder-runtime.63ce5e91.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/js/lib-lodash.cb5aaa3b.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/js/lib-polyfill.9252ee59.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/js/lib-react.cad72241.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/js/lib-axios.3f06ef79.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/js/lib-router.d19c0e90.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/js/8634.1bf1daeb.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/js/main.6f01a043.js",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/css/8634.527a778b.css",
+		"https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/ies/creator-center-web/static/css/main.baf62d86.css",
+		"https://lf16-cdn-tos.tiktokcdn-us.com/obj/static-tx/tiktok-infra/csp/sdk-pre/tea.pre.js",
+		"https://lf16-cdn-tos.tiktokcdn-us.com/obj/static-tx/log-sdk/collect/5.2/collect.js",
+		"https://lf16-cdn-tos.tiktokcdn-us.com/obj/static-tx/tiktok-infra/csp/sdk-pre/slardar.web.pre.js"
+	]
+}

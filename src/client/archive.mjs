@@ -73,7 +73,8 @@ export function RewriteAssets(Text, Origin) {
 export function ReadJsonScript(Html, Id) {
 	const Match = Html.match(new RegExp(`<script[^>]*id="${Id}"[^>]*>([\\s\\S]*?)<\\/script>`));
 	if (!Match) throw new Error(`MissingScript:${Id}`);
-	return JSON.parse(Match[1]);
+	const Text = Match[1].trim();
+	return JSON.parse(Text.startsWith('{&quot;') ? Text.replace(/&(quot|amp|lt|gt|#39);/g, (_, Name) => ({ quot: '"', amp: '&', lt: '<', gt: '>', '#39': "'" })[Name]) : Text);
 }
 
 export function ReplaceJsonScript(Html, Id, Value) {
@@ -114,6 +115,7 @@ async function CapturePage(Source, Name, Label, Scripts, Refresh) {
 	try { return await Job; } finally { Captures.delete(Name); }
 }
 export const CaptureLoginPage = (Refresh = false) => CapturePage('https://www.tiktok.com/login', 'login', 'Login', ['SIGI_STATE', '__UNIVERSAL_DATA_FOR_REHYDRATION__'], Refresh);
+export const CaptureStudioPage = (Refresh = false) => CapturePage('https://www.tiktok.com/tiktokstudio', 'studio', 'Studio', ['_REGION_DATA_', '__Creator_Center_Context__'], Refresh);
 export const CaptureNotFoundPage = (Refresh = false) => CapturePage('https://www.tiktok.com/404?fromUrl=/', 'notfound', 'NotFound', ['tiktok-environment'], Refresh);
 const NotFoundSources = {
 	'importmap.json': 'https://www.tiktok.com/node-webapp/api/importmap',

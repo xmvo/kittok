@@ -2252,3 +2252,42 @@ test('misc switches turn Kittok features off and back on without a restart', asy
 	assert.equal((await Get('/api/challenge/detail/?challengeName=kittok')).statusCode, 0);
 	await Pool.query('UPDATE users SET verified = false WHERE id = $1', [Owner.id]);
 });
+
+test('tiktok studio lists your posts, comments, and daily insights, and edits, pins, and deletes your posts', async () => {
+	const Post = (Path, Body) => Call(Path, 'POST', Body, Auth());
+	assert.equal((await fetch(Origin + '/tiktokstudio', { redirect: 'manual', headers: { accept: 'text/html' } })).headers.get('location'), '/login?redirect_url=%2Ftiktokstudio');
+	if (await readFile(join(ClientDir, 'studio.html')).catch(() => null)) {
+		const Page = await (await Call('/tiktokstudio/content', 'GET', undefined, Auth({ accept: 'text/html' }))).text();
+		const Context = ReadJsonScript(Page, '__Creator_Center_Context__');
+		assert.equal(Context.error, undefined); assert.ok(Page.includes('/_kittok/bridge.js') && !Page.includes('privacy_protection_framework'));
+	}
+	const Context = await (await Call('/node-webapp/api/common-app-context', 'GET', undefined, Auth())).json();
+	assert.equal(Context.user.uniqueId, 'owner');
+	const Extra = await ImportVideo(Pool, Config, Owner.id, join(Directory, 'input.mp4'), 'studio scratch');
+	await Pool.query("INSERT INTO comments(video_id, author_id, body) VALUES ($1, $2, 'studio comment')", [VideoId, Friend.id]);
+	const Items = (await (await Post('/tiktok/creator/manage/item_list/v1/', { cursor: 0, size: 50, query: { sort_orders: [{ field_name: 'post_time', order: 2 }], conditions: [] } })).json()).item_list;
+	const Item = Items.find(Entry => Entry.item_id === VideoId);
+	assert.ok(Items.some(Entry => Entry.item_id === Extra)); assert.equal(Item.visibility, 1); assert.ok(Item.duration >= 900); assert.equal(Item.permissions.can_edit_cover.show_type, 2);
+	assert.equal(typeof Item.like_count, 'number'); assert.ok(Item.cover_url[0].startsWith(Origin + '/media/'));
+	const Comments = await (await Post('/tiktokstudio/api/web/commentsV2', { count: 20, query: { searchConditions: [], filterConditions: [{ fieldName: 'item_id', op: 1, field: VideoId }] } })).json();
+	assert.ok(Comments.comments.some(Entry => Entry.text === 'studio comment' && Entry.user.uniqueId === 'friend' && Entry.item.itemId === VideoId));
+	assert.equal((await (await Post('/tiktokstudio/api/web/commentsV2', { count: 20, query: { searchConditions: [{ fieldName: 'text', field: 'nothing like this' }] } })).json()).comments.length, 0);
+	const Profile = await (await Call('/tiktokstudio/api/web/user', 'GET', undefined, Auth())).json();
+	assert.equal(Profile.userExtra.isU16, false); assert.equal(Profile['tt-csrf-token'], Session.csrfToken);
+	assert.equal(typeof (await (await Call(`/tiktokstudio/api/web/counter/getHashCount?userId=${Owner.id}`, 'GET', undefined, Auth())).json()).CountData[Owner.id].item_count, 'number');
+	assert.equal(typeof (await (await Call(`/tiktokstudio/api/web/relation/multiGetFollowRelationCount?userId=${Owner.id}`, 'GET', undefined, Auth())).json()).FollowerCount[Owner.id], 'number');
+	const Insight = await (await Call(`/aweme/v2/data/insight/?type_requests=${encodeURIComponent(JSON.stringify([{ insigh_type: 'vv_history', days: 16, end_days: 1 }, { insigh_type: 'pv_history', days: 16, end_days: 1 }]))}`, 'GET', undefined, Auth())).json();
+	assert.equal(Insight.vv_history.length, 16); assert.ok(Insight.pv_history.every(Day => Day.status === 0 && Day.value === 0));
+	assert.equal((await Post('/tiktok/post/edit/v1/', { aweme_id: Extra, scene: 1, visibility: { visibility: 1 } })).status, 200);
+	assert.equal((await Pool.query('SELECT visibility FROM videos WHERE id = $1', [Extra])).rows[0].visibility, 'only_me');
+	assert.equal((await Post('/tiktok/post/edit/v1/', { aweme_id: VideoId, scene: 1, visibility: { visibility: 1 } })).status, 200);
+	assert.equal((await Post('/tiktok/post/edit/v1/', { aweme_id: VideoId, scene: 1, visibility: { visibility: 0 } })).status, 200);
+	assert.equal((await Call('/tiktok/post/edit/v1/', 'POST', { aweme_id: Extra, scene: 1, visibility: { visibility: 0 } }, { cookie: Cookie })).status, 403);
+	assert.equal((await Post('/tiktok/creator/top/item/create/v1/', { item_id: Extra })).status, 200);
+	assert.ok((await Pool.query('SELECT pinned_at FROM videos WHERE id = $1', [Extra])).rows[0].pinned_at);
+	assert.equal((await Post('/tiktok/creator/top/item/delete/v1/', { item_id: Extra })).status, 200);
+	assert.equal((await Call(`/tiktok/creator/item/delete/v1/?item_id=${Extra}`, 'DELETE', undefined, Auth())).status, 200);
+	assert.equal((await Pool.query('SELECT 1 FROM videos WHERE id = $1', [Extra])).rowCount, 0);
+	assert.equal((await Call(`/tiktok/creator/item/delete/v1/?item_id=${VideoId}`, 'DELETE', undefined, { cookie: (await Call('/api/v1/session', 'POST', { username: 'friend', password: Password })).headers.get('set-cookie').split(';')[0] })).status, 403);
+	await Pool.query("DELETE FROM comments WHERE body = 'studio comment'");
+});

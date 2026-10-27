@@ -8,7 +8,8 @@ Kittok runs TikTok's own web client, so most of the job is answering its API cal
 
 - For You feed, video pages, playback and seeking (MP4 with range requests).
 - View counts that only go up when a video actually starts playing, not when it's preloaded, once per viewer every 6 hours.
-- Uploads through Kittok's own upload page (not TikTok Studio): preview, caption, privacy, comment settings, category, and a Share to story switch.
+- Uploads through Kittok's own upload page: preview, caption, privacy, comment settings, category, and a Share to story switch. TikTok Studio's Upload button opens it too.
+- TikTok Studio at `/tiktokstudio`, the real creator dashboard: home with key metrics, recent posts and latest comments, the Posts list (search, sort, privacy, pin and delete), Comments with filters, replies and deletes, and Analytics overview charts.
 - Explore with categories (picked at upload or guessed from hashtags), hashtag pages, related videos, music pages for original sounds, and search for people and videos. The Photos and LIVE search tabs stay empty.
 - Up to 3 pinned videos, and Latest, Popular and Oldest sorting on profiles.
 - Stories that last 24 hours, in the client's own tray, rings and player, starting at the first one you haven't watched. Only the author sees who watched.
@@ -48,6 +49,7 @@ Kittok runs TikTok's own web client, so most of the job is answering its API cal
 - Most of Settings beyond privacy, downloading your data and deleting your account.
 - Pinned comments (the web client doesn't have them), and photos or videos in group chats.
 - Recent people in the @mention picker.
+- Studio's own uploader and post editor, drafts, monetization, LIVE, the inspiration and academy tabs, and analytics beyond the overview (content, viewers and follower breakdowns show no data). Profile views and shares are always 0 because Kittok doesn't record them.
 
 Unknown API calls get a 501 and are listed for admins at `/_debug/unknown`, which is the quickest way to find what's missing.
 
@@ -174,6 +176,20 @@ Each restriction answers in the client's own shape:
 | Sign in while banned | Passport `error_code` 1091 with `user_id_str` and a 30-minute `verify_ticket` | Its ban dialog from GET `/aweme/v2/appeal/status/` (or `/tns-api/appeal/status/`): `pop_title`, `pop_content`, `appeal_type` 2018, and `button_list` (`btn_type` 4 opens its appeal form, 0 closes). The form stores the email with POST `/aweme/v1/material/upload/` (`ns: review_account_appeal`) and submits POST `/tns-api/appeal/post-commit/` with `extra.mail_address_v2` |
 
 Decisions and appeal outcomes appear in Inbox > System notifications > Account updates: group 661 and type 47, `template_notice.notice` `{title: {title}, content}`, with their own read marker (`users.moderation_seen_at`). `/account` shows the account status: standing, active strikes against each limit, restrictions, history, and an appeal form. The client's success text promises an email, but Kittok does not send mail; outcomes are visible on the next sign-in. LIVE restrictions are recorded but Kittok has no LIVE yet.
+
+## Studio contract
+
+Studio is captured from `https://www.tiktok.com/tiktokstudio` into `client/studio.html` and served for every `/tiktokstudio/...` page with the server-rendered `error` and `firstBatchQueryItems` removed from `__Creator_Center_Context__` (it is HTML-escaped JSON). Studio reads the signed-in user from `/node-webapp/api/common-app-context`, so that response carries `user` like `webapp.app-context.user`. Its own backend lives under `/tiktokstudio/api/web/`.
+
+| Client call | Response read by the client |
+| --- | --- |
+| POST `/tiktok/creator/manage/item_list/v1/` `{cursor, size, query: {sort_orders: [{field_name: post_time\|play_count\|like_count\|comment_count, order: 1 asc\|2 desc}], conditions}}` | `item_list` of `{item_id, desc, cover_url[], duration (ms), post_time, visibility (1 everyone, 2 only me, 3 friends), is_pinned, play_count, like_count, comment_count, permissions}`, `cursor`, `has_more`. A post shows "Under review" unless `permissions.can_edit_cover.show_type` is 2, and the privacy menu needs `permissions.can_change_privacy.show_type` 2 |
+| POST `/tiktokstudio/api/web/commentsV2` `{count, cursor, query: {searchConditions: [{fieldName: text}], filterConditions: [{fieldName: item_id\|user_id\|creator_replied\|is_follower, field}]}, dateRange: {startDate, endDate}}` | `comments` of `{commentId, text, createTime, likeCount, hasCreatorLiked, item: {itemId, desc, coverUrl[]}, user: {uniqueId, nickname, avatarThumb[]}}`, `cursor`, `hasMore` |
+| GET `/tiktokstudio/api/web/user` | `userExtra.{profileBio, isVerified, isPrivate, isU16}` and `tt-csrf-token`. The comment list waits for it |
+| GET `/tiktokstudio/api/web/counter/getHashCount?userId=` and `/relation/multiGetFollowRelationCount?userId=` | `CountData[uid].{repined_count, item_count}`, and `FollowerCount[uid]`, `FollowingCount[uid]` |
+| GET `/aweme/v2/data/insight/?type_requests=[{insigh_type, days, end_days}]` | For each `*_history` type, one `{status: 0, value}` per UTC day, oldest first, from `days` ago to `end_days` ago |
+| POST `/tiktok/post/edit/v1/` `{aweme_id, text, visibility: {visibility: 0 everyone\|1 only me\|2 friends}}` | `status_code` |
+| POST `/tiktok/creator/top/item/create/v1/` and `/delete/v1/` `{item_id}`, DELETE `/tiktok/creator/item/delete/v1/?item_id=` | `status_code` |
 
 ## Report dialog contract
 

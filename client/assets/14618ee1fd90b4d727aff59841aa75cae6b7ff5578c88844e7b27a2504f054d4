@@ -1,0 +1,1 @@
+"use strict";(self["@pgc-web/web-creation:2.0.0.2577"]=self["@pgc-web/web-creation:2.0.0.2577"]||[]).push([[3648],{53648:function(e,r,t){t.r(r),t.d(r,{GSUB:function(){return u}});var s=t(67801);class u extends s.G{constructor(e,r){super(e,r,"GSUB")}getLookup(e){return super.getLookup(e,"GSUB")}}}}]);
